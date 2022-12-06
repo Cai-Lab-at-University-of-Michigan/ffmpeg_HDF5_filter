@@ -86,6 +86,7 @@ int main(int argc, const char *argv[]) {
     unsigned int cd_values[6];
     int return_code = 1;
     int num_diff = 0;
+    double avg_diff = 0.;
     int encoder_id, decoder_id;
     hid_t fid, sid, dset, plist = 0;
 
@@ -165,9 +166,12 @@ int main(int argc, const char *argv[]) {
         if (data[i] != data_out[i]) {
             num_diff++;
         }
+        avg_diff += (double)abs(data[i] - data_out[i]);
     }
 
-    fprintf(stdout, "Success, %f percent of differing array elements\n", 100. * (double) num_diff / SIZE);
+    avg_diff /= SIZE;
+
+    fprintf(stdout, "Success, %f percent of different elements, average difference is %f\n", 100. * (double) num_diff / SIZE, avg_diff);
     stat("example.h5", &st);
     fprintf(stdout, "Success, compression ratio %f for %d bytes to %d bytes \n", (double)SIZE / (double)st.st_size, SIZE, st.st_size);
 

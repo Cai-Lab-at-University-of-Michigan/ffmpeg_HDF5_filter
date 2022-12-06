@@ -29,12 +29,11 @@ static void find_encoder_name(int c_id, char *name);
 
 static void find_decoder_name(int c_id, char *name);
 
-static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
-                   size_t *buf_size, uint8_t **buf, FILE *f);
+static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data);
 
 static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
-                   size_t *buf_size, void **buf);
+                   size_t *out_size, uint8_t **out_data, int color_mode);
 
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
                         size_t *buf_size, void **buf);
@@ -140,10 +139,9 @@ static void find_decoder_name(int c_id, char *name) {
     }
 }
 
-static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
-                   size_t *buf_size, uint8_t **buf, FILE *f) {
+static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data) {
     int ret;
-    int i;
+    int offset = 0;
 
     /* send the frame to the encoder */
     if (frame) printf("Encode frame %3"PRId64"\n", frame->pts);
@@ -160,18 +158,17 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
         if (ret < 0) {
             fprintf(stderr, "Error during encoding\n");
         }
+
         printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
 
-        *buf = calloc(1, pkt->size);
-        if (*buf == NULL) {
+        offset = *out_size;
+        *out_data = realloc(*out_data, offset + pkt->size);
+
+        if (*out_data == NULL) {
             fprintf(stderr, "Out of memory occurred during encoding\n");
         }
-        memcpy(*buf, pkt->data, pkt->size);
-
-        fwrite(*buf, 1, pkt->size, f);
-
-        *buf += pkt->size;
-        *buf_size += pkt->size;
+        memcpy(*out_data + offset, pkt->data, pkt->size);
+        *out_size += pkt->size;
         av_packet_unref(pkt);
     }
 }
@@ -179,11 +176,13 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
 
 static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
-                   size_t *buf_size, void **buf) {
+                   size_t *out_size, uint8_t **out_data, int color_mode) {
     int ret;
+    int offset = 0;
+    int perchannelsize = 0;
 
     ret = avcodec_send_packet(dec_ctx, pkt);
-    printf("receiving packets %d\n", pkt->size);
+//    printf("receiving packets %d\n", pkt->size);
     if (ret < 0) {
         fprintf(stderr, "Error sending a pkt for encoding, pkt size %d\n", pkt->size);
     }
@@ -195,22 +194,43 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         else if (ret < 0) {
             fprintf(stderr, "Error receiving a frame for encoding\n");
         }
-        printf("Decode frame %3d\n", dec_ctx->frame_number);
+//        printf("Decode frame %3d\n", dec_ctx->frame_number);
 
         /* do colorspace conversion */
         sws_scale_frame(sws_context, dst_frame, src_frame);
 
         /* put to buffer */
-        *buf = calloc(1, dst_frame->width * dst_frame->height);
-        if (*buf == NULL) {
-            fprintf(stderr, "Out of memory occurred during encoding\n");
+        offset = *out_size;
+
+        perchannelsize = dst_frame->width * dst_frame->height;
+
+        if (color_mode == 0) {
+            *out_data = realloc(*out_data, *out_size + perchannelsize);
+            memcpy(*out_data + offset, dst_frame->data[0], perchannelsize);
+            *out_size += perchannelsize;
+        } else {
+            *out_data = realloc(*out_data, *out_size + perchannelsize * 3);
+            memcpy(*out_data + offset, dst_frame->data[0], perchannelsize);
+            memcpy(*out_data + offset + perchannelsize, dst_frame->data[1], perchannelsize);
+            memcpy(*out_data + offset + perchannelsize * 2, dst_frame->data[2], perchannelsize);
+            *out_size += perchannelsize * 3;
         }
-        memcpy(*buf, dst_frame->data, dst_frame->width * dst_frame->height);
-        *buf += dst_frame->width * dst_frame->height;
-        *buf_size += dst_frame->width * dst_frame->height;
     }
 }
 
+
+void pgm_save(unsigned char *buf, int wrap, int xsize, int ysize,
+                     char *filename)
+{
+    FILE *f;
+    int i;
+
+    f = fopen(filename,"wb");
+    fprintf(f, "P5\n%d %d\n%d\n", xsize, ysize, 255);
+    for (i = 0; i < ysize; i++)
+        fwrite(buf + i * wrap, 1, xsize, f);
+    fclose(f);
+}
 
 /* The ffmpeg filter function */
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
@@ -243,11 +263,11 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         size_t expected_size;
 
         size_t out_size = 0;
+        int offset = 0;
         uint8_t *out_data = NULL;
         uint8_t *p_data = NULL;
 
         int i, j, ret;
-        FILE *f, *fb;
 
         printf("I am in compressing\n");
 
@@ -347,18 +367,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             return 0;
         }
 
-        f = fopen("tmp_video", "wb");
-        if (!f) {
-            fprintf(stderr, "Could not open \n");
-            exit(1);
-        }
-
-        fb = fopen("tmp_video_from_buffer", "wb");
-        if (!fb) {
-            fprintf(stderr, "Could not open \n");
-            exit(1);
-        }
-
         p_data = (uint8_t *) *buf;
         sws_context = sws_getContext(width,
                                      height,
@@ -398,6 +406,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 p_data += width * height;
             }
 
+            printf("frame data %d\n", src_frame->data[0][10]);
+
             ret = sws_scale_frame(sws_context, dst_frame, src_frame);
             if (ret < 0) {
                 fprintf(stderr, "Could not do colorspace conversion");
@@ -407,20 +417,17 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             dst_frame->pts = i;
 
             /* encode the frame */
-            encode(c, dst_frame, pkt, &out_size, &out_data, fb);
+            encode(c, dst_frame, pkt, &out_size, &out_data);
         }
 
         printf("flush the encoder\n");
         /* flush the encoder */
-        encode(c, NULL, pkt, &out_size, &out_data, fb);
+        encode(c, NULL, pkt, &out_size, &out_data);
 
-        out_data = calloc(1, sizeof(endcode));
-        memcpy(out_data, endcode, sizeof(endcode));
-
-        fwrite(out_data, 1, sizeof(endcode), fb);
-        fclose(fb);
-
-        out_data += sizeof(endcode);
+        // endcode
+        offset = out_size;
+        out_data = realloc(out_data, out_size + sizeof(endcode));
+        memcpy(out_data + offset, endcode, sizeof(endcode));
         out_size += sizeof(endcode);
 
         avcodec_free_context(&c);
@@ -428,33 +435,32 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         av_frame_free(&dst_frame);
         av_packet_free(&pkt);
         sws_freeContext(sws_context);
-        free(codec_name);
+        if (codec_name) free(codec_name);
 
         buf_size_out = out_size;
 
-        out_buf = H5allocate_memory(buf_size_out, false);
+        out_buf = H5allocate_memory(out_size, false);
+
         if (!out_buf) {
-            fprintf(stderr, "Failed to allocate JPEG array");
+            fprintf(stderr, "Failed to allocate memory for image array");
             goto CompressFailure;
         }
 
-        out_data -= buf_size_out;
         memcpy(out_buf, out_data, buf_size_out);
 
-        fwrite(out_data, 1, out_size, f);
-        fclose(f);
-
         H5free_memory(*buf);
-
         if (out_data) free(out_data);
+
         *buf = out_buf;
         *buf_size = buf_size_out;
         printf("buf size out %d\n", *buf_size);
+
         return buf_size_out;
 
     CompressFailure:
         fprintf(stderr, "Error compressing array");
         if (codec_name) free(codec_name);
+        if (endcode) free(endcode);
         if (out_data) free(out_data);
         if (out_buf) H5free_memory(out_buf);
         if (c) avcodec_free_context(&c);
@@ -495,10 +501,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         unsigned char *p_data = NULL;
         size_t p_data_size = 0;
 
-
         int i, ret, eof;
-
-        printf("I am in decompressing, buf_size in %d\n", *buf_size);
 
         c_id = cd_values[1];
         width = cd_values[2];
@@ -598,7 +601,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
                 if (pkt->size) {
                     /* decode packet */
-                    decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data);
+                    decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
                 }
                 else if (eof)
                     break;
@@ -608,7 +611,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         /* flush the decoder */
         pkt->data = NULL;
         pkt->size = 0;
-        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data);
+        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
 
         /* Sanity check to make sure we have been passed a complete image */
         expected_size = (color_mode == 1) ? height * width * depth * 3 :height * width * depth;
@@ -627,7 +630,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         out_buf = H5allocate_memory(buf_size_out, false);
         if (!out_buf) {
-            fprintf(stderr, "Failed to allocate image array");
+            fprintf(stderr, "Failed to allocate memory for image array");
             goto DecompressFailure;
         }
         memcpy(out_buf, out_data, buf_size_out);
@@ -640,7 +643,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         *buf_size = buf_size_out;
         return buf_size_out;
 
-        DecompressFailure:
+     DecompressFailure:
         fprintf(stderr, "Error decompressing packets\n");
         if (codec_name) free(codec_name);
         if (out_data) free(out_data);
