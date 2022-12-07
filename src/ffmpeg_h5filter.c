@@ -59,7 +59,7 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
     memcpy(buf, *data, read_size);
     *data += read_size;
     *data_size -= read_size;
-    
+
     return read_size;
 }
 
@@ -180,8 +180,8 @@ static void find_decoder_name(int c_id, char *name) {
  *
  */
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data) {
-    int ret;
-    int offset = 0;
+    int ret
+    size_t offset = 0;
 
     /* send the frame to the encoder */
     if (frame) printf("Encode frame %3"PRId64"\n", frame->pts);
@@ -191,7 +191,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
         fprintf(stderr, "Error sending a frame for encoding\n");
     }
 
-    while (ret >= 0) {
+    while (ret >= 0) { 
         ret = avcodec_receive_packet(enc_ctx, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
@@ -202,11 +202,12 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
         printf("Write packet %3"PRId64" (size=%5d)\n", pkt->pts, pkt->size);
 
         offset = *out_size;
+        // TODO: You can remove the need for multiple reallocs if you overallocate buffer -LAW
         *out_data = realloc(*out_data, offset + pkt->size);
-
         if (*out_data == NULL) {
             fprintf(stderr, "Out of memory occurred during encoding\n");
         }
+
         memcpy(*out_data + offset, pkt->data, pkt->size);
         *out_size += pkt->size;
         av_packet_unref(pkt);
