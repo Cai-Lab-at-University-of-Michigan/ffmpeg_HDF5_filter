@@ -2,3 +2,5 @@
 *.xml
 *.h5
 /cmake-build-debug/
+/.idea/.gitignore
+/.idea/ffmpeg_HDF5_filter.iml
