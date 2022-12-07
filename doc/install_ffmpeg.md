@@ -1,5 +1,5 @@
  # Install ffmpeg with all codecs
- ![Codecs installing](![](codecs.png "Codecs installing")
+ ![Codecs installing](../misc/codecs.png)
  ## Clone ffmpeg
  `git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg/`
  

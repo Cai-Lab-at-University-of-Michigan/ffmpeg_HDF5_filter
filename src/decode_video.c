@@ -81,7 +81,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *frame, AVPacket *pkt,
 
 int main(int argc, char **argv)
 {
-    const char *filename, *outfilename;
+    const char *filename, *outfilename, *codec_name;
     const AVCodec *codec;
     AVCodecParserContext *parser;
     AVCodecContext *c= NULL;
@@ -94,13 +94,13 @@ int main(int argc, char **argv)
     int eof;
     AVPacket *pkt;
 
-    if (argc <= 2) {
-        fprintf(stderr, "Usage: %s <input file> <output file>\n"
-                "And check your input file is encoded by mpeg1video please.\n", argv[0]);
+    if (argc <= 3) {
+        fprintf(stderr, "Usage: %s <input file> <output file> <decoder name>\n");
         exit(0);
     }
     filename    = argv[1];
     outfilename = argv[2];
+    codec_name = argv[3];
 
     pkt = av_packet_alloc();
     if (!pkt)
@@ -110,7 +110,7 @@ int main(int argc, char **argv)
     memset(inbuf + INBUF_SIZE, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
     /* find the MPEG-1 video decoder */
-    codec = avcodec_find_decoder(AV_CODEC_ID_MPEG1VIDEO);
+    codec = avcodec_find_decoder_by_name(codec_name);
     if (!codec) {
         fprintf(stderr, "Codec not found\n");
         exit(1);
