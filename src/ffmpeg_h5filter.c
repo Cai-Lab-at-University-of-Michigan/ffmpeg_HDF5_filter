@@ -185,7 +185,7 @@ static void find_decoder_name(int c_id, char *name)
  */
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data)
 {
-    int ret
+    int ret;
         size_t offset = 0;
 
     /* send the frame to the encoder */
