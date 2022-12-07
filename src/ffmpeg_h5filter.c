@@ -53,15 +53,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
  *
  */
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size) {
-    size_t read_size = NULL;
+    if(*data_size <= 0) return 0;
 
-    if (*data_size > 0) {
-        read_size = (*data_size - buf_size >= 0) ? buf_size : *data_size;
-        memcpy(buf, *data, read_size);
-        *data += read_size;
-        *data_size -= read_size;
-    }
-
+    size_t read_size = (*data_size - buf_size >= 0) ? buf_size : *data_size;
+    memcpy(buf, *data, read_size);
+    *data += read_size;
+    *data_size -= read_size;
+    
     return read_size;
 }
 
