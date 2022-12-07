@@ -28,4 +28,4 @@
 
 
 ## Acknowledgments
-The cmake file and this documentation borrow heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encode and decode codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). Very much thanks.
+The cmake file borrows heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encode and decode codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). Very much thanks.
