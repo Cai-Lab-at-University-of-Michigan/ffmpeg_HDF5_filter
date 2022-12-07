@@ -12,7 +12,7 @@
 #include "ffmpeg_h5filter.h"
 
 #define NX 2048
-#define NY 2048
+#define NY 1024
 #define NZ 10
 #define SIZE (NX * NY * NZ)
 #define SHAPE {NZ, NY, NX}
@@ -128,7 +128,7 @@ int main(int argc, const char *argv[]) {
     cd_values[1] = decoder_id;  /* Decoder id */
     cd_values[2] = NX; /* Number of columns */
     cd_values[3] = NY; /* Number of rows */
-    cd_values[4] = NZ; /* Number of depth */
+    cd_values[4] = NZ; /* depth */
     cd_values[5] = 0;  /* Color mode (0=Mono, 1=RGB) */
 
     /* Set the filter with 5 params */

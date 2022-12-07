@@ -23,6 +23,7 @@
 #define PUSH_ERR(func, minor, str)                                      \
     H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
 
+
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
 
 static void find_encoder_name(int c_id, char *name);
@@ -38,6 +39,19 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
                         size_t *buf_size, void **buf);
 
+/*
+ * Function:  read_from_buffer
+ * --------------------
+ * reads data portion from buffer
+ *
+ *  *buf: buf to store data portion
+ *  buf_size: maximum size to be read from the buffer
+ *  **data: ptr of data buffer
+ *  *data_size: remain size of the data buffer
+ *
+ *  returns: size of the size of the reading data portion
+ *
+ */
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size) {
     size_t read_size = NULL;
 
@@ -51,7 +65,15 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
     return read_size;
 }
 
-// ffv1, mpeg4, libxvid, libvpx, libvpx-vp9, libx264, h264_nvenc, libx265, hevc_nvenc, libaom-av1, libsvtav1, librav1e
+/*
+ * Function:  find_encoder_name
+ * --------------------
+ * map id used in hdf5 params to real encoders name in ffmpeg
+ *
+ *  c_id : integer used in hdf5 auxiliary parameters
+ *  *name : encoders name
+ *
+ */
 static void find_encoder_name(int c_id, char *name) {
     switch (c_id) {
         /* encoders */
@@ -98,7 +120,15 @@ static void find_encoder_name(int c_id, char *name) {
     }
 }
 
-// ffv1, mpeg4, libvpx, libvpx-vp9, h264, h264_cuvid, hevc, hevc_cuvid, libaom-av1, libdav1d
+/*
+ * Function:  find_decoder_name
+ * --------------------
+ * map id used in hdf5 params to real decoders name in ffmpeg
+ *
+ *  c_id : integer used in hdf5 params
+ *  *name : decoders name
+ *
+ */
 static void find_decoder_name(int c_id, char *name) {
     switch (c_id) {
         /* decoders */
@@ -139,6 +169,18 @@ static void find_decoder_name(int c_id, char *name) {
     }
 }
 
+/*
+ * Function:  encode
+ * --------------------
+ * encode a ffmpeg frame
+ *
+ *  *enc_ctx: AVCodecContext
+ *  *frame: frame to be encoded
+ *  *pkt: pkt where data being compressed into
+ *  *out_size: accumulated compressed pkts data size
+ *  **out_data: compressed pkts data
+ *
+ */
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data) {
     int ret;
     int offset = 0;
@@ -173,7 +215,21 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
     }
 }
 
-
+/*
+ * Function:  decode
+ * --------------------
+ * decode a compressed pkt to frame and convert colorspace of the frame
+ *
+ *  *dec_ctx: AVCodecContext
+ *  *src_frame: source frame where compressed pkt to be decoded
+ *  *pkt: compressed pkt
+ *  *sws_context: context of colorspace conversion
+ *  *dst_frame: destination frame
+ *  *out_size: accumulated destination frame data size
+ *  **out_data: frame data took from destination frame
+ *  color_mode: 0(GRAYSCALE), 1(RGB)
+ *
+ */
 static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
                    size_t *out_size, uint8_t **out_data, int color_mode) {
@@ -218,21 +274,21 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
     }
 }
 
-
-void pgm_save(unsigned char *buf, int wrap, int xsize, int ysize,
-                     char *filename)
-{
-    FILE *f;
-    int i;
-
-    f = fopen(filename,"wb");
-    fprintf(f, "P5\n%d %d\n%d\n", xsize, ysize, 255);
-    for (i = 0; i < ysize; i++)
-        fwrite(buf + i * wrap, 1, xsize, f);
-    fclose(f);
-}
-
-/* The ffmpeg filter function */
+/*
+ * Function:  ffmpeg_h5_filter
+ * --------------------
+ * The ffmpeg filter function
+ *
+ *  flags:
+ *  cd_nelmts: number of auxiliary parameters
+ *  cd_values: auxiliary parameters
+ *  nbytes: valid data size
+ *  *buf_size: size of buffer
+ *  **buf: buffer
+ *
+ *  return: 0 (failed), otherwise size of buffer
+ *
+ */
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
                         size_t *buf_size, void **buf) {
 
@@ -255,7 +311,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         AVFrame *dst_frame, *src_frame = NULL;
         AVPacket *pkt;
         struct SwsContext *sws_context;
-        uint8_t endcode[] = { 0, 0, 1, 0xb7 };
 
         int c_id;
         int width, height, depth;
@@ -285,8 +340,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             return 0;
         }
         codec_name = calloc(1, 50);
-//        find_encoder_name(c_id, codec_name);
-        stpcpy(codec_name, "mpeg1video");
+        find_encoder_name(c_id, codec_name);
         codec = avcodec_find_encoder_by_name(codec_name);
         if (!codec) {
             fprintf(stderr, "Codec not found");
@@ -424,12 +478,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         /* flush the encoder */
         encode(c, NULL, pkt, &out_size, &out_data);
 
-        // endcode
-        offset = out_size;
-        out_data = realloc(out_data, out_size + sizeof(endcode));
-        memcpy(out_data + offset, endcode, sizeof(endcode));
-        out_size += sizeof(endcode);
-
         avcodec_free_context(&c);
         av_frame_free(&src_frame);
         av_frame_free(&dst_frame);
@@ -460,7 +508,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
     CompressFailure:
         fprintf(stderr, "Error compressing array");
         if (codec_name) free(codec_name);
-        if (endcode) free(endcode);
         if (out_data) free(out_data);
         if (out_buf) H5free_memory(out_buf);
         if (c) avcodec_free_context(&c);
@@ -519,8 +566,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         memset(inbuf + INBUF_SIZE, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
         codec_name = calloc(1, 50);
-//        find_decoder_name(c_id, codec_name);
-        stpcpy(codec_name, "mpeg1video");
+        find_decoder_name(c_id, codec_name);
         codec = avcodec_find_decoder_by_name(codec_name);
         if (!codec) {
             fprintf(stderr, "Codec not found");
@@ -658,19 +704,27 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
     }
 }
 
-
+/* H%Z struct declaration*/
 H5Z_class_t ffmpeg_H5Filter[1] = {{
       H5Z_CLASS_T_VERS,
       (H5Z_filter_t)(FFMPEG_H5FILTER),
       1, /* encode (compress) */
       1, /* decode (decompress) */
-      "ffmpeg",
+      "ffmpeg see https://github.com/Cai-Lab-at-University-of-Michigan/ffmpeg_HDF5_filter",
       NULL,
       NULL,
       (H5Z_func_t)(ffmpeg_h5_filter)
 }};
 
 
+/*
+ * Function:  ffmpeg_register_h5filter
+ * --------------------
+ * register ffmpeg hdf5 filter
+ *
+ *  return: negative value (failed), otherwise success
+ *
+ */
 int ffmpeg_register_h5filter(void) {
     int ret;
 

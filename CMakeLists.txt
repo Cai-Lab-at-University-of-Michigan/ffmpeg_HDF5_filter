@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 2.10)
 project(ffmpeg_hdf5)
 
 # Set where to find ffmpeg related packages
-set(FFMPEG_BUILD_PATH /home/binduan/ffmpeg_build)
+#set(FFMPEG_BUILD_PATH ~/ffmpeg_build)
 
 # We have to manually set paths since ffmpeg doesn't support find_package in CMake
 find_path(
@@ -59,7 +59,7 @@ option(BUILD_TESTS "Build test programs form the ffmpeg filter" ON)
 option(BUILD_PLUGIN "Build dynamically loadable plugin for HDF5 version > 1.12.9" ON)
 
 if(BUILD_PLUGIN)
-    set(PLUGIN_INSTALL_PATH "/home/binduan/hdf5_plugin"
+    set(PLUGIN_INSTALL_PATH "~/hdf5_plugin"
             CACHE PATH "Where to install the dynamic HDF5-plugin")
 endif(BUILD_PLUGIN)
 

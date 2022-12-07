@@ -2,7 +2,7 @@
 
 rm -rf ./build
 mkdir build && cd build
-cmake ..
+cmake .. -DFFMPEG_BUILD_PATH=~/ffmpeg_build
 make
 cd ..
 build/example 1
