@@ -324,8 +324,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         int i, j, ret;
 
-        printf("I am in compressing\n");
-
         c_id = cd_values[0];
         width = cd_values[2];
         height = cd_values[3];
@@ -460,8 +458,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 p_data += width * height;
             }
 
-            printf("frame data %d\n", src_frame->data[0][10]);
-
             ret = sws_scale_frame(sws_context, dst_frame, src_frame);
             if (ret < 0) {
                 fprintf(stderr, "Could not do colorspace conversion");
@@ -474,7 +470,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             encode(c, dst_frame, pkt, &out_size, &out_data);
         }
 
-        printf("flush the encoder\n");
         /* flush the encoder */
         encode(c, NULL, pkt, &out_size, &out_data);
 
@@ -501,8 +496,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         *buf = out_buf;
         *buf_size = buf_size_out;
-        printf("buf size out %d\n", *buf_size);
-
         return buf_size_out;
 
     CompressFailure:

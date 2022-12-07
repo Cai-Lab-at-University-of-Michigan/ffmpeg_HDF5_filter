@@ -2,8 +2,8 @@
 * Lossy and lossless compressions supprted filter based on ffmpeg.
 
 ## Getting Started
-- [x] install ffmepg and codecs, example [ffmpeg compiled from source](doc/install_ffmpeg.md)
-- [x] install hdf5
+- [x] install ffmepg and other codecs, example [ffmpeg compiled from source](doc/install_ffmpeg.md)
+- [x] install hdf5 (1.12.1)
 - [x] download current repo
 
 ## Restrictions
