@@ -69,7 +69,7 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
  * map id used in hdf5 params to real encoders name in ffmpeg
  *
  *  c_id : integer used in hdf5 auxiliary parameters
- *  *name : encoders name
+ *  *name : encoder name
  *
  */
 static void find_encoder_name(int c_id, char *name)
@@ -126,7 +126,7 @@ static void find_encoder_name(int c_id, char *name)
  * map id used in hdf5 params to real decoders name in ffmpeg
  *
  *  c_id : integer used in hdf5 params
- *  *name : decoders name
+ *  *name : decoder name
  *
  */
 static void find_decoder_name(int c_id, char *name)
@@ -244,7 +244,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    size_t *out_size, uint8_t **out_data, int color_mode)
 {
     int ret;
-    int offset = 0;
+    size_t offset = 0;
     int perchannelsize = 0;
 
     ret = avcodec_send_packet(dec_ctx, pkt);
@@ -334,14 +334,15 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         int c_id;
         int width, height, depth;
         int color_mode;
-        size_t expected_size;
 
         size_t out_size = 0;
-        int offset = 0;
+        size_t offset = 0;
         uint8_t *out_data = NULL;
         uint8_t *p_data = NULL;
 
         int i, j, ret;
+
+        printf("I am here in compressing\n");
 
         c_id = cd_values[0];
         width = cd_values[2];
@@ -349,15 +350,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         depth = cd_values[4];
         color_mode = cd_values[5];
 
-        /* Sanity check to make sure we have been passed a complete image */
-        expected_size = width * height * depth;
-        if (color_mode == 1)
-            expected_size *= 3;
-        if (expected_size != nbytes)
-        {
-            fprintf(stderr, "nbytes does not match image size");
-            return 0;
-        }
         codec_name = calloc(1, 50);
         find_encoder_name(c_id, codec_name);
         codec = avcodec_find_encoder_by_name(codec_name);
@@ -581,7 +573,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         int c_id;
         int width, height, depth;
         int color_mode;
-        size_t expected_size;
 
         uint8_t inbuf[INBUF_SIZE + AV_INPUT_BUFFER_PADDING_SIZE];
         uint8_t *data;
@@ -712,14 +703,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         pkt->data = NULL;
         pkt->size = 0;
         decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
-
-        /* Sanity check to make sure we have been passed a complete image */
-        expected_size = (color_mode == 1) ? height * width * depth * 3 : height * width * depth;
-        if (expected_size != out_size)
-        {
-            fprintf(stderr, "Decompressed image does not match image size\n");
-            goto DecompressFailure;
-        }
 
         av_parser_close(parser);
         avcodec_free_context(&c);
