@@ -33,7 +33,7 @@ def rgb_main(raw_file, h5_file, rec_file):
     print(f'RAW SHAPE: {raw_array.shape}')
 
     chunk_shape = raw_array.shape
-    
+
     print(f'CHUNK SHAPE: {chunk_shape}')
     filter_parameters = (1, 1, raw_array.shape[2],
                          raw_array.shape[1], raw_array.shape[0], 0)
@@ -71,11 +71,13 @@ def gray_main(raw_file, h5_file, rec_file):
     raw_array = imread(raw_file)  # ZYX
     print(f'RAW SHAPE: {raw_array.shape}')
 
-    chunk_shape = (832, 1024, 1024)
-    
+    assert raw_array.dtype == np.uint8
+
+    chunk_shape = raw_array.shape
+
     print(f'CHUNK SHAPE: {chunk_shape}')
-    filter_parameters = (1, 1, raw_array.shape[2],
-                         raw_array.shape[1], raw_array.shape[0], 0)
+    filter_parameters = (
+        10, 9, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 0)
 
     record = TEMPLATE
 
@@ -107,9 +109,9 @@ def gray_main(raw_file, h5_file, rec_file):
 
 
 if __name__ == '__main__':
-    tif_file = '/home/binduan/Downloads/182725_16X.tif'
-    hdf5_file = '/home/binduan/Downloads/182725_16X.h5'
-    rec_tif_file = '/home/binduan/Downloads/Rec_182725_16X.tif'
+    tif_file = '/home/binduan/Downloads/182725.tif'
+    hdf5_file = '/home/binduan/Downloads/182725.h5'
+    rec_tif_file = '/home/binduan/Downloads/Rec_182725.tif'
     benchmark_meter = BenchmarkMeter()
 
     gray_main(tif_file, hdf5_file, rec_tif_file)

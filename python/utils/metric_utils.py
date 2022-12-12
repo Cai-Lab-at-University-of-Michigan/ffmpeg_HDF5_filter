@@ -170,8 +170,16 @@ class BenchmarkMeter(object):
             psnr.append(peak_signal_noise_ratio(src_im, cs_im))
             ssim.append(structural_similarity(src_im, cs_im, channel_axis=-1))
 
-        record_template['rmse'] = f'{np.mean(np.array(rmse)):.4f}'
-        record_template['psnr'] = f'{np.mean(np.array(psnr)):.4f}'
-        record_template['ssim'] = f'{np.mean(np.array(ssim)):.4f}'
+        rmse = np.array(rmse)
+        psnr = np.array(psnr)
+        ssim = np.array(ssim)
+
+        rmse[np.isnan(rmse)] = 0
+        rmse[np.isinf(rmse)] = 0
+        psnr[np.isinf(psnr)] = 0
+
+        record_template['rmse'] = f'{np.mean(rmse):.4f}'
+        record_template['psnr'] = f'{np.mean(psnr):.4f}'
+        record_template['ssim'] = f'{np.mean(ssim):.4f}'
 
         return record_template
