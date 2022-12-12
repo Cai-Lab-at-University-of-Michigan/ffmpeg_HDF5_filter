@@ -17,7 +17,7 @@
 
 #include "ffmpeg_h5filter.h"
 
-#define INBUF_SIZE 1024 // we have to define big buffer size to ensure at least covering one complete compressed packet
+#define INBUF_SIZE 4096
 
 #define PUSH_ERR(func, minor, str) \
     H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
@@ -245,13 +245,13 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 {
     int ret;
     size_t offset = 0;
-    size_t perchannelsize = 0;
+    size_t frame_size = 0;
 
     ret = avcodec_send_packet(dec_ctx, pkt);
 
     if (ret < 0)
         fprintf(stderr, "Error sending a pkt for encoding\n");
-    
+
     // printf("receiving packets %d\n", pkt->size);
 
     while (ret >= 0)
@@ -272,22 +272,11 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         /* put to buffer */
         offset = *out_size;
 
-        perchannelsize = dst_frame->width * dst_frame->height;
+        frame_size = (color_mode == 0) ? dst_frame->width * dst_frame->height : dst_frame->width * dst_frame->height * 3;
 
-        if (color_mode == 0)
-        {
-            *out_data = realloc(*out_data, *out_size + perchannelsize);
-            memcpy(*out_data + offset, dst_frame->data[0], perchannelsize);
-            *out_size += perchannelsize;
-        }
-        else
-        {
-            *out_data = realloc(*out_data, *out_size + perchannelsize * 3);
-            memcpy(*out_data + offset, dst_frame->data[0], perchannelsize);
-            memcpy(*out_data + offset + perchannelsize, dst_frame->data[1], perchannelsize);
-            memcpy(*out_data + offset + perchannelsize * 2, dst_frame->data[2], perchannelsize);
-            *out_size += perchannelsize * 3;
-        }
+        *out_data = realloc(*out_data, *out_size + frame_size);
+        av_image_copy_to_buffer(*out_data + offset, frame_size, (const uint8_t *const *)dst_frame->data, dst_frame->linesize, dst_frame->format, dst_frame->width, dst_frame->height, 1);
+        *out_size += frame_size;
     }
 }
 
@@ -386,8 +375,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * then gop_size is ignored and the output of encoder
          * will always be I frame irrespective to gop_size
          */
-        c->gop_size = 10;
-        c->max_b_frames = 1;
+
+        // c->gop_size = 10;
+        // c->max_b_frames = 1;
 
         /* additional parameters (codec specific)
          * leave blank for now
@@ -434,7 +424,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         src_frame->width = c->width;
         src_frame->height = c->height;
 
-        if ((av_frame_get_buffer(src_frame, 0) < 0))
+        if (av_frame_get_buffer(src_frame, 0) < 0)
         {
             fprintf(stderr, "Could not allocate the video src_frame data\n");
             return 0;
@@ -473,19 +463,11 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 return 0;
             }
             /* put buffer data to frame and do colorspace conversion */
+            av_image_fill_arrays(src_frame->data, src_frame->linesize, p_data, src_frame->format, width, height, 1);
             if (color_mode == 1)
-            {
-                for (j = 0; j < 3; j++)
-                {
-                    memcpy(src_frame->data[j], p_data, width * height);
-                    p_data += width * height;
-                }
-            }
+                p_data += width * height * 3;
             else
-            {
-                memcpy(src_frame->data[0], p_data, width * height);
                 p_data += width * height;
-            }
 
             ret = sws_scale_frame(sws_context, dst_frame, src_frame);
             if (ret < 0)
@@ -589,8 +571,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         depth = cd_values[4];
         color_mode = cd_values[5];
 
-        printf("I am at decompressing, input bytes %d bytes\n", nbytes);
-
         pkt = av_packet_alloc();
         if (!pkt)
         {
@@ -688,13 +668,12 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                     return 0;
                 }
 
-
                 data += ret;
                 data_buf_size -= ret;
 
                 if (pkt->size)
                 {
-                    /* decode packet */
+                    /* decode packets */
                     decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
                 }
                 else if (eof)
@@ -736,7 +715,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         }
 
         /* flush the decoder */
-        printf("flush the decoder\n");
         pkt->data = NULL;
         pkt->size = 0;
         decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
@@ -768,6 +746,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         *buf = out_buf;
         *buf_size = buf_size_out;
 
+        // printf("I am at decompressing %u\n", buf_size_out);
         return buf_size_out;
 
     DecompressFailure:
@@ -794,7 +773,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
     }
 }
 
-/* H%Z struct declaration*/
+/* H5Z struct declaration */
 H5Z_class_t ffmpeg_H5Filter[1] = {{H5Z_CLASS_T_VERS,
                                    (H5Z_filter_t)(FFMPEG_H5FILTER),
                                    1, /* encode (compress) */
