@@ -11,8 +11,8 @@
 #include "hdf5.h"
 #include "ffmpeg_h5filter.h"
 
-#define NX 2048
-#define NY 1024
+#define NX 4096 
+#define NY 4096
 #define NZ 20
 #define SIZE (NX * NY * NZ)
 #define SHAPE      \
@@ -67,7 +67,7 @@ int adjust_decoder_by_encoder(int c_id)
         decoder_id = 7;
         break;
     case 9:
-        decoder_id = 8;
+        decoder_id = 9;
         break;
     case 10:
         decoder_id = 9;
@@ -140,7 +140,7 @@ int main(int argc, const char *argv[])
     if (r < 0)
         goto failed;
 
-    /* JPEG filter requires 4 parameters */
+    /* FFMPEG filter requires 6 parameters */
     cd_values[0] = encoder_id; /* Encoder id */
     cd_values[1] = decoder_id; /* Decoder id */
     cd_values[2] = NX;         /* Number of columns */
