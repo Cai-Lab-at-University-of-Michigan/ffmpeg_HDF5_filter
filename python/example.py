@@ -6,7 +6,6 @@
 """
 
 import json
-import os
 import time
 
 import h5py
@@ -72,7 +71,7 @@ def multi_channel_main(raw_file, h5_file, rec_file, channel_first=False):
 
     print(f'CHUNK SHAPE: {chunk_shape}')
     filter_parameters = (
-        10, 9, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 0)
+        8, 7, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 0)
 
     record = TEMPLATE
 
@@ -104,7 +103,7 @@ def multi_channel_main(raw_file, h5_file, rec_file, channel_first=False):
         rec_array = np.reshape(
             rec_array, (-1, ch, raw_array.shape[1], raw_array.shape[2]))
 
-    imwrite(rec_file, rec_array)
+    imwrite(rec_file, rec_array, imagej=True, metadata={'axes': 'ZCYX'})
 
     # metrics
     try:
@@ -124,7 +123,7 @@ def rgb_main(raw_file, h5_file, rec_file):
 
     print(f'CHUNK SHAPE: {chunk_shape}')
     filter_parameters = (
-        10, 9, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 1)
+        8, 7, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 1)
 
     record = TEMPLATE
 
@@ -150,7 +149,7 @@ def rgb_main(raw_file, h5_file, rec_file):
 
     rec_array = np.transpose(rec_array, (0, 3, 1, 2))
 
-    imwrite(rec_file, rec_array)
+    imwrite(rec_file, rec_array, imagej=True, metadata={'axes': 'ZCYX'})
 
     # metrics
     try:
@@ -171,7 +170,7 @@ def gray_main(raw_file, h5_file, rec_file):
 
     print(f'CHUNK SHAPE: {chunk_shape}')
     filter_parameters = (
-        10, 9, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 0)
+        8, 7, raw_array.shape[2], raw_array.shape[1], raw_array.shape[0], 0)
 
     record = TEMPLATE
 
