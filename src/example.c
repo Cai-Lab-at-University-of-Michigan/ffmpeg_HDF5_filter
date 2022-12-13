@@ -11,7 +11,7 @@
 #include "hdf5.h"
 #include "ffmpeg_h5filter.h"
 
-#define NX 4096 
+#define NX 4096
 #define NY 4096
 #define NZ 20
 #define SIZE (NX * NY * NZ)
@@ -28,7 +28,7 @@ int DisplayHelp()
 {
     printf("Usage :build/example <encoder id>\n");
     printf("\t<encoder id> : Which encoder to be used for compression? \n");
-    printf("\t\t[0-11] ffv1, mpeg4, libxvid, libvpx, libvpx-vp9, libx264, h264_nvenc, libx265, hevc_nvenc, libaom-av1, libsvtav1, librav1e\n");
+    printf("\t\t[0-7] mpeg4, libxvid, libx264, h264_nvenc, libx265, hevc_nvenc, libsvtav1, librav1e\n");
     exit(1);
 }
 
@@ -91,9 +91,7 @@ int main(int argc, const char *argv[])
     struct stat st;
 
     if (argc != 2)
-    {
         DisplayHelp();
-    }
 
     encoder_id = atoi(argv[1]);
 
