@@ -44,6 +44,7 @@ def save_record_appending(record, file):
 def print_record(record, indent=2):
     print(json.dumps(record, indent=indent))
 
+
 def print_file(file):
     with open(file, 'r') as f:
         for line in f.readlines():
@@ -107,7 +108,7 @@ def multi_channel_main(raw_file, h5_file, rec_file, channel_first=False):
 
     # metrics
     try:
-        record = benchmark_meter(record, raw_file, h5_file)
+        record = benchmark_meter(record, raw_file, h5_file, rec_file)
     except:
         print("Error happened")
 
@@ -147,11 +148,13 @@ def rgb_main(raw_file, h5_file, rec_file):
     assert raw_array.shape == rec_array.shape, print(
         "Two images shape not matched")
 
+    rec_array = np.transpose(rec_array, (0, 3, 1, 2))
+
     imwrite(rec_file, rec_array)
 
     # metrics
     try:
-        record = benchmark_meter(record, raw_file, h5_file)
+        record = benchmark_meter(record, raw_file, h5_file, rec_file)
     except:
         print("Error happened")
 
@@ -195,7 +198,7 @@ def gray_main(raw_file, h5_file, rec_file):
 
     # metrics
     try:
-        record = benchmark_meter(record, raw_file, h5_file)
+        record = benchmark_meter(record, raw_file, h5_file, rec_file)
     except:
         print("Error happened")
 
@@ -206,40 +209,40 @@ if __name__ == '__main__':
     log_file = 'run.log'
 
     tif_file = '/home/binduan/Downloads/nTracer_sample.tif'
-    h5_file = '/home/binduan/Downloads/nTracer_sample.h5'
+    hdf5_file = '/home/binduan/Downloads/nTracer_sample.h5'
     rec_tif_file = '/home/binduan/Downloads/Rec_nTracer_sample.tif'
     benchmark_meter = BenchmarkMeter()
     echo(f'Compressing {tif_file}, color_mode: 1 (rgb)', log_file)
-    rgb_main(tif_file, h5_file, rec_tif_file)
+    rgb_main(tif_file, hdf5_file, rec_tif_file)
 
     tif_file = '/home/binduan/Downloads/nTracer_sample_denoised.tif'
-    h5_file = '/home/binduan/Downloads/nTracer_sample_denoised.h5'
+    hdf5_file = '/home/binduan/Downloads/nTracer_sample_denoised.h5'
     rec_tif_file = '/home/binduan/Downloads/Rec_nTracer_sample_denoised.tif'
     benchmark_meter = BenchmarkMeter()
     echo(f'Compressing {tif_file}, color_mode: 1 (rgb)', log_file)
-    rgb_main(tif_file, h5_file, rec_tif_file)
+    rgb_main(tif_file, hdf5_file, rec_tif_file)
 
     tif_file = '/home/binduan/Downloads/nTracer_sample_denoised.tif'
-    h5_file = '/home/binduan/Downloads/nTracer_sample_denoised.h5'
+    hdf5_file = '/home/binduan/Downloads/nTracer_sample_denoised.h5'
     rec_tif_file = '/home/binduan/Downloads/Rec_nTracer_sample_denoised.tif'
     benchmark_meter = BenchmarkMeter()
     echo(
         f'Compressing {tif_file}, color_mode: 1 (rgb), channel_first: False', log_file)
-    multi_channel_main(tif_file, h5_file, rec_tif_file, channel_first=False)
+    multi_channel_main(tif_file, hdf5_file, rec_tif_file, channel_first=False)
 
     tif_file = '/home/binduan/Downloads/nTracer_sample_denoised.tif'
-    h5_file = '/home/binduan/Downloads/nTracer_sample_denoised.h5'
+    hdf5_file = '/home/binduan/Downloads/nTracer_sample_denoised.h5'
     rec_tif_file = '/home/binduan/Downloads/Rec_nTracer_sample_denoised.tif'
     benchmark_meter = BenchmarkMeter()
     echo(
         f'Compressing {tif_file}, color_mode: 1 (rgb), channel_first: True', log_file)
-    multi_channel_main(tif_file, h5_file, rec_tif_file, channel_first=True)
+    multi_channel_main(tif_file, hdf5_file, rec_tif_file, channel_first=True)
 
     tif_file = '/home/binduan/Downloads/182725.tif'
-    h5_file = '/home/binduan/Downloads/182725.h5'
+    hdf5_file = '/home/binduan/Downloads/182725.h5'
     rec_tif_file = '/home/binduan/Downloads/Rec_182725.tif'
     benchmark_meter = BenchmarkMeter()
     echo(f'Compressing {tif_file}, color_mode: 0 (gray)', log_file)
-    gray_main(tif_file, h5_file, rec_tif_file)
+    gray_main(tif_file, hdf5_file, rec_tif_file)
 
     print_file(log_file)
