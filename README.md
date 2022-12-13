@@ -9,8 +9,10 @@
 ## Restrictions
 * Only 8-bit unsigned data arrays are supported.
 * Arrays must be either:
-    * 2-D Grayscale [NumColumns, NumRows, Depth]
-    * 3-D RGB [NumColumns, NumRows, Depth, 3]
+    * 2-D Grayscale [Depth, Height, Width] (ZYX)
+    * 3-D RGB [Depth, Height, Width, 3] (ZYXC)
+* If we want to compress multi-channel (>1 channel) image stack, we can reshape (ZCYX) to ((ZC)YX) for grayscale compression.
+* NOTE: we convert grayscale or rgb to YUV420P internally, where compressing rgb stacks can be pretty lossy. If we want to more faithful compression, we can alternatively reshape the data for grayscale compression.
 
 ## Compliling the Filter
 - [x] install cmake >= 2.10 
@@ -28,4 +30,4 @@
 
 
 ## Acknowledgments
-The cmake file borrows heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encode and decode codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). Very much thanks.
+The cmake file borrows heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encoding and decoding codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). Very much thanks.
