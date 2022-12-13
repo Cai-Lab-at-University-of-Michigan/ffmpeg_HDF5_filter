@@ -43,7 +43,7 @@ int adjust_decoder_by_encoder(int c_id)
         decoder_id = 0;
         break;
     case 1:
-        decoder_id = 1;
+        decoder_id = 0;
         break;
     case 2:
         decoder_id = 1;
@@ -58,22 +58,10 @@ int adjust_decoder_by_encoder(int c_id)
         decoder_id = 4;
         break;
     case 6:
-        decoder_id = 5;
+        decoder_id = 6;
         break;
     case 7:
         decoder_id = 6;
-        break;
-    case 8:
-        decoder_id = 7;
-        break;
-    case 9:
-        decoder_id = 9;
-        break;
-    case 10:
-        decoder_id = 9;
-        break;
-    case 11:
-        decoder_id = 9;
         break;
 
     default:

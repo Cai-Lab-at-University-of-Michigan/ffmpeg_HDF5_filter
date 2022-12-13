@@ -78,44 +78,32 @@ static void find_encoder_name(int c_id, char *name)
     {
     /* encoders */
     case 0:
-        strcpy(name, "ffv1");
-        break;
-    case 1:
         strcpy(name, "mpeg4");
         break;
-    case 2:
+    case 1:
         strcpy(name, "libxvid");
         break;
-    case 3:
-        strcpy(name, "libvpx");
-        break;
-    case 4:
-        strcpy(name, "libvpx-vp9");
-        break;
-    case 5:
+    case 2:
         strcpy(name, "libx264");
         break;
-    case 6:
+    case 3:
         strcpy(name, "h264_nvenc");
         break;
-    case 7:
+    case 4:
         strcpy(name, "libx265");
         break;
-    case 8:
+    case 5:
         strcpy(name, "hevc_nvenc");
         break;
-    case 9:
-        strcpy(name, "libaom-av1");
-        break;
-    case 10:
+    case 6:
         strcpy(name, "libsvtav1");
         break;
-    case 11:
+    case 7:
         strcpy(name, "librav1e");
         break;
 
     default:
-        strcpy(name, "ffv1");
+        strcpy(name, "libx264");
         break;
     }
 }
@@ -135,38 +123,29 @@ static void find_decoder_name(int c_id, char *name)
     {
     /* decoders */
     case 0:
-        strcpy(name, "ffv1");
-        break;
-    case 1:
         strcpy(name, "mpeg4");
         break;
-    case 2:
-        strcpy(name, "libvpx");
-        break;
-    case 3:
-        strcpy(name, "libvpx-vp9");
-        break;
-    case 4:
+    case 1:
         strcpy(name, "h264");
         break;
-    case 5:
+    case 2:
         strcpy(name, "h264_cuvid");
         break;
-    case 6:
+    case 3:
         strcpy(name, "hevc");
         break;
-    case 7:
+    case 4:
         strcpy(name, "hevc_cuvid");
         break;
-    case 8:
+    case 5:
         strcpy(name, "libaom-av1");
         break;
-    case 9:
+    case 6:
         strcpy(name, "libdav1d");
         break;
 
     default:
-        strcpy(name, "ffv1");
+        strcpy(name, "h264");
         break;
     }
 }
@@ -364,7 +343,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         /* set width and height */
         c->width = width;
         c->height = height;
-        c->pix_fmt = AV_PIX_FMT_YUV420P;
+        c->pix_fmt = (strstr(codec_name, "nvenc")) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P;
+
         /* frames per second */
         c->time_base = (AVRational){1, 25};
         c->framerate = (AVRational){25, 1};
@@ -621,7 +601,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             return 0;
         }
 
-        src_frame->format = AV_PIX_FMT_YUV420P;
+        src_frame->format = (strstr(codec_name, "cuvid")) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P;
         src_frame->width = c->width;
         src_frame->height = c->height;
 
@@ -641,10 +621,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         sws_context = sws_getContext(width,
                                      height,
-                                     AV_PIX_FMT_YUV420P,
+                                     src_frame->format,
                                      width,
                                      height,
-                                     (color_mode == 1) ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_GRAY8,
+                                     dst_frame->format,
                                      SWS_BILINEAR,
                                      NULL,
                                      NULL,
