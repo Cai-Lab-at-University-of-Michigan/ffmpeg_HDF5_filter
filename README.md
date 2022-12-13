@@ -11,8 +11,7 @@
 * Arrays must be either:
     * 2-D Grayscale [Depth, Height, Width] (ZYX)
     * 3-D RGB [Depth, Height, Width, 3] (ZYXC)
-* If we want to compress multi-channel (>1 channel) image stack, we can reshape (ZCYX) to ((ZC)YX) for grayscale compression.
-* NOTE: we convert grayscale or rgb to YUV420P internally, where compressing rgb stacks can be pretty lossy. If we want to more faithful compression, we can alternatively reshape the data for grayscale compression.
+* **NOTE**: We convert grayscale or rgb to YUV420P internally, where compressing rgb stacks can be pretty lossy. If we want more faithful compression, we can alternatively reshape the multi-channel (>1 channel) data for grayscale compression.
 
 ## Compliling the Filter
 - [x] install cmake >= 2.10 
