@@ -5,6 +5,7 @@ project(ffmpeg_hdf5)
 #set(FFMPEG_BUILD_PATH ~/ffmpeg_build)
 
 # We have to manually set paths since ffmpeg doesn't support find_package in CMake
+# Please set FFMPEG_BUILD_PATH
 find_path(
     AVCODEC_INCLUDE_DIR
     NAMES "libavcodec/avcodec.h"
@@ -54,9 +55,9 @@ find_library(
 set(CMAKE_VERBOSE_MAKEFILE ON)
 
 # options
-option(BUILD_TESTS "Build test programs form the ffmpeg filter" ON)
+option(BUILD_TESTS "Build test programs from the ffmpeg filter" ON)
 
-option(BUILD_PLUGIN "Build dynamically loadable plugin for HDF5 version > 1.12.9" ON)
+option(BUILD_PLUGIN "Build dynamically loadable plugin for HDF5 version >= 1.12.1" ON)
 
 if(BUILD_PLUGIN)
     set(PLUGIN_INSTALL_PATH "~/hdf5_plugin"
@@ -80,6 +81,7 @@ if(MSVC)
 else(MSVC)
     find_package(HDF5 REQUIRED)
 endif(MSVC)
+
 include_directories(${HDF5_INCLUDE_DIRS})
 include_directories(${AVCODEC_INCLUDE_DIR})
 include_directories(${SWSCALE_INCLUDE_DIR})
