@@ -4,7 +4,7 @@
  `git clone https://git.ffmpeg.org/ffmpeg.git ffmpeg/`
  
  ## run bash file
- `bash install.sh`
+ `bash scripts/install_ffmpeg.sh`
 
  Before run bash script, you need to follow [4-6] to resolve dependencies. [7,8] might be useful just for reference.
 
