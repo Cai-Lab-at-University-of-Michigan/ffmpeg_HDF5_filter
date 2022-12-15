@@ -11,9 +11,9 @@
 #include "hdf5.h"
 #include "ffmpeg_h5filter.h"
 
-#define NX 4096
-#define NY 4096
-#define NZ 20
+#define NX 1024
+#define NY 1024
+#define NZ 10
 #define SIZE (NX * NY * NZ)
 #define SHAPE      \
     {              \
@@ -85,23 +85,25 @@ int main(int argc, const char *argv[])
     int return_code = 1;
     int num_diff = 0;
     double avg_diff = 0.;
-    int encoder_id, decoder_id;
+    int encoder_id, decoder_id, preset_id, tune_type;
     hid_t fid, sid, dset, plist = 0;
 
     struct stat st;
 
-    if (argc != 2)
+    if (argc < 2)
         DisplayHelp();
 
     encoder_id = atoi(argv[1]);
+
+    if (argc == 4)
+        preset_id = atoi(argv[2]);
+        tune_type = atoi(argv[3]);
 
     // adjusted according to encoder id
     decoder_id = adjust_decoder_by_encoder(encoder_id);
 
     for (i = 0; i < SIZE; i++)
-    {
         data[i] = i;
-    }
 
     /* Dynamically register the filter with the library */
     r = ffmpeg_register_h5filter();
@@ -133,9 +135,11 @@ int main(int argc, const char *argv[])
     cd_values[3] = NY;         /* Number of rows */
     cd_values[4] = NZ;         /* depth */
     cd_values[5] = 0;          /* Color mode (0=Mono, 1=RGB) */
+    cd_values[6] = preset_id;  /* Preset for encoding codec */
+    cd_values[7] = tune_type;  /* tuning for encoding codec */
 
-    /* Set the filter with 5 params */
-    r = H5Pset_filter(plist, FFMPEG_H5FILTER, H5Z_FLAG_OPTIONAL, 6, cd_values);
+    /* Set the filter with 6 params */
+    r = H5Pset_filter(plist, FFMPEG_H5FILTER, H5Z_FLAG_OPTIONAL, 8, cd_values);
 
     if (r < 0)
         goto failed;
@@ -189,7 +193,6 @@ int main(int argc, const char *argv[])
     return_code = 0;
 
 failed:
-
     if (dset > 0)
         H5Dclose(dset);
     if (sid > 0)
