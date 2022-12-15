@@ -66,17 +66,17 @@ enum DecoderCodec
 enum PresetID
 {
     /* no preset */
-    FFH5_PRESET_NONE = -1,
+    FFH5_PRESET_NONE = 0,
     /* libx264 */
-    FFH5_PRESET_X264_ULTRAFAST = 0,
-    FFH5_PRESET_X264_SUPERFAST = 1,
-    FFH5_PRESET_X264_VERYFAST = 2,
-    FFH5_PRESET_X264_FASTER = 3,
-    FFH5_PRESET_X264_FAST = 4,
-    FFH5_PRESET_X264_MEDIUM = 5,
-    FFH5_PRESET_X264_SLOW = 6,
-    FFH5_PRESET_X264_SLOWER = 7,
-    FFH5_PRESET_X264_VERYSLOW = 8,
+    FFH5_PRESET_X264_ULTRAFAST = 10,
+    FFH5_PRESET_X264_SUPERFAST = 11,
+    FFH5_PRESET_X264_VERYFAST = 12,
+    FFH5_PRESET_X264_FASTER = 13,
+    FFH5_PRESET_X264_FAST = 14,
+    FFH5_PRESET_X264_MEDIUM = 15,
+    FFH5_PRESET_X264_SLOW = 16,
+    FFH5_PRESET_X264_SLOWER = 17,
+    FFH5_PRESET_X264_VERYSLOW = 18,
     /* h264_nvenc */
     FFH5_PRESET_H264_VERYFAST = 100,
     FFH5_PRESET_H264_FASTER = 101,
@@ -134,16 +134,16 @@ enum PresetID
 enum TuneType
 {
     /* no tune */
-    FFH5_TUNE_NONE = -1,
+    FFH5_TUNE_NONE = 0,
     /* libx264 */
-    FFH5_TUNE_X264_PSNR = 0,
-    FFH5_TUNE_X264_SSIM = 1,
-    FFH5_TUNE_X264_GRAIN = 2,
-    FFH5_TUNE_X264_FASTDECODE = 3,
-    FFH5_TUNE_X264_ZEROLATENCY = 4,
-    FFH5_TUNE_X264_ANIMATION = 5,
-    FFH5_TUNE_X264_FILM = 6,
-    FFH5_TUNE_X264_STILLIMAGE = 7,
+    FFH5_TUNE_X264_PSNR = 10,
+    FFH5_TUNE_X264_SSIM = 11,
+    FFH5_TUNE_X264_GRAIN = 12,
+    FFH5_TUNE_X264_FASTDECODE = 13,
+    FFH5_TUNE_X264_ZEROLATENCY = 14,
+    FFH5_TUNE_X264_ANIMATION = 15,
+    FFH5_TUNE_X264_FILM = 16,
+    FFH5_TUNE_X264_STILLIMAGE = 17,
 
     /* h264_nvenc */
     FFH5_TUNE_H264_HQ = 100,
@@ -423,7 +423,7 @@ static void find_preset_by_id(int p_id, char *preset)
         break;
 
     default:
-        printf("No such preset for this codec, default preset will be used\n");
+        printf("No such preset for this codec, default/no preset will be used\n");
         break;
     }
 }
@@ -508,7 +508,7 @@ static void find_tune_by_id(int t_id, char *tune)
         break;
 
     default:
-        printf("No such tune for this codec, default tune will be used\n");
+        printf("No such tune for this codec, default/no tune will be used\n");
         break;
     }
 }
