@@ -24,9 +24,13 @@
 
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
 
-static void find_encoder_name(int c_id, char *name);
+static void find_encoder_name_by_id(int c_id, char *name);
 
-static void find_decoder_name(int c_id, char *name);
+static void find_decoder_name_by_id(int c_id, char *name);
+
+static void find_preset_by_id(int p_id, char *preset);
+
+static void find_tune_by_id(int t_id, char *tune);
 
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data);
 
@@ -37,10 +41,140 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
                         size_t *buf_size, void **buf);
 
-
 /* Define enums */
-enum EncoderCodec {mpeg4, libxvid, libx264, h264_nvenc, libx265, hevc_nvenc, libsvtav1, librav1e};
-enum DecoderCodec {mpeg4, h264, h264_cuvid, hevc, hevc_cuvid, libaomav1, libdav1d};
+enum EncoderCodec
+{
+    FFH5_ENC_MPEG4,
+    FFH5_ENC_XVID,
+    FFH5_ENC_X264,
+    FFH5_ENC_H264_NV,
+    FFH5_ENC_X265,
+    FFH5_ENC_HEVC_NV,
+    FFH5_ENC_SVTAV1,
+    FFH5_ENC_RAV1E
+};
+enum DecoderCodec
+{
+    FFH5_DEC_MPEG4,
+    FFH5_DEC_H264,
+    FFH5_DEC_H264_CUVID,
+    FFH5_DEC_HEVC,
+    FFH5_DEC_HEVC_CUVID,
+    FFH5_DEC_AOMAV1,
+    FFH5_DEC_DAV1D
+};
+enum PresetID
+{
+    /* no preset */
+    FFH5_PRESET_NONE = -1,
+    /* libx264 */
+    FFH5_PRESET_X264_ULTRAFAST = 0,
+    FFH5_PRESET_X264_SUPERFAST = 1,
+    FFH5_PRESET_X264_VERYFAST = 2,
+    FFH5_PRESET_X264_FASTER = 3,
+    FFH5_PRESET_X264_FAST = 4,
+    FFH5_PRESET_X264_MEDIUM = 5,
+    FFH5_PRESET_X264_SLOW = 6,
+    FFH5_PRESET_X264_SLOWER = 7,
+    FFH5_PRESET_X264_VERYSLOW = 8,
+    /* h264_nvenc */
+    FFH5_PRESET_H264_VERYFAST = 100,
+    FFH5_PRESET_H264_FASTER = 101,
+    FFH5_PRESET_H264_FAST = 102,
+    FFH5_PRESET_H264_MEDIUM = 103,
+    FFH5_PRESET_H264_SLOW = 104,
+    FFH5_PRESET_H264_SLOWER = 105,
+    FFH5_PRESET_H264_VERYSLOW = 106,
+    /* x265 */
+    FFH5_PRESET_X265_ULTRAFAST = 200,
+    FFH5_PRESET_X265_SUPERFAST = 201,
+    FFH5_PRESET_X265_VERYFAST = 202,
+    FFH5_PRESET_X265_FASTER = 203,
+    FFH5_PRESET_X265_FAST = 204,
+    FFH5_PRESET_X265_MEDIUM = 205,
+    FFH5_PRESET_X265_SLOW = 206,
+    FFH5_PRESET_X265_SLOWER = 207,
+    FFH5_PRESET_X265_VERYSLOW = 208,
+    /* hevc_nvenc */
+    FFH5_PRESET_HEVC_VERYFAST = 300,
+    FFH5_PRESET_HEVC_FASTER = 301,
+    FFH5_PRESET_HEVC_FAST = 302,
+    FFH5_PRESET_HEVC_MEDIUM = 303,
+    FFH5_PRESET_HEVC_SLOW = 304,
+    FFH5_PRESET_HEVC_SLOWER = 305,
+    FFH5_PRESET_HEVC_VERYSLOW = 306,
+    /* svtav1 */
+    FFH5_PRESET_SVTAV1_ULTRAFAST = 400,
+    FFH5_PRESET_SVTAV1_SUPERFAST = 401,
+    FFH5_PRESET_SVTAV1_VERYFAST = 402,
+    FFH5_PRESET_SVTAV1_MUCHFASTER = 403,
+    FFH5_PRESET_SVTAV1_FASTER = 404,
+    FFH5_PRESET_SVTAV1_FAST = 405,
+    FFH5_PRESET_SVTAV1_LESSFAST = 406,
+    FFH5_PRESET_SVTAV1_MEDIUM = 407,
+    FFH5_PRESET_SVTAV1_LESSSLOW = 408,
+    FFH5_PRESET_SVTAV1_SLOW = 409,
+    FFH5_PRESET_SVTAV1_SLOWER = 410,
+    FFH5_PRESET_SVTAV1_MUCHSLOWER = 411,
+    FFH5_PRESET_SVTAV1_VERYSLOW = 412,
+    FFH5_PRESET_SVTAV1_SUPERSLOW = 413,
+    /* rav1e */
+    FFH5_PRESET_RAV1E_MUCHFASTER = 500,
+    FFH5_PRESET_RAV1E_FASTER = 501,
+    FFH5_PRESET_RAV1E_FAST = 502,
+    FFH5_PRESET_RAV1E_LESSFAST = 503,
+    FFH5_PRESET_RAV1E_MEDIUM = 504,
+    FFH5_PRESET_RAV1E_LESSSLOW = 505,
+    FFH5_PRESET_RAV1E_SLOW = 506,
+    FFH5_PRESET_RAV1E_SLOWER = 507,
+    FFH5_PRESET_RAV1E_MUCHSLOWER = 508,
+    FFH5_PRESET_RAV1E_VERYSLOW = 509,
+    FFH5_PRESET_RAV1E_SUPERSLOW = 510,
+};
+enum TuneType
+{
+    /* no tune */
+    FFH5_TUNE_NONE = -1,
+    /* libx264 */
+    FFH5_TUNE_X264_PSNR = 0,
+    FFH5_TUNE_X264_SSIM = 1,
+    FFH5_TUNE_X264_GRAIN = 2,
+    FFH5_TUNE_X264_FASTDECODE = 3,
+    FFH5_TUNE_X264_ZEROLATENCY = 4,
+    FFH5_TUNE_X264_ANIMATION = 5,
+    FFH5_TUNE_X264_FILM = 6,
+    FFH5_TUNE_X264_STILLIMAGE = 7,
+
+    /* h264_nvenc */
+    FFH5_TUNE_H264_HQ = 100,
+    FFH5_TUNE_H264_ll = 101,
+    FFH5_TUNE_H264_ULL = 102,
+    FFH5_TUNE_H264_LOSSLESS = 103,
+
+    /* x265 */
+    FFH5_TUNE_X265_PSNR = 200,
+    FFH5_TUNE_X265_SSIM = 201,
+    FFH5_TUNE_X265_GRAIN = 202,
+    FFH5_TUNE_X265_FASTDECODE = 203,
+    FFH5_TUNE_X265_ZEROLATENCY = 204,
+    FFH5_TUNE_X265_ANIMATION = 205,
+
+    /* hevc_nvenc */
+    FFH5_TUNE_HEVC_HQ = 300,
+    FFH5_TUNE_HEVC_ll = 301,
+    FFH5_TUNE_HEVC_ULL = 302,
+    FFH5_TUNE_HEVC_LOSSLESS = 303,
+
+    /* svtav1 */
+    FFH5_TUNE_SVTAV1_VQ = 400,
+    FFH5_TUNE_SVTAV1_PSNR = 401,
+    FFH5_TUNE_SVTAV1_FASTDECODE = 402,
+
+    /* rav1e */
+    FFH5_TUNE_RAV1E_PSNR = 500,
+    FFH5_TUNE_RAV1E_PSYCHOVISUAL = 501,
+
+};
 
 /*
  * Function:  read_from_buffer
@@ -69,7 +203,7 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
 }
 
 /*
- * Function:  find_encoder_name
+ * Function:  find_encoder_name_by_id
  * --------------------
  * map id used in hdf5 params to real encoders name in ffmpeg
  *
@@ -77,33 +211,33 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
  *  *name : encoder name
  *
  */
-static void find_encoder_name(int c_id, char *name)
+static void find_encoder_name_by_id(int c_id, char *name)
 {
     switch (c_id)
     {
     /* encoders */
-    case mpeg4:
+    case FFH5_ENC_MPEG4:
         strcpy(name, "mpeg4");
         break;
-    case libxvid:
+    case FFH5_ENC_XVID:
         strcpy(name, "libxvid");
         break;
-    case libx264:
+    case FFH5_ENC_X264:
         strcpy(name, "libx264");
         break;
-    case h264_nvenc:
+    case FFH5_ENC_H264_NV:
         strcpy(name, "h264_nvenc");
         break;
-    case libx265:
+    case FFH5_ENC_X265:
         strcpy(name, "libx265");
         break;
-    case hevc_nvenc:
+    case FFH5_ENC_HEVC_NV:
         strcpy(name, "hevc_nvenc");
         break;
-    case libsvtav1:
+    case FFH5_ENC_SVTAV1:
         strcpy(name, "libsvtav1");
         break;
-    case librav1e:
+    case FFH5_ENC_RAV1E:
         strcpy(name, "librav1e");
         break;
 
@@ -114,7 +248,7 @@ static void find_encoder_name(int c_id, char *name)
 }
 
 /*
- * Function:  find_decoder_name
+ * Function:  find_decoder_name_by_id
  * --------------------
  * map id used in hdf5 params to real decoders name in ffmpeg
  *
@@ -122,35 +256,259 @@ static void find_encoder_name(int c_id, char *name)
  *  *name : decoder name
  *
  */
-static void find_decoder_name(int c_id, char *name)
+static void find_decoder_name_by_id(int c_id, char *name)
 {
     switch (c_id)
     {
     /* decoders */
-    case mpeg4:
+    case FFH5_DEC_MPEG4:
         strcpy(name, "mpeg4");
         break;
-    case h264:
+    case FFH5_DEC_H264:
         strcpy(name, "h264");
         break;
-    case h264_cuvid:
+    case FFH5_DEC_H264_CUVID:
         strcpy(name, "h264_cuvid");
         break;
-    case hevc:
+    case FFH5_DEC_HEVC:
         strcpy(name, "hevc");
         break;
-    case hevc_cuvid:
+    case FFH5_DEC_HEVC_CUVID:
         strcpy(name, "hevc_cuvid");
         break;
-    case libaomav1:
+    case FFH5_DEC_AOMAV1:
         strcpy(name, "libaom-av1");
         break;
-    case libdav1d:
+    case FFH5_DEC_DAV1D:
         strcpy(name, "libdav1d");
         break;
 
     default:
         strcpy(name, "h264");
+        break;
+    }
+}
+
+/*
+ * Function:  find_preset_by_id
+ * --------------------
+ * map id used in hdf5 params to preset in different codecs
+ *
+ *  p_id : integer used in hdf5 auxiliary parameters
+ *  *preset : encoder preset
+ *
+ */
+static void find_preset_by_id(int p_id, char *preset)
+{
+    switch (p_id)
+    {
+    case FFH5_PRESET_X264_ULTRAFAST:
+    case FFH5_PRESET_X265_ULTRAFAST:
+        strcpy(preset, "ultrafast");
+        break;
+    case FFH5_PRESET_X264_SUPERFAST:
+    case FFH5_PRESET_X265_SUPERFAST:
+        strcpy(preset, "superfast");
+        break;
+    case FFH5_PRESET_X264_VERYFAST:
+    case FFH5_PRESET_X265_VERYFAST:
+        strcpy(preset, "veryfast");
+        break;
+    case FFH5_PRESET_X264_FASTER:
+    case FFH5_PRESET_X265_FASTER:
+        strcpy(preset, "faster");
+        break;
+    case FFH5_PRESET_X264_FAST:
+    case FFH5_PRESET_X265_FAST:
+        strcpy(preset, "fast");
+        break;
+    case FFH5_PRESET_X264_MEDIUM:
+    case FFH5_PRESET_X265_MEDIUM:
+        strcpy(preset, "medium");
+        break;
+    case FFH5_PRESET_X264_SLOW:
+    case FFH5_PRESET_X265_SLOW:
+        strcpy(preset, "slow");
+        break;
+    case FFH5_PRESET_X264_SLOWER:
+    case FFH5_PRESET_X265_SLOWER:
+        strcpy(preset, "slower");
+        break;
+    case FFH5_PRESET_X264_VERYSLOW:
+    case FFH5_PRESET_X265_VERYSLOW:
+        strcpy(preset, "veryslow");
+        break;
+    /* h264 and hevc */
+    case FFH5_PRESET_H264_VERYFAST:
+    case FFH5_PRESET_HEVC_VERYFAST:
+        strcpy(preset, "p1");
+        break;
+    case FFH5_PRESET_H264_FASTER:
+    case FFH5_PRESET_HEVC_FASTER:
+        strcpy(preset, "p2");
+        break;
+    case FFH5_PRESET_H264_FAST:
+    case FFH5_PRESET_HEVC_FAST:
+        strcpy(preset, "p3");
+        break;
+    case FFH5_PRESET_H264_MEDIUM:
+    case FFH5_PRESET_HEVC_MEDIUM:
+        strcpy(preset, "p4");
+        break;
+    case FFH5_PRESET_H264_SLOW:
+    case FFH5_PRESET_HEVC_SLOW:
+        strcpy(preset, "p5");
+        break;
+    case FFH5_PRESET_H264_SLOWER:
+    case FFH5_PRESET_HEVC_SLOWER:
+        strcpy(preset, "p6");
+        break;
+    case FFH5_PRESET_H264_VERYSLOW:
+    case FFH5_PRESET_HEVC_VERYSLOW:
+        strcpy(preset, "p7");
+        break;
+    /* svtav1 and rav1e */
+    case FFH5_PRESET_SVTAV1_SUPERSLOW:
+    case FFH5_PRESET_RAV1E_SUPERSLOW:
+        strcpy(preset, "0");
+        break;
+    case FFH5_PRESET_SVTAV1_VERYSLOW:
+    case FFH5_PRESET_RAV1E_VERYSLOW:
+        strcpy(preset, "1");
+        break;
+    case FFH5_PRESET_SVTAV1_MUCHSLOWER:
+    case FFH5_PRESET_RAV1E_MUCHSLOWER:
+        strcpy(preset, "2");
+        break;
+    case FFH5_PRESET_SVTAV1_SLOWER:
+    case FFH5_PRESET_RAV1E_SLOWER:
+        strcpy(preset, "3");
+        break;
+    case FFH5_PRESET_SVTAV1_SLOW:
+    case FFH5_PRESET_RAV1E_SLOW:
+        strcpy(preset, "4");
+        break;
+    case FFH5_PRESET_SVTAV1_LESSSLOW:
+    case FFH5_PRESET_RAV1E_LESSSLOW:
+        strcpy(preset, "5");
+        break;
+    case FFH5_PRESET_SVTAV1_MEDIUM:
+    case FFH5_PRESET_RAV1E_MEDIUM:
+        strcpy(preset, "6");
+        break;
+    case FFH5_PRESET_SVTAV1_LESSFAST:
+    case FFH5_PRESET_RAV1E_LESSFAST:
+        strcpy(preset, "7");
+        break;
+    case FFH5_PRESET_SVTAV1_FAST:
+    case FFH5_PRESET_RAV1E_FAST:
+        strcpy(preset, "8");
+        break;
+    case FFH5_PRESET_SVTAV1_FASTER:
+    case FFH5_PRESET_RAV1E_FASTER:
+        strcpy(preset, "9");
+        break;
+    case FFH5_PRESET_SVTAV1_MUCHFASTER:
+    case FFH5_PRESET_RAV1E_MUCHFASTER:
+        strcpy(preset, "10");
+        break;
+    case FFH5_PRESET_SVTAV1_VERYFAST:
+        strcpy(preset, "11");
+        break;
+    case FFH5_PRESET_SVTAV1_SUPERFAST:
+        strcpy(preset, "12");
+        break;
+    case FFH5_PRESET_SVTAV1_ULTRAFAST:
+        strcpy(preset, "13");
+        break;
+
+    default:
+        printf("No such preset for this codec, default preset will be used\n");
+        break;
+    }
+}
+
+/*
+ * Function:  find_preset_by_id
+ * --------------------
+ * map id used in hdf5 params to tune in different codecs
+ *
+ *  t_id : integer used in hdf5 auxiliary parameters
+ *  *tune : encoder tune param
+ *
+ */
+static void find_tune_by_id(int t_id, char *tune)
+{
+    switch (t_id)
+    {
+    /* x264 and x265 */
+    case FFH5_TUNE_X264_PSNR:
+    case FFH5_TUNE_X265_PSNR:
+        strcpy(tune, "psnr");
+        break;
+    case FFH5_TUNE_X264_SSIM:
+    case FFH5_TUNE_X265_SSIM:
+        strcpy(tune, "ssim");
+        break;
+    case FFH5_TUNE_X264_GRAIN:
+    case FFH5_TUNE_X265_GRAIN:
+        strcpy(tune, "grain");
+        break;
+    case FFH5_TUNE_X264_FASTDECODE:
+    case FFH5_TUNE_X265_FASTDECODE:
+        strcpy(tune, "fastdecode");
+        break;
+    case FFH5_TUNE_X264_ZEROLATENCY:
+    case FFH5_TUNE_X265_ZEROLATENCY:
+        strcpy(tune, "zerolatency");
+        break;
+    case FFH5_TUNE_X264_ANIMATION:
+    case FFH5_TUNE_X265_ANIMATION:
+        strcpy(tune, "animation");
+        break;
+    case FFH5_TUNE_X264_FILM:
+        strcpy(tune, "film");
+        break;
+    case FFH5_TUNE_X264_STILLIMAGE:
+        strcpy(tune, "stillimage");
+        break;
+    /* h264 and hevc */
+    case FFH5_TUNE_H264_HQ:
+    case FFH5_TUNE_HEVC_HQ:
+        strcpy(tune, "hq");
+        break;
+    case FFH5_TUNE_H264_ll:
+    case FFH5_TUNE_HEVC_ll:
+        strcpy(tune, "ll");
+        break;
+    case FFH5_TUNE_H264_ULL:
+    case FFH5_TUNE_HEVC_ULL:
+        strcpy(tune, "ull");
+        break;
+    case FFH5_TUNE_H264_LOSSLESS:
+    case FFH5_TUNE_HEVC_LOSSLESS:
+        strcpy(tune, "lossless");
+        break;
+    /* svtav1 */
+    case FFH5_TUNE_SVTAV1_VQ:
+        strcpy(tune, "tune=0");
+        break;
+    case FFH5_TUNE_SVTAV1_PSNR:
+        strcpy(tune, "tune=1");
+        break;
+    case FFH5_TUNE_SVTAV1_FASTDECODE:
+        strcpy(tune, "fast-decode=1");
+        break;    
+    /* rav1e */
+    case FFH5_TUNE_RAV1E_PSNR:
+        strcpy(tune, "tune=Psnr");
+        break;
+    case FFH5_TUNE_RAV1E_PSYCHOVISUAL:
+        strcpy(tune, "tune=Psychovisual");
+        break;
+
+    default:
+        printf("No such tune for this codec, default tune will be used\n");
         break;
     }
 }
@@ -296,9 +654,11 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[3] = height
          * cd_values[4] = depth
          * cd_values[5] = 0=Mono, 1=RGB
+         * cd_values[6] = preset
+         * cd_values[7] = tune
          */
 
-        char *codec_name;
+        char *codec_name, *preset, *tune;
         const AVCodec *codec;
         AVCodecContext *c = NULL;
         AVFrame *dst_frame, *src_frame = NULL;
@@ -306,11 +666,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         struct SwsContext *sws_context;
 
         enum EncoderCodec c_id;
+        enum PresetID p_id;
+        enum TuneType t_id;
+
         int width, height, depth;
         int color_mode;
 
         size_t out_size = 0;
-        size_t offset = 0;
         uint8_t *out_data = NULL;
         uint8_t *p_data = NULL;
 
@@ -321,9 +683,24 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         height = cd_values[3];
         depth = cd_values[4];
         color_mode = cd_values[5];
+        p_id = cd_values[6];
+        t_id = cd_values[7];
 
         codec_name = calloc(1, 50);
-        find_encoder_name(c_id, codec_name);
+        find_encoder_name_by_id(c_id, codec_name);
+
+        preset = calloc(1, 50);
+        tune = calloc(1, 50);
+        if (c_id == FFH5_ENC_MPEG4 || c_id == FFH5_ENC_XVID)
+        {
+            p_id = FFH5_PRESET_NONE;
+            t_id = FFH5_TUNE_NONE;
+        }
+
+        find_preset_by_id(p_id, preset);
+        find_tune_by_id(t_id, tune);
+
+        printf("%s, %s, %s\n", codec_name, preset, tune);
 
         codec = avcodec_find_encoder_by_name(codec_name);
         if (!codec)
@@ -364,13 +741,33 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         // c->gop_size = 10;
         // c->max_b_frames = 1;
 
-        /* additional parameters (codec specific)
-         * leave blank for now
-         * example:
-         *   c->bit_rate = 400000;
-         *   if (codec->id == AV_CODEC_ID_H264)
-         *       av_opt_set(c->priv_data, "preset", "slow", 0);
-         */
+        /* if found preset and tune */
+        switch (c_id)
+        {
+        case FFH5_ENC_X264:
+        case FFH5_ENC_X265:
+        case FFH5_ENC_H264_NV:
+        case FFH5_ENC_HEVC_NV:
+            if (strlen(preset) > 0)
+                av_opt_set(c->priv_data, "preset", preset, 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "tune", tune, 0);
+            break;
+        case FFH5_ENC_SVTAV1:
+            if (strlen(preset) > 0)
+                av_opt_set_int(c->priv_data, "preset", atoi(preset), 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "svtav1-params", tune, 0);
+            break;
+        case FFH5_ENC_RAV1E:
+            if (strlen(preset) > 0)
+                av_opt_set_int(c->priv_data, "speed", atoi(preset), 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "rav1e-params", tune, 0);
+            break;
+        default:
+            break;
+        }
 
         /* open it */
         ret = avcodec_open2(c, codec, NULL);
@@ -477,6 +874,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         sws_freeContext(sws_context);
         if (codec_name)
             free(codec_name);
+        if (preset)
+            free(preset);
+        if (tune)
+            free(tune);
 
         buf_size_out = out_size;
 
@@ -501,6 +902,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         fprintf(stderr, "Error compressing array\n");
         if (codec_name)
             free(codec_name);
+        if (preset)
+            free(preset);
+        if (tune)
+            free(tune);
         if (out_data)
             free(out_data);
         if (out_buf)
@@ -567,7 +972,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         memset(inbuf + INBUF_SIZE, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
         codec_name = calloc(1, 50);
-        find_decoder_name(c_id, codec_name);
+        find_decoder_name_by_id(c_id, codec_name);
 
         codec = avcodec_find_decoder_by_name(codec_name);
         if (!codec)
