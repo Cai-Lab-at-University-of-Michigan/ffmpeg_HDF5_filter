@@ -37,6 +37,11 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
                         size_t *buf_size, void **buf);
 
+
+/* Define enums */
+enum EncoderCodec {mpeg4, libxvid, libx264, h264_nvenc, libx265, hevc_nvenc, libsvtav1, librav1e};
+enum DecoderCodec {mpeg4, h264, h264_cuvid, hevc, hevc_cuvid, libaomav1, libdav1d};
+
 /*
  * Function:  read_from_buffer
  * --------------------
@@ -77,28 +82,28 @@ static void find_encoder_name(int c_id, char *name)
     switch (c_id)
     {
     /* encoders */
-    case 0:
+    case mpeg4:
         strcpy(name, "mpeg4");
         break;
-    case 1:
+    case libxvid:
         strcpy(name, "libxvid");
         break;
-    case 2:
+    case libx264:
         strcpy(name, "libx264");
         break;
-    case 3:
+    case h264_nvenc:
         strcpy(name, "h264_nvenc");
         break;
-    case 4:
+    case libx265:
         strcpy(name, "libx265");
         break;
-    case 5:
+    case hevc_nvenc:
         strcpy(name, "hevc_nvenc");
         break;
-    case 6:
+    case libsvtav1:
         strcpy(name, "libsvtav1");
         break;
-    case 7:
+    case librav1e:
         strcpy(name, "librav1e");
         break;
 
@@ -122,25 +127,25 @@ static void find_decoder_name(int c_id, char *name)
     switch (c_id)
     {
     /* decoders */
-    case 0:
+    case mpeg4:
         strcpy(name, "mpeg4");
         break;
-    case 1:
+    case h264:
         strcpy(name, "h264");
         break;
-    case 2:
+    case h264_cuvid:
         strcpy(name, "h264_cuvid");
         break;
-    case 3:
+    case hevc:
         strcpy(name, "hevc");
         break;
-    case 4:
+    case hevc_cuvid:
         strcpy(name, "hevc_cuvid");
         break;
-    case 5:
+    case libaomav1:
         strcpy(name, "libaom-av1");
         break;
-    case 6:
+    case libdav1d:
         strcpy(name, "libdav1d");
         break;
 
@@ -300,7 +305,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         AVPacket *pkt;
         struct SwsContext *sws_context;
 
-        int c_id;
+        enum EncoderCodec c_id;
         int width, height, depth;
         int color_mode;
 
@@ -531,7 +536,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         AVPacket *pkt;
         struct SwsContext *sws_context = NULL;
 
-        int c_id;
+        enum DecoderCodec c_id;
         int width, height, depth;
         int color_mode;
 
