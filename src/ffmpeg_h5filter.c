@@ -24,9 +24,9 @@
 
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
 
-static void find_encoder_name_by_id(int c_id, char *name);
+static void find_encoder_name_by_id(int c_id, char *codec_name);
 
-static void find_decoder_name_by_id(int c_id, char *name);
+static void find_decoder_name_by_id(int c_id, char *codec_name);
 
 static void find_preset_by_id(int p_id, char *preset);
 
@@ -208,41 +208,41 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
  * map id used in hdf5 params to real encoders name in ffmpeg
  *
  *  c_id : integer used in hdf5 auxiliary parameters
- *  *name : encoder name
+ *  *codec_name : encoder name
  *
  */
-static void find_encoder_name_by_id(int c_id, char *name)
+static void find_encoder_name_by_id(int c_id, char *codec_name)
 {
     switch (c_id)
     {
     /* encoders */
     case FFH5_ENC_MPEG4:
-        strcpy(name, "mpeg4");
+        strcpy(codec_name, "mpeg4");
         break;
     case FFH5_ENC_XVID:
-        strcpy(name, "libxvid");
+        strcpy(codec_name, "libxvid");
         break;
     case FFH5_ENC_X264:
-        strcpy(name, "libx264");
+        strcpy(codec_name, "libx264");
         break;
     case FFH5_ENC_H264_NV:
-        strcpy(name, "h264_nvenc");
+        strcpy(codec_name, "h264_nvenc");
         break;
     case FFH5_ENC_X265:
-        strcpy(name, "libx265");
+        strcpy(codec_name, "libx265");
         break;
     case FFH5_ENC_HEVC_NV:
-        strcpy(name, "hevc_nvenc");
+        strcpy(codec_name, "hevc_nvenc");
         break;
     case FFH5_ENC_SVTAV1:
-        strcpy(name, "libsvtav1");
+        strcpy(codec_name, "libsvtav1");
         break;
     case FFH5_ENC_RAV1E:
-        strcpy(name, "librav1e");
+        strcpy(codec_name, "librav1e");
         break;
 
     default:
-        strcpy(name, "libx264");
+        strcpy(codec_name, "libx264");
         break;
     }
 }
@@ -253,38 +253,38 @@ static void find_encoder_name_by_id(int c_id, char *name)
  * map id used in hdf5 params to real decoders name in ffmpeg
  *
  *  c_id : integer used in hdf5 params
- *  *name : decoder name
+ *  *codec_name : decoder name
  *
  */
-static void find_decoder_name_by_id(int c_id, char *name)
+static void find_decoder_name_by_id(int c_id, char *codec_name)
 {
     switch (c_id)
     {
     /* decoders */
     case FFH5_DEC_MPEG4:
-        strcpy(name, "mpeg4");
+        strcpy(codec_name, "mpeg4");
         break;
     case FFH5_DEC_H264:
-        strcpy(name, "h264");
+        strcpy(codec_name, "h264");
         break;
     case FFH5_DEC_H264_CUVID:
-        strcpy(name, "h264_cuvid");
+        strcpy(codec_name, "h264_cuvid");
         break;
     case FFH5_DEC_HEVC:
-        strcpy(name, "hevc");
+        strcpy(codec_name, "hevc");
         break;
     case FFH5_DEC_HEVC_CUVID:
-        strcpy(name, "hevc_cuvid");
+        strcpy(codec_name, "hevc_cuvid");
         break;
     case FFH5_DEC_AOMAV1:
-        strcpy(name, "libaom-av1");
+        strcpy(codec_name, "libaom-av1");
         break;
     case FFH5_DEC_DAV1D:
-        strcpy(name, "libdav1d");
+        strcpy(codec_name, "libdav1d");
         break;
 
     default:
-        strcpy(name, "h264");
+        strcpy(codec_name, "h264");
         break;
     }
 }
@@ -429,12 +429,12 @@ static void find_preset_by_id(int p_id, char *preset)
 }
 
 /*
- * Function:  find_preset_by_id
+ * Function:  find_tune_by_id
  * --------------------
  * map id used in hdf5 params to tune in different codecs
  *
  *  t_id : integer used in hdf5 auxiliary parameters
- *  *tune : encoder tune param
+ *  *tune : encoder tune parameter
  *
  */
 static void find_tune_by_id(int t_id, char *tune)
@@ -498,7 +498,7 @@ static void find_tune_by_id(int t_id, char *tune)
         break;
     case FFH5_TUNE_SVTAV1_FASTDECODE:
         strcpy(tune, "fast-decode=1");
-        break;    
+        break;
     /* rav1e */
     case FFH5_TUNE_RAV1E_PSNR:
         strcpy(tune, "tune=Psnr");
@@ -700,8 +700,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         find_preset_by_id(p_id, preset);
         find_tune_by_id(t_id, tune);
 
-        printf("%s, %s, %s\n", codec_name, preset, tune);
-
         codec = avcodec_find_encoder_by_name(codec_name);
         if (!codec)
         {
@@ -741,7 +739,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         // c->gop_size = 10;
         // c->max_b_frames = 1;
 
-        /* if found preset and tune */
+        /* Presets and Tunes */
         switch (c_id)
         {
         case FFH5_ENC_X264:
@@ -1136,7 +1134,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         *buf = out_buf;
         *buf_size = buf_size_out;
 
-        // printf("I am at decompressing %u\n", buf_size_out);
         return buf_size_out;
 
     DecompressFailure:
