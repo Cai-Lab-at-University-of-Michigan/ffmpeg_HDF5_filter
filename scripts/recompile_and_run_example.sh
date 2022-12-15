@@ -10,9 +10,9 @@ do
     build/example 0
 done
 
-for PRESET in {0..8}
+for PRESET in {10..18}
 do  
-    for TUNE in {0..7}
+    for TUNE in {10..17}
     do
         build/example 2 $PRESET $TUNE
     done
