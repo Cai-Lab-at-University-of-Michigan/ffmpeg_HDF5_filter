@@ -18,6 +18,7 @@
 #include "ffmpeg_h5filter.h"
 
 #define INBUF_SIZE 4096
+#define EXPECTED_CS_RATIO 100
 
 #define PUSH_ERR(func, minor, str) \
     H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
@@ -32,7 +33,8 @@ static void find_preset(int p_id, char *preset);
 
 static void find_tune(int t_id, char *tune);
 
-static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data);
+static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
+                   size_t *out_size, uint8_t **out_data, size_t *expected_size);
 
 static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
@@ -516,12 +518,15 @@ static void find_tune(int t_id, char *tune)
  *  *pkt: pkt where data being compressed into
  *  *out_size: accumulated compressed pkts data size
  *  **out_data: compressed pkts data
+ *  *expected_size: expected size of compressed buffer
  *
  */
-static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data)
+static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
+                   size_t *out_size, uint8_t **out_data, size_t *expected_size)
 {
     int ret;
     size_t offset = 0;
+    size_t updated_size = 0;
 
     /* send the frame to the encoder */
     // if (frame)
@@ -544,13 +549,20 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
         // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
 
         offset = *out_size;
-        // TODO: You can remove the need for multiple reallocs if you overallocate buffer -LAW
-        *out_data = realloc(*out_data, offset + pkt->size);
+        updated_size = *out_size + pkt->size;
+
+        // each time exceeds memory block then realloc two times bigger block
+        if (updated_size > *expected_size)
+        {
+            *out_data = realloc(*out_data, updated_size * 2);
+            *expected_size = updated_size * 2;
+        }
+
         if (*out_data == NULL)
             fprintf(stderr, "Out of memory occurred during encoding\n");
 
         memcpy(*out_data + offset, pkt->data, pkt->size);
-        *out_size += pkt->size;
+        *out_size = updated_size;
         av_packet_unref(pkt);
     }
 }
@@ -665,6 +677,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         size_t out_size = 0;
         uint8_t *out_data = NULL;
         uint8_t *p_data = NULL;
+        size_t expected_size = 0;
 
         int i, j, ret;
 
@@ -802,6 +815,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         }
 
         p_data = (uint8_t *)*buf;
+
+        expected_size = (color_mode == 0) ? width * height * depth / EXPECTED_CS_RATIO : width * height * depth * 3 / EXPECTED_CS_RATIO;
+        out_data = calloc(1, expected_size);
+
         sws_context = sws_getContext(width,
                                      height,
                                      src_frame->format,
@@ -850,11 +867,11 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             dst_frame->pts = i;
 
             /* encode the frame */
-            encode(c, dst_frame, pkt, &out_size, &out_data);
+            encode(c, dst_frame, pkt, &out_size, &out_data, &expected_size);
         }
 
         /* flush the encoder */
-        encode(c, NULL, pkt, &out_size, &out_data);
+        encode(c, NULL, pkt, &out_size, &out_data, &expected_size);
 
         avcodec_free_context(&c);
         av_frame_free(&src_frame);
@@ -1023,6 +1040,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         frame_size = (color_mode == 0) ? width * height : width * height * 3;
         out_data = calloc(1, frame_size * depth + AV_INPUT_BUFFER_PADDING_SIZE);
 
+        if (*out_data == NULL)
+            fprintf(stderr, "Out of memory occurred during decoding\n");
+
         sws_context = sws_getContext(width,
                                      height,
                                      src_frame->format,
@@ -1056,10 +1076,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 data_buf_size -= ret;
 
                 if (pkt->size)
-                {
-                    /* decode packets */
                     decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
-                }
                 else if (eof)
                     break;
             }
@@ -1088,10 +1105,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                     data_buf_size -= ret;
 
                     if (pkt->size)
-                    {
-                        /* decode packet */
                         decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
-                    }
                     else if (eof)
                         break;
                 }
