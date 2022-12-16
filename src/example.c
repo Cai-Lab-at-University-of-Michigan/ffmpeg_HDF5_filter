@@ -128,7 +128,7 @@ int main(int argc, const char *argv[])
     if (r < 0)
         goto failed;
 
-    /* FFMPEG filter requires 6 parameters */
+    /* FFMPEG filter requires 8 parameters */
     cd_values[0] = encoder_id; /* Encoder id */
     cd_values[1] = decoder_id; /* Decoder id */
     cd_values[2] = NX;         /* Number of columns */
@@ -138,7 +138,7 @@ int main(int argc, const char *argv[])
     cd_values[6] = preset_id;  /* Preset for encoding codec */
     cd_values[7] = tune_type;  /* tuning for encoding codec */
 
-    /* Set the filter with 6 params */
+    /* Set the filter with 8 params */
     r = H5Pset_filter(plist, FFMPEG_H5FILTER, H5Z_FLAG_OPTIONAL, 8, cd_values);
 
     if (r < 0)

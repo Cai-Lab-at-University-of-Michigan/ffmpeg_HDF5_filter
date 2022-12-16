@@ -6,7 +6,6 @@
 """
 
 import json
-from os import pread
 import time
 
 import h5py
@@ -43,6 +42,7 @@ def save_record_appending(record, file):
     print_record(record)
     with open(file, 'a+') as f:
         json.dump(record, f)
+        f.write('\n')
 
 
 def print_record(record, indent=2):
@@ -151,7 +151,8 @@ if __name__ == '__main__':
         try:
             params = next(gen)
             gray_main(tif_file, hdf5_file, rec_tif_file, params, idx)
+            idx += 1
         except StopIteration:
             break
 
-    # print_file(log_file)
+    print_file(log_file)
