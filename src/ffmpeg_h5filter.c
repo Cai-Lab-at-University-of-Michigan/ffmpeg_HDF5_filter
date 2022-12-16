@@ -1025,7 +1025,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         frame_size = (color_mode == 0) ? width * height : width * height * 3;
         out_data = calloc(1, frame_size * depth + AV_INPUT_BUFFER_PADDING_SIZE);
 
-        if (*out_data == NULL)
+        if (out_data == NULL)
             fprintf(stderr, "Out of memory occurred during decoding\n");
 
         sws_context = sws_getContext(width,
@@ -1037,10 +1037,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                                      SWS_BILINEAR,
                                      NULL,
                                      NULL,
-                                     NULL);
+                                     NULL);                                
 
         /* real code for decoding buffer data */
-        while (p_data_size > 0 || eof)
+        while (p_data_size >= 0 || eof)
         {
             eof = !p_data_size;
 
