@@ -656,14 +656,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[6] = preset
          * cd_values[7] = tune
          */
-
-        char *codec_name, *preset, *tune;
         const AVCodec *codec;
         AVCodecContext *c = NULL;
-        AVFrame *dst_frame, *src_frame = NULL;
+        AVFrame *src_frame = NULL, *dst_frame = NULL;
         AVPacket *pkt;
-        struct SwsContext *sws_context;
+        struct SwsContext *sws_context = NULL;
 
+        char *codec_name, *preset, *tune;
         enum EncoderCodec c_id;
         enum PresetID p_id;
         enum TuneType t_id;
@@ -671,10 +670,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         int width, height, depth;
         int color_mode;
 
+        size_t expected_size = 0, frame_size = 0;
+        uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
-        uint8_t *out_data = NULL;
-        uint8_t *p_data = NULL;
-        size_t expected_size = 0;
 
         int i, j, ret;
 
@@ -813,7 +811,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         p_data = (uint8_t *)*buf;
 
-        expected_size = (color_mode == 0) ? width * height * depth / EXPECTED_CS_RATIO : width * height * depth * 3 / EXPECTED_CS_RATIO;
+        frame_size = (color_mode == 0) ? width * height : width * height * 3;
+        expected_size = frame_size * depth / EXPECTED_CS_RATIO;
         out_data = calloc(1, expected_size);
 
         sws_context = sws_getContext(width,
@@ -849,10 +848,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             }
             /* put buffer data to frame and do colorspace conversion */
             av_image_fill_arrays(src_frame->data, src_frame->linesize, p_data, src_frame->format, width, height, 1);
-            if (color_mode == 1)
-                p_data += width * height * 3;
-            else
-                p_data += width * height;
+            p_data += frame_size;
 
             ret = sws_scale_frame(sws_context, dst_frame, src_frame);
             if (ret < 0)
@@ -936,23 +932,22 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[4] = depth
          * cd_values[5] = 0=Mono, 1=RGB
          */
-        const char *codec_name;
         const AVCodec *codec;
         AVCodecParserContext *parser;
         AVCodecContext *c = NULL;
-        AVFrame *src_frame, *dst_frame = NULL;
+        AVFrame *src_frame = NULL, *dst_frame = NULL;
         AVPacket *pkt;
         struct SwsContext *sws_context = NULL;
 
+        const char *codec_name;
         enum DecoderCodec c_id;
+
         int width, height, depth;
         int color_mode;
 
+        size_t p_data_size = 0, frame_size = 0;
+        uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
-        uint8_t *out_data = NULL;
-        unsigned char *p_data = NULL;
-        size_t p_data_size = 0;
-        size_t frame_size = 0;
 
         int i, ret, eof;
 
@@ -1024,7 +1019,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         dst_frame->width = c->width;
         dst_frame->height = c->height;
 
-        p_data = (unsigned char *)*buf;
+        p_data = (uint8_t *)*buf;
         p_data_size = *buf_size;
 
         frame_size = (color_mode == 0) ? width * height : width * height * 3;
@@ -1066,7 +1061,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             else if (eof)
                 break;
         }
-        
 
         /* flush the decoder */
         pkt->data = NULL;
