@@ -36,7 +36,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
 
 static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
-                   size_t *out_size, uint8_t **out_data, int color_mode);
+                   size_t *out_size, uint8_t *out_data, size_t frame_size);
 
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
                         size_t *buf_size, void **buf);
@@ -566,17 +566,16 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
  *  *sws_context: context of colorspace conversion
  *  *dst_frame: destination frame
  *  *out_size: accumulated destination frame data size
- *  **out_data: frame data took from destination frame
- *  color_mode: 0(GRAYSCALE), 1(RGB)
+ *  *out_data: frame data took from destination frame
+ *  frame_size: size of frame
  *
  */
 static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
-                   size_t *out_size, uint8_t **out_data, int color_mode)
+                   size_t *out_size, uint8_t *out_data, size_t frame_size)
 {
     int ret;
     size_t offset = 0;
-    size_t frame_size = 0;
 
     ret = avcodec_send_packet(dec_ctx, pkt);
 
@@ -601,10 +600,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         /* put to buffer */
         offset = *out_size;
 
-        frame_size = (color_mode == 0) ? dst_frame->width * dst_frame->height : dst_frame->width * dst_frame->height * 3;
-
-        *out_data = realloc(*out_data, *out_size + frame_size);
-        av_image_copy_to_buffer(*out_data + offset,
+        av_image_copy_to_buffer(out_data + offset,
                                 frame_size,
                                 (const uint8_t *const *)dst_frame->data,
                                 dst_frame->linesize,
@@ -945,6 +941,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         size_t data_buf_size;
         unsigned char *p_data = NULL;
         size_t p_data_size = 0;
+        size_t frame_size = 0;
 
         int i, ret, eof;
 
@@ -1023,6 +1020,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         p_data = (unsigned char *)*buf;
         p_data_size = *buf_size;
 
+        frame_size = (color_mode == 0) ? width * height : width * height * 3;
+        out_data = calloc(1, frame_size * depth + AV_INPUT_BUFFER_PADDING_SIZE);
+
         sws_context = sws_getContext(width,
                                      height,
                                      src_frame->format,
@@ -1058,7 +1058,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 if (pkt->size)
                 {
                     /* decode packets */
-                    decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
+                    decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
                 }
                 else if (eof)
                     break;
@@ -1090,7 +1090,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                     if (pkt->size)
                     {
                         /* decode packet */
-                        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
+                        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
                     }
                     else if (eof)
                         break;
@@ -1101,7 +1101,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         /* flush the decoder */
         pkt->data = NULL;
         pkt->size = 0;
-        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, &out_data, color_mode);
+        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
 
         av_parser_close(parser);
         avcodec_free_context(&c);
