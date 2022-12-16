@@ -17,7 +17,6 @@
 
 #include "ffmpeg_h5filter.h"
 
-#define INBUF_SIZE 4096
 #define EXPECTED_CS_RATIO 100
 
 #define PUSH_ERR(func, minor, str) \
@@ -518,7 +517,7 @@ static void find_tune(int t_id, char *tune)
  *  *pkt: pkt where data being compressed into
  *  *out_size: accumulated compressed pkts data size
  *  **out_data: compressed pkts data
- *  *expected_size: expected size of compressed buffer
+ *  *expected_size: expected size of the compressed buffer
  *
  */
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
@@ -534,9 +533,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
 
     ret = avcodec_send_frame(enc_ctx, frame);
     if (ret < 0)
-    {
         fprintf(stderr, "Error sending a frame for encoding\n");
-    }
 
     while (ret >= 0)
     {
@@ -951,11 +948,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         int width, height, depth;
         int color_mode;
 
-        uint8_t inbuf[INBUF_SIZE + AV_INPUT_BUFFER_PADDING_SIZE];
-        uint8_t *data;
         size_t out_size = 0;
         uint8_t *out_data = NULL;
-        size_t data_buf_size;
         unsigned char *p_data = NULL;
         size_t p_data_size = 0;
         size_t frame_size = 0;
@@ -974,10 +968,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             fprintf(stderr, "Could not allocate packet\n");
             return 0;
         }
-
-        /* padding the end of the buffer to 0
-           This ensures that no overreading happens for damaged MPEG streams */
-        memset(inbuf + INBUF_SIZE, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
         codec_name = calloc(1, 50);
         find_decoder_name(c_id, codec_name);
@@ -1055,62 +1045,28 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                                      NULL);
 
         /* real code for decoding buffer data */
-        if (strstr(codec_name, "av1")) // av1 codecs
+        while (p_data_size > 0 || eof)
         {
-            data = p_data;
-            data_buf_size = p_data_size;
-            while (data_buf_size > 0 || eof)
+            eof = !p_data_size;
+
+            ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
+                                   p_data, p_data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
+
+            if (ret < 0)
             {
-                eof = !data_buf_size;
-
-                ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
-                                       data, data_buf_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
-
-                if (ret < 0)
-                {
-                    fprintf(stderr, "Packet not readable\n");
-                    return 0;
-                }
-
-                data += ret;
-                data_buf_size -= ret;
-
-                if (pkt->size)
-                    decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
-                else if (eof)
-                    break;
+                fprintf(stderr, "Packet not readable\n");
+                return 0;
             }
+
+            p_data += ret;
+            p_data_size -= ret;
+
+            if (pkt->size)
+                decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
+            else if (eof)
+                break;
         }
-        else // other codecs
-        {
-            do
-            {
-                data_buf_size = read_from_buffer(inbuf, INBUF_SIZE, &p_data, &p_data_size);
-                eof = !data_buf_size;
-
-                /* use the parser to split the data into frames */
-                data = inbuf;
-                while (data_buf_size > 0 || eof)
-                {
-                    ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
-                                           data, data_buf_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
-
-                    if (ret < 0)
-                    {
-                        fprintf(stderr, "Packet not readable\n");
-                        return 0;
-                    }
-
-                    data += ret;
-                    data_buf_size -= ret;
-
-                    if (pkt->size)
-                        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
-                    else if (eof)
-                        break;
-                }
-            } while (!eof);
-        }
+        
 
         /* flush the decoder */
         pkt->data = NULL;
