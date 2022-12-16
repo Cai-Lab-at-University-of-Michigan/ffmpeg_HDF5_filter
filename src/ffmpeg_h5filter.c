@@ -24,13 +24,13 @@
 
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
 
-static void find_encoder_name_by_id(int c_id, char *codec_name);
+static void find_encoder_name(int c_id, char *codec_name);
 
-static void find_decoder_name_by_id(int c_id, char *codec_name);
+static void find_decoder_name(int c_id, char *codec_name);
 
-static void find_preset_by_id(int p_id, char *preset);
+static void find_preset(int p_id, char *preset);
 
-static void find_tune_by_id(int t_id, char *tune);
+static void find_tune(int t_id, char *tune);
 
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_t *out_size, uint8_t **out_data);
 
@@ -44,24 +44,24 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 /* Define enums */
 enum EncoderCodec
 {
-    FFH5_ENC_MPEG4,
-    FFH5_ENC_XVID,
-    FFH5_ENC_X264,
-    FFH5_ENC_H264_NV,
-    FFH5_ENC_X265,
-    FFH5_ENC_HEVC_NV,
-    FFH5_ENC_SVTAV1,
-    FFH5_ENC_RAV1E
+    FFH5_ENC_MPEG4 = 0,
+    FFH5_ENC_XVID = 1,
+    FFH5_ENC_X264 = 2,
+    FFH5_ENC_H264_NV = 3,
+    FFH5_ENC_X265 = 4,
+    FFH5_ENC_HEVC_NV = 5,
+    FFH5_ENC_SVTAV1 = 6,
+    FFH5_ENC_RAV1E = 7,
 };
 enum DecoderCodec
 {
-    FFH5_DEC_MPEG4,
-    FFH5_DEC_H264,
-    FFH5_DEC_H264_CUVID,
-    FFH5_DEC_HEVC,
-    FFH5_DEC_HEVC_CUVID,
-    FFH5_DEC_AOMAV1,
-    FFH5_DEC_DAV1D
+    FFH5_DEC_MPEG4 = 0,
+    FFH5_DEC_H264 = 1,
+    FFH5_DEC_H264_CUVID = 2,
+    FFH5_DEC_HEVC = 3,
+    FFH5_DEC_HEVC_CUVID = 4,
+    FFH5_DEC_AOMAV1 = 5,
+    FFH5_DEC_DAV1D = 6,
 };
 enum PresetID
 {
@@ -144,13 +144,11 @@ enum TuneType
     FFH5_TUNE_X264_ANIMATION = 15,
     FFH5_TUNE_X264_FILM = 16,
     FFH5_TUNE_X264_STILLIMAGE = 17,
-
     /* h264_nvenc */
     FFH5_TUNE_H264_HQ = 100,
     FFH5_TUNE_H264_ll = 101,
     FFH5_TUNE_H264_ULL = 102,
     FFH5_TUNE_H264_LOSSLESS = 103,
-
     /* x265 */
     FFH5_TUNE_X265_PSNR = 200,
     FFH5_TUNE_X265_SSIM = 201,
@@ -158,22 +156,18 @@ enum TuneType
     FFH5_TUNE_X265_FASTDECODE = 203,
     FFH5_TUNE_X265_ZEROLATENCY = 204,
     FFH5_TUNE_X265_ANIMATION = 205,
-
     /* hevc_nvenc */
     FFH5_TUNE_HEVC_HQ = 300,
     FFH5_TUNE_HEVC_ll = 301,
     FFH5_TUNE_HEVC_ULL = 302,
     FFH5_TUNE_HEVC_LOSSLESS = 303,
-
     /* svtav1 */
     FFH5_TUNE_SVTAV1_VQ = 400,
     FFH5_TUNE_SVTAV1_PSNR = 401,
     FFH5_TUNE_SVTAV1_FASTDECODE = 402,
-
     /* rav1e */
     FFH5_TUNE_RAV1E_PSNR = 500,
     FFH5_TUNE_RAV1E_PSYCHOVISUAL = 501,
-
 };
 
 /*
@@ -203,7 +197,7 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
 }
 
 /*
- * Function:  find_encoder_name_by_id
+ * Function:  find_encoder_name
  * --------------------
  * map id used in hdf5 params to real encoders name in ffmpeg
  *
@@ -211,11 +205,10 @@ static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data,
  *  *codec_name : encoder name
  *
  */
-static void find_encoder_name_by_id(int c_id, char *codec_name)
+static void find_encoder_name(int c_id, char *codec_name)
 {
     switch (c_id)
     {
-    /* encoders */
     case FFH5_ENC_MPEG4:
         strcpy(codec_name, "mpeg4");
         break;
@@ -248,7 +241,7 @@ static void find_encoder_name_by_id(int c_id, char *codec_name)
 }
 
 /*
- * Function:  find_decoder_name_by_id
+ * Function:  find_decoder_name
  * --------------------
  * map id used in hdf5 params to real decoders name in ffmpeg
  *
@@ -256,11 +249,10 @@ static void find_encoder_name_by_id(int c_id, char *codec_name)
  *  *codec_name : decoder name
  *
  */
-static void find_decoder_name_by_id(int c_id, char *codec_name)
+static void find_decoder_name(int c_id, char *codec_name)
 {
     switch (c_id)
     {
-    /* decoders */
     case FFH5_DEC_MPEG4:
         strcpy(codec_name, "mpeg4");
         break;
@@ -290,7 +282,7 @@ static void find_decoder_name_by_id(int c_id, char *codec_name)
 }
 
 /*
- * Function:  find_preset_by_id
+ * Function:  find_preset
  * --------------------
  * map id used in hdf5 params to preset in different codecs
  *
@@ -298,10 +290,11 @@ static void find_decoder_name_by_id(int c_id, char *codec_name)
  *  *preset : encoder preset
  *
  */
-static void find_preset_by_id(int p_id, char *preset)
+static void find_preset(int p_id, char *preset)
 {
     switch (p_id)
     {
+    /* x264 and x265 */
     case FFH5_PRESET_X264_ULTRAFAST:
     case FFH5_PRESET_X265_ULTRAFAST:
         strcpy(preset, "ultrafast");
@@ -429,7 +422,7 @@ static void find_preset_by_id(int p_id, char *preset)
 }
 
 /*
- * Function:  find_tune_by_id
+ * Function:  find_tune
  * --------------------
  * map id used in hdf5 params to tune in different codecs
  *
@@ -437,7 +430,7 @@ static void find_preset_by_id(int p_id, char *preset)
  *  *tune : encoder tune parameter
  *
  */
-static void find_tune_by_id(int t_id, char *tune)
+static void find_tune(int t_id, char *tune)
 {
     switch (t_id)
     {
@@ -546,9 +539,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         if (ret < 0)
-        {
             fprintf(stderr, "Error during encoding\n");
-        }
 
         // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
 
@@ -556,9 +547,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt, size_
         // TODO: You can remove the need for multiple reallocs if you overallocate buffer -LAW
         *out_data = realloc(*out_data, offset + pkt->size);
         if (*out_data == NULL)
-        {
             fprintf(stderr, "Out of memory occurred during encoding\n");
-        }
 
         memcpy(*out_data + offset, pkt->data, pkt->size);
         *out_size += pkt->size;
@@ -602,9 +591,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         else if (ret < 0)
-        {
             fprintf(stderr, "Error receiving a frame for encoding\n");
-        }
 
         // printf("Decode frame %3d\n", dec_ctx->frame_number);
 
@@ -617,7 +604,14 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         frame_size = (color_mode == 0) ? dst_frame->width * dst_frame->height : dst_frame->width * dst_frame->height * 3;
 
         *out_data = realloc(*out_data, *out_size + frame_size);
-        av_image_copy_to_buffer(*out_data + offset, frame_size, (const uint8_t *const *)dst_frame->data, dst_frame->linesize, dst_frame->format, dst_frame->width, dst_frame->height, 1);
+        av_image_copy_to_buffer(*out_data + offset,
+                                frame_size,
+                                (const uint8_t *const *)dst_frame->data,
+                                dst_frame->linesize,
+                                dst_frame->format,
+                                dst_frame->width,
+                                dst_frame->height,
+                                1);
         *out_size += frame_size;
     }
 }
@@ -687,7 +681,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         t_id = cd_values[7];
 
         codec_name = calloc(1, 50);
-        find_encoder_name_by_id(c_id, codec_name);
+        find_encoder_name(c_id, codec_name);
 
         preset = calloc(1, 50);
         tune = calloc(1, 50);
@@ -697,8 +691,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             t_id = FFH5_TUNE_NONE;
         }
 
-        find_preset_by_id(p_id, preset);
-        find_tune_by_id(t_id, tune);
+        find_preset(p_id, preset);
+        find_tune(t_id, tune);
 
         codec = avcodec_find_encoder_by_name(codec_name);
         if (!codec)
@@ -763,6 +757,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             if (strlen(tune) > 0)
                 av_opt_set(c->priv_data, "rav1e-params", tune, 0);
             break;
+
         default:
             break;
         }
@@ -966,11 +961,12 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             return 0;
         }
 
-        /* padding the end of the buffer to 0 (this ensures that no overreading happens for damaged MPEG streams) */
+        /* padding the end of the buffer to 0
+           This ensures that no overreading happens for damaged MPEG streams */
         memset(inbuf + INBUF_SIZE, 0, AV_INPUT_BUFFER_PADDING_SIZE);
 
         codec_name = calloc(1, 50);
-        find_decoder_name_by_id(c_id, codec_name);
+        find_decoder_name(c_id, codec_name);
 
         codec = avcodec_find_decoder_by_name(codec_name);
         if (!codec)
@@ -1184,8 +1180,7 @@ int ffmpeg_register_h5filter(void)
 
     ret = H5Zregister(ffmpeg_H5Filter);
     if (ret < 0)
-    {
         PUSH_ERR("ffmpeg_register_h5filter", H5E_CANTREGISTER, "Can't register FFMPEG filter");
-    }
+
     return ret;
 }
