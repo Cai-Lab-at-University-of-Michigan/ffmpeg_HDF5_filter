@@ -5,9 +5,11 @@ mkdir build && cd build
 cmake .. -DFFMPEG_BUILD_PATH=~/ffmpeg_build
 make
 cd ..
-for ENC in {0..1}
+
+# no preset no tune
+for ENC in {0..7}
 do
-    build/example 0
+    build/example $ENC 0 0
 done
 
 for PRESET in {10..18}
