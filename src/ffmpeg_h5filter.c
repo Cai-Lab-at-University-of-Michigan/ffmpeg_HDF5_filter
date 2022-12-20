@@ -39,8 +39,8 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    struct SwsContext *sws_context, AVFrame *dst_frame,
                    size_t *out_size, uint8_t *out_data, size_t frame_size);
 
-size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
-                        size_t *buf_size, void **buf);
+size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[],
+                        size_t nbytes, size_t *buf_size, void **buf);
 
 /* Define enums */
 enum EncoderCodec
@@ -417,7 +417,7 @@ static void find_preset(int p_id, char *preset)
         break;
 
     default:
-        printf("No such preset for this codec, default/no preset will be used\n");
+        printf("No such preset for this codec, default/no preset used\n");
         break;
     }
 }
@@ -502,7 +502,7 @@ static void find_tune(int t_id, char *tune)
         break;
 
     default:
-        printf("No such tune for this codec, default/no tune will be used\n");
+        printf("No such tune for this codec, default/no tune used\n");
         break;
     }
 }
@@ -636,8 +636,8 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
  *  return: 0 (failed), otherwise size of buffer
  *
  */
-size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[], size_t nbytes,
-                        size_t *buf_size, void **buf)
+size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[],
+                        size_t nbytes, size_t *buf_size, void **buf)
 {
 
     size_t buf_size_out = 0;
@@ -661,6 +661,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         AVFrame *src_frame = NULL, *dst_frame = NULL;
         AVPacket *pkt;
         struct SwsContext *sws_context = NULL;
+        // int thread_count = 1; // single thread
 
         char *codec_name, *preset, *tune;
         enum EncoderCodec c_id;
@@ -688,7 +689,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         find_encoder_name(c_id, codec_name);
 
         preset = calloc(1, 50);
-        tune = calloc(1, 50);
+        tune = calloc(1, 100);
         if (c_id == FFH5_ENC_MPEG4 || c_id == FFH5_ENC_XVID)
         {
             p_id = FFH5_PRESET_NONE;
@@ -711,6 +712,26 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             fprintf(stderr, "Could not allocate video codec context\n");
             return 0;
         }
+
+        /* Add single threading just for testing purpose */
+        // c->thread_count = thread_count;
+        // switch (c_id)
+        // {
+        // case FFH5_ENC_X265:
+        //     av_opt_set(c->priv_data, "x265-params", "frame-threads=1:pools=1", 0);
+        //     break;
+        // case FFH5_ENC_SVTAV1:
+        //     /* This is not working since the last set will override the first one.
+        //      * We have to concat them together.
+        //      */
+        //     // av_opt_set(c->priv_data, "svtav1-params", "lp=1:ss=1", 0);
+        //     strcat(tune, ":lp=1:ss=1");
+        //     break;
+        
+        // default:
+        //     break;
+        // }   
+
         pkt = av_packet_alloc();
         if (!pkt)
         {
@@ -938,6 +959,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         AVFrame *src_frame = NULL, *dst_frame = NULL;
         AVPacket *pkt;
         struct SwsContext *sws_context = NULL;
+        // int thread_count = 1; // single thread
 
         const char *codec_name;
         enum DecoderCodec c_id;
@@ -985,6 +1007,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             fprintf(stderr, "Could not allocate video codec context\n");
             return 0;
         }
+
+        /* Add single threading just for testing purpose */
+        // c->thread_count = thread_count;
+
         /* For some codecs, such as msmpeg4 and mpeg4, width and height
            MUST be initialized there because this information is not
            available in the bitstream. */
@@ -1037,7 +1063,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                                      SWS_BILINEAR,
                                      NULL,
                                      NULL,
-                                     NULL);                                
+                                     NULL);
 
         /* real code for decoding buffer data */
         while (p_data_size >= 0 || eof)
