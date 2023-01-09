@@ -24,7 +24,3 @@ cp ../ffmpeg_hdf5_filter/src/ffmpeg_h5plugin.c src/ffmpeg/src
 
 /home/binduan/anaconda3/envs/compress/bin/python -m pip uninstall -y hdf5plugin
 /home/binduan/anaconda3/envs/compress/bin/python setup.py install
-
-echo "run example"
-cd ../ffmpeg_hdf5_filter
-/home/binduan/anaconda3/envs/compress/bin/python python/benchmark.py
