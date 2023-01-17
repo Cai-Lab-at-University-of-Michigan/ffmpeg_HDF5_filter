@@ -14,6 +14,8 @@
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
 #include <libavformat/avformat.h>
+#include <libavutil/opt.h>
+#include <libavutil/imgutils.h>
 
 #include "ffmpeg_h5filter.h"
 
@@ -675,7 +677,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
 
-        int i, j, ret;
+        int i, ret;
 
         c_id = cd_values[0];
         width = cd_values[2];
@@ -727,10 +729,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         //     // av_opt_set(c->priv_data, "svtav1-params", "lp=1:ss=1", 0);
         //     strcat(tune, ":lp=1:ss=1");
         //     break;
-        
+
         // default:
         //     break;
-        // }   
+        // }
 
         pkt = av_packet_alloc();
         if (!pkt)
@@ -971,7 +973,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
 
-        int i, ret, eof;
+        int ret, eof;
 
         c_id = cd_values[1];
         width = cd_values[2];
