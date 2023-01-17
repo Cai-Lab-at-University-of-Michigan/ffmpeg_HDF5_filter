@@ -45,7 +45,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                         size_t nbytes, size_t *buf_size, void **buf);
 
 /* Define enums */
-enum EncoderCodec
+enum EncoderCodecEnum
 {
     FFH5_ENC_MPEG4 = 0,
     FFH5_ENC_XVID = 1,
@@ -56,7 +56,7 @@ enum EncoderCodec
     FFH5_ENC_SVTAV1 = 6,
     FFH5_ENC_RAV1E = 7,
 };
-enum DecoderCodec
+enum DecoderCodecEnum
 {
     FFH5_DEC_MPEG4 = 0,
     FFH5_DEC_H264 = 1,
@@ -66,7 +66,7 @@ enum DecoderCodec
     FFH5_DEC_AOMAV1 = 5,
     FFH5_DEC_DAV1D = 6,
 };
-enum PresetID
+enum PresetIDEnum
 {
     /* no preset */
     FFH5_PRESET_NONE = 0,
@@ -134,7 +134,7 @@ enum PresetID
     FFH5_PRESET_RAV1E_VERYSLOW = 509,
     FFH5_PRESET_RAV1E_SUPERSLOW = 510,
 };
-enum TuneType
+enum TuneTypeEnum
 {
     /* no tune */
     FFH5_TUNE_NONE = 0,
@@ -666,9 +666,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         // int thread_count = 1; // single thread
 
         char *codec_name, *preset, *tune;
-        enum EncoderCodec c_id;
-        enum PresetID p_id;
-        enum TuneType t_id;
+        enum EncoderCodecEnum c_id;
+        enum PresetIDEnum p_id;
+        enum TuneTypeEnum t_id;
 
         int width, height, depth;
         int color_mode;
@@ -726,8 +726,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         //     /* This is not working since the last set will override the first one.
         //      * We have to concat them together.
         //      */
-        //     // av_opt_set(c->priv_data, "svtav1-params", "lp=1:ss=1", 0);
-        //     strcat(tune, ":lp=1:ss=1");
+        //     if (strlen(tune) > 0)
+        //         strcat(tune, ":lp=1:ss=1");
+        //     else
+        //         av_opt_set(c->priv_data, "svtav1-params", "lp=1:ss=1", 0);
         //     break;
 
         // default:
@@ -964,7 +966,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         // int thread_count = 1; // single thread
 
         const char *codec_name;
-        enum DecoderCodec c_id;
+        enum DecoderCodecEnum c_id;
 
         int width, height, depth;
         int color_mode;
