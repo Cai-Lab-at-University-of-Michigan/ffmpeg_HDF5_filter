@@ -8,3 +8,4 @@ tmp_video*
 __pycache__
 .vscode
 python/*
+.ipynb_checkpoints
