@@ -17,9 +17,10 @@
 - [x] install cmake >= 2.10 
 - [x] change -DFFMPEG_BUILD_PATH in `scripts/compile.sh`
 - [x] run `scripts/compile.sh` in current folder
-- [x] open `~/.bashrc`, add one line at the end `export $HDF5_PLUGIN_PATH=~/ffmpeg_HDF5_filter/build`
-- [x] run `source ~/.bashrc`
-- [x] `echo $HDF5_PLUGIN_PATH`, should be `~/ffmpeg_HDF5_filter/build`
+- [x] set `$HDF5_PLUGIN_PATH` to the `build` dir of `ffmpeg_HDF5_filter`
+- [x] open `$HOME/.bashrc`, add one line at the end `export HDF5_PLUGIN_PATH=$HOME/ffmpeg_HDF5_filter/build`
+- [x] run `source $HOME/.bashrc`
+- [x] `echo $HDF5_PLUGIN_PATH`, should be `$HOME/ffmpeg_HDF5_filter/build`
 
 ## Running Example
 * run `build/exampe` and will generate `example.h5` in current folder
