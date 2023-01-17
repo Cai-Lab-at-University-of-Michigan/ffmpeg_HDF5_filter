@@ -41,15 +41,15 @@ find_library(
     NO_DEFAULT_PATH)
 
 find_path(
-        AVUTIL_INCLUDE_DIR
-        NAMES "libavutil/opt.h"
-        PATHS "${FFMPEG_BUILD_PATH}/include"
-        NO_DEFAULT_PATH)
+    AVUTIL_INCLUDE_DIR
+    NAMES "libavutil/opt.h"
+    PATHS "${FFMPEG_BUILD_PATH}/include"
+    NO_DEFAULT_PATH)
 find_library(
-        AVUTIL_LIBRARY
-        NAMES libavutil.so
-        PATHS "${FFMPEG_BUILD_PATH}/lib"
-        NO_DEFAULT_PATH)
+    AVUTIL_LIBRARY
+    NAMES libavutil.so
+    PATHS "${FFMPEG_BUILD_PATH}/lib"
+    NO_DEFAULT_PATH)
 
 # Want to see more output from make
 set(CMAKE_VERBOSE_MAKEFILE ON)
