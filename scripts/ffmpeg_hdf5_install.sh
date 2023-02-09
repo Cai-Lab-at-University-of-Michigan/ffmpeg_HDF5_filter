@@ -1,15 +1,17 @@
 #!/bin/bash
 
 # CONDA ENV
-createCondaEnv(){
-echo "Creating conda enviroment if not exist"
-conda env create -f env.yml
-}
+ENVNAME="ffmpeg"
+ENVS=$(conda env list | awk '$ENVNAME' )
 
-activateCondaEnv(){
-echo "Activating conda enviroment"
-source $HOME/anaconda3/bin/activate ffmpeg && \
-which python
+setupCondaEnv(){
+echo "Creating conda enviroment if not exist"
+if [[ $ENVS != *"$ENVNAME"* ]]; then
+  conda env create -f env.yml
+fi
+# echo "Activating conda enviroment" && \
+# source $HOME/anaconda3/bin/activate ffmpeg && \
+# which python
 }
 
 # NASM
@@ -80,7 +82,7 @@ PATH="$HOME/bin:$PATH" make -j$(nproc) && \
 make install
 }
 
-# libaom (av1 video)
+# libaom-av1 (av1 video)
 compileLibaom(){
 echo "Compiling libaom"
 cd $HOME/ffmpeg_sources && \
@@ -105,6 +107,7 @@ make install
 }
 
 # librav1e (av1 video)
+# we have to specify cargo-c version due to compatiablity
 compileLibrav1e(){
 echo "Compiling librav1e"
 cd $HOME/ffmpeg_sources && \
@@ -116,7 +119,7 @@ find target -name rav1e -exec install -m 755 {} $HOME/bin \; && \
 strip $HOME/bin/rav1e && \
 cd $HOME/ffmpeg_sources && \
 rm -rfv rav1e-p20230110 && \
-cargo install cargo-c --version=0.9.14+cargo-0.66 && \ # we have to specify cargo-c version due to compatiablity
+cargo install cargo-c --version=0.9.14+cargo-0.66 && \
 cd $HOME/ffmpeg_sources && tar xvf p20230110.tar.gz && \
 cd rav1e-p20230110 && \
 cargo cinstall --release \
@@ -143,7 +146,7 @@ ninja install
 compileNVCodec(){
 echo "Compling nv-codec-headers"
 cd $HOME/ffmpeg_sources && \
-git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git && \
+# git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git && \
 cd nv-codec-headers && \
 make -j$(nproc) && \
 make install PREFIX="$HOME/ffmpeg_build"
@@ -161,7 +164,7 @@ PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig" ./conf
   --pkg-config-flags="--static" \
   --extra-cflags="-I$HOME/ffmpeg_build/include" \
   --extra-ldflags="-L$HOME/ffmpeg_build/lib" \
-  --extra-libs="-lpthread -lm -lrt" \
+  --extra-libs="-lpthread -lm" \
   --ld="g++" \
   --bindir="$HOME/bin" \
   --enable-gpl \
@@ -178,12 +181,16 @@ PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig" ./conf
   --enable-libnpp \
   --disable-static \
   --enable-shared \
+  --extra-libs="-lpthread" \
   --extra-cflags="-I$CONDA_PREFIX/include" \
   --extra-ldflags="-L$CONDA_PREFIX/lib" && \
 PATH="$HOME/bin:$PATH" make -j$(nproc) && \
 make install && \
 hash -r
 }
+
+# If got x265 not found by pkg-config error, 
+# delete the x265_config.h in ffmpeg_build/include.
 
 #######################################################################################
 # NOTE FOR NVCC ERROR WHILE COMPILING FFMPEG                                          #
@@ -197,10 +204,9 @@ hash -r
 #Process
 cd $HOME
 mkdir ffmpeg_sources bin
-createCondaEnv
-activateCondaEnv
-installNasm
-installYasm
+setupCondaEnv
+# installNasm
+# installYasm
 compileLibX264
 compileLibX265
 compileLibVpx
