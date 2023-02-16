@@ -110,6 +110,9 @@ static void find_encoder_name(int c_id, char *codec_name)
     case FFH5_ENC_AV1_NV:
         strcpy(codec_name, "av1_nvenc");
         break;
+    case FFH5_ENC_AV1_QSV:
+        strcpy(codec_name, "av1_qsv");
+        break;
 
     default:
         strcpy(codec_name, "libx264");
@@ -153,6 +156,9 @@ static void find_decoder_name(int c_id, char *codec_name)
         break;
     case FFH5_DEC_AV1_CUVID:
         strcpy(codec_name, "av1_cuvid");
+        break;
+    case FFH5_DEC_AV1_QSV:
+        strcpy(codec_name, "av1_qsv");
         break;
 
     default:
@@ -212,9 +218,9 @@ static void find_preset(int p_id, char *preset)
         strcpy(preset, "veryslow");
         break;
     /* h264, hevc, av1_nvenc */
-    case FFH5_PRESET_H264_VERYFAST:
-    case FFH5_PRESET_HEVC_VERYFAST:
-    case FFH5_PRESET_AV1NV_VERYFAST:
+    case FFH5_PRESET_H264_FASTEST:
+    case FFH5_PRESET_HEVC_FASTEST:
+    case FFH5_PRESET_AV1NV_FASTEST:
         strcpy(preset, "p1");
         break;
     case FFH5_PRESET_H264_FASTER:
@@ -242,9 +248,9 @@ static void find_preset(int p_id, char *preset)
     case FFH5_PRESET_AV1NV_SLOWER:
         strcpy(preset, "p6");
         break;
-    case FFH5_PRESET_H264_VERYSLOW:
-    case FFH5_PRESET_HEVC_VERYSLOW:
-    case FFH5_PRESET_AV1NV_VERYSLOW:
+    case FFH5_PRESET_H264_SLOWEST:
+    case FFH5_PRESET_HEVC_SLOWEST:
+    case FFH5_PRESET_AV1NV_SLOWEST:
         strcpy(preset, "p7");
         break;
     /* svtav1 and rav1e */
@@ -301,9 +307,31 @@ static void find_preset(int p_id, char *preset)
     case FFH5_PRESET_SVTAV1_ULTRAFAST:
         strcpy(preset, "13");
         break;
+    /* av1_qsv */
+    case FFH5_PRESET_AV1QSV_FASTEST:
+        strcpy(preset, "veryfast");
+        break;
+    case FFH5_PRESET_AV1QSV_FASTER:
+        strcpy(preset, "faster");
+        break;
+    case FFH5_PRESET_AV1QSV_FAST:
+        strcpy(preset, "fast");
+        break;
+    case FFH5_PRESET_AV1QSV_MEDIUM:
+        strcpy(preset, "medium");
+        break;
+    case FFH5_PRESET_AV1QSV_SLOW:
+        strcpy(preset, "slow");
+        break;
+    case FFH5_PRESET_AV1QSV_SLOWER:
+        strcpy(preset, "slower");
+        break;
+    case FFH5_PRESET_AV1QSV_SLOWEST:
+        strcpy(preset, "veryslow");
+        break;
 
     default:
-        printf("No such preset for this codec, default/no preset used\n");
+        printf("No such preset for this codec, default preset will be used\n");
         break;
     }
 }
@@ -390,9 +418,37 @@ static void find_tune(int t_id, char *tune)
     case FFH5_TUNE_RAV1E_PSYCHOVISUAL:
         strcpy(tune, "tune=Psychovisual");
         break;
+    /* qsv_av1 */
+    case FFH5_TUNE_AV1QSV_UNKNOWN:
+        strcpy(tune, "unknown");
+        break;
+    case FFH5_TUNE_AV1QSV_DISPLAYREMOTING:
+        strcpy(tune, "displayremoting");
+        break;
+    case FFH5_TUNE_AV1QSV_VIDEOCONFERENCE:
+        strcpy(tune, "videoconference");
+        break;
+    case FFH5_TUNE_AV1QSV_ARCHIVE:
+        strcpy(tune, "archive");
+        break;
+    case FFH5_TUNE_AV1QSV_LIVESTREAMING:
+        strcpy(tune, "livestreaming");
+        break;
+    case FFH5_TUNE_AV1QSV_CAMERACAPTURE:
+        strcpy(tune, "cameracapture");
+        break;
+    case FFH5_TUNE_AV1QSV_VIDEOSURVEILLANCE:
+        strcpy(tune, "videosurveillance");
+        break;
+    case FFH5_TUNE_AV1QSV_GAMESTREAMING:
+        strcpy(tune, "gamestreaming");
+        break;
+    case FFH5_TUNE_AV1QSV_REMOTEGAMING:
+        strcpy(tune, "remotegaming");
+        break;
 
     default:
-        printf("No such tune for this codec, default/no tune used\n");
+        printf("No such tune for this codec, default tune will be used\n");
         break;
     }
 }
@@ -545,6 +601,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[5] = 0=Mono, 1=RGB
          * cd_values[6] = preset
          * cd_values[7] = tune
+         * cd_values[8] = crf
+         * cd_values[9] = film_grain [for svt-av1 only]
          */
         const AVCodec *codec;
         AVCodecContext *c = NULL;
@@ -561,6 +619,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         int width, height, depth;
         int color_mode;
         int crf;
+        int film_grain;
+        int gpu_id;
+        char film_grain_buffer[10];
 
         size_t expected_size = 0, frame_size = 0;
         uint8_t *out_data = NULL, *p_data = NULL;
@@ -576,6 +637,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         p_id = cd_values[6];
         t_id = cd_values[7];
         crf = cd_values[8];
+        film_grain = cd_values[9]; // for svt-av1 particularly
+        gpu_id = cd_values[10];    // for nvenc only
 
         codec_name = calloc(1, 50);
         find_encoder_name(c_id, codec_name);
@@ -621,7 +684,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         //     if (strlen(tune) > 0)
         //         strcat(tune, ":lp=1:ss=1");
         //     else
-        //         av_opt_set(c->priv_data, "svtav1-params", "lp=1:ss=1", 0);
+        //         strcpy(tune, "lp=1:ss=1");
         //     break;
 
         // default:
@@ -638,7 +701,12 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         /* set width and height */
         c->width = width;
         c->height = height;
-        c->pix_fmt = (strstr(codec_name, "nvenc")) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P;
+
+        if (strstr(codec_name, "nvenc") || strstr(codec_name, "qsv"))
+            // use this pix_fmt for hardware accelerated encoding
+            c->pix_fmt = AV_PIX_FMT_NV12;
+        else
+            c->pix_fmt = AV_PIX_FMT_YUV420P;
 
         /* frames per second */
         c->time_base = (AVRational){1, 25};
@@ -674,13 +742,38 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             if (strlen(tune) > 0)
                 av_opt_set(c->priv_data, "tune", tune, 0);
             if (crf < 52)
-                av_opt_set_int(c->priv_data, "cq", crf, 0);
+            {
+                /* we have to use constqp for Variable bitrate mode and set bit_rate to 0 (auto),
+                /* otherwise the bitrate will be capped to ~2Mbs by NVENC
+                /* instead of using cq mode, constqp is better to reflect different qps
+                */
+                av_opt_set(c->priv_data, "rc", "constqp", 0);
+                c->bit_rate = 0;
+                av_opt_set_int(c->priv_data, "qp", crf, 0);
+            }
+
+            av_opt_set_int(c->priv_data, "gpu", gpu_id, 0);
             break;
         case FFH5_ENC_SVTAV1:
             if (strlen(preset) > 0)
                 av_opt_set_int(c->priv_data, "preset", atoi(preset), 0);
+
+            if (film_grain > 50)
+                film_grain = 50;
+
+            snprintf(film_grain_buffer, 10, "%d", film_grain);
+
             if (strlen(tune) > 0)
-                av_opt_set(c->priv_data, "svtav1-params", tune, 0);
+            {
+                strcat(tune, ":film-grain=");
+                strcat(tune, film_grain_buffer);
+            }
+            else
+            {
+                stpcpy(tune, "film-grain=");
+                strcat(tune, film_grain_buffer);
+            }
+            av_opt_set(c->priv_data, "svtav1-params", tune, 0);
             if (crf < 64)
                 av_opt_set_int(c->priv_data, "crf", crf, 0);
             break;
@@ -691,6 +784,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 av_opt_set(c->priv_data, "rav1e-params", tune, 0);
             if (crf < 255)
                 av_opt_set_int(c->priv_data, "qp", crf, 0);
+            break;
+        case FFH5_ENC_AV1_QSV:
+            if (strlen(preset) > 0)
+                av_opt_set(c->priv_data, "preset", preset, 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "scenario", tune, 0);
+            if (crf < 52)
+                av_opt_set_int(c->priv_data, "global_quality", crf, 0);
             break;
 
         default:
