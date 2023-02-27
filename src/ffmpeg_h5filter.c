@@ -218,38 +218,38 @@ static void find_preset(int p_id, char *preset)
         strcpy(preset, "veryslow");
         break;
     /* h264, hevc, av1_nvenc */
-    case FFH5_PRESET_H264_FASTEST:
-    case FFH5_PRESET_HEVC_FASTEST:
+    case FFH5_PRESET_H264NV_FASTEST:
+    case FFH5_PRESET_HEVCNV_FASTEST:
     case FFH5_PRESET_AV1NV_FASTEST:
         strcpy(preset, "p1");
         break;
-    case FFH5_PRESET_H264_FASTER:
-    case FFH5_PRESET_HEVC_FASTER:
+    case FFH5_PRESET_H264NV_FASTER:
+    case FFH5_PRESET_HEVCNV_FASTER:
     case FFH5_PRESET_AV1NV_FASTER:
         strcpy(preset, "p2");
         break;
-    case FFH5_PRESET_H264_FAST:
-    case FFH5_PRESET_HEVC_FAST:
+    case FFH5_PRESET_H264NV_FAST:
+    case FFH5_PRESET_HEVCNV_FAST:
     case FFH5_PRESET_AV1NV_FAST:
         strcpy(preset, "p3");
         break;
-    case FFH5_PRESET_H264_MEDIUM:
-    case FFH5_PRESET_HEVC_MEDIUM:
+    case FFH5_PRESET_H264NV_MEDIUM:
+    case FFH5_PRESET_HEVCNV_MEDIUM:
     case FFH5_PRESET_AV1NV_MEDIUM:
         strcpy(preset, "p4");
         break;
-    case FFH5_PRESET_H264_SLOW:
-    case FFH5_PRESET_HEVC_SLOW:
+    case FFH5_PRESET_H264NV_SLOW:
+    case FFH5_PRESET_HEVCNV_SLOW:
     case FFH5_PRESET_AV1NV_SLOW:
         strcpy(preset, "p5");
         break;
-    case FFH5_PRESET_H264_SLOWER:
-    case FFH5_PRESET_HEVC_SLOWER:
+    case FFH5_PRESET_H264NV_SLOWER:
+    case FFH5_PRESET_HEVCNV_SLOWER:
     case FFH5_PRESET_AV1NV_SLOWER:
         strcpy(preset, "p6");
         break;
-    case FFH5_PRESET_H264_SLOWEST:
-    case FFH5_PRESET_HEVC_SLOWEST:
+    case FFH5_PRESET_H264NV_SLOWEST:
+    case FFH5_PRESET_HEVCNV_SLOWEST:
     case FFH5_PRESET_AV1NV_SLOWEST:
         strcpy(preset, "p7");
         break;
@@ -381,23 +381,23 @@ static void find_tune(int t_id, char *tune)
         strcpy(tune, "stillimage");
         break;
     /* h264, hevc, av1_nvenc */
-    case FFH5_TUNE_H264_HQ:
-    case FFH5_TUNE_HEVC_HQ:
+    case FFH5_TUNE_H264NV_HQ:
+    case FFH5_TUNE_HEVCNV_HQ:
     case FFH5_TUNE_AV1NV_HQ:
         strcpy(tune, "hq");
         break;
-    case FFH5_TUNE_H264_LL:
-    case FFH5_TUNE_HEVC_LL:
+    case FFH5_TUNE_H264NV_LL:
+    case FFH5_TUNE_HEVCNV_LL:
     case FFH5_TUNE_AV1NV_LL:
         strcpy(tune, "ll");
         break;
-    case FFH5_TUNE_H264_ULL:
-    case FFH5_TUNE_HEVC_ULL:
+    case FFH5_TUNE_H264NV_ULL:
+    case FFH5_TUNE_HEVCNV_ULL:
     case FFH5_TUNE_AV1NV_ULL:
         strcpy(tune, "ull");
         break;
-    case FFH5_TUNE_H264_LOSSLESS:
-    case FFH5_TUNE_HEVC_LOSSLESS:
+    case FFH5_TUNE_H264NV_LOSSLESS:
+    case FFH5_TUNE_HEVCNV_LOSSLESS:
     case FFH5_TUNE_AV1NV_LOSSLESS:
         strcpy(tune, "lossless");
         break;

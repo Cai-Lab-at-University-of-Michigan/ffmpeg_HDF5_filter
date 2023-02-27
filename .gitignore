@@ -9,3 +9,5 @@ __pycache__
 .vscode
 python/*
 .ipynb_checkpoints
+unit_tests/*
+notebooks/*

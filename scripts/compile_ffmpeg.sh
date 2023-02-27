@@ -205,6 +205,7 @@ hash -r
 cd $HOME
 mkdir ffmpeg_sources bin
 setupCondaEnv
+# installCmake
 # installNasm
 # installYasm
 compileLibX264
