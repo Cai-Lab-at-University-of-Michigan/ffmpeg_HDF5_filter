@@ -2,11 +2,13 @@
 * Lossy and lossless compressions supprted filter based on ffmpeg.
 
 ## Getting Started
-- [x] compile ffmepg and libraries, run `bash compile_ffmpeg.sh`
-- [x] download current repo and compile this filter, run `bash compile_hdf5_filter.sh`
+- [x] compile ffmepg and libraries, run `bash scripts/compile_ffmpeg.sh`
+- [x] download current repo and compile this filter, run `bash scripts/compile_hdf5_filter.sh`
 
 
 ## Tests
+
+**Parameters description**: encoder, decoder, chunkSizeX, chunkSizeY, chunkSizeZ, colormode, preset, tune, qualityFactor, filmGrain, gpuID (not used for software encoders)
 
 | Compression ratio| Parameters |
 | -----------------| ----------- |
