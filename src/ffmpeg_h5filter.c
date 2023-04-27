@@ -16,6 +16,7 @@
 #include <libavformat/avformat.h>
 #include <libavutil/opt.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/log.h>
 
 #include "ffmpeg_h5filter.h"
 
@@ -609,7 +610,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         AVFrame *src_frame = NULL, *dst_frame = NULL;
         AVPacket *pkt;
         struct SwsContext *sws_context = NULL;
-        // int thread_count = 1; // single thread
+        // int thread_count = 16; // single thread
 
         char *codec_name, *preset, *tune;
         enum EncoderCodecEnum c_id;
@@ -639,6 +640,9 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         crf = cd_values[8];
         film_grain = cd_values[9]; // for svt-av1 particularly
         gpu_id = cd_values[10];    // for nvenc only
+
+        // av_log_set_level(AV_LOG_ERROR);
+        av_log_set_level(AV_LOG_INFO);
 
         codec_name = calloc(1, 50);
         find_encoder_name(c_id, codec_name);
@@ -702,11 +706,40 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         c->width = width;
         c->height = height;
 
-        if (strstr(codec_name, "nvenc") || strstr(codec_name, "qsv"))
-            // use this pix_fmt for hardware accelerated encoding
-            c->pix_fmt = AV_PIX_FMT_NV12;
-        else
+        switch (c_id)
+        {
+        // list those who support 10bit encoding (actually using 16bit)
+        case FFH5_ENC_X264:
+        case FFH5_ENC_SVTAV1:
+        case FFH5_ENC_RAV1E:
+            c->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+            break;
+        case FFH5_ENC_X265:
+            switch (color_mode)
+            {
+            case 0: //8bit
+                c->pix_fmt = AV_PIX_FMT_YUV420P;
+                break;
+            case 1: //10bit
+                c->pix_fmt = AV_PIX_FMT_YUV420P10;
+                break;
+            case 2: //12bit
+                c->pix_fmt = AV_PIX_FMT_YUV420P12;
+                break;
+            default:
+                c->pix_fmt = AV_PIX_FMT_YUV420P;
+            }
+            break;
+        // We have to use NV12
+        case FFH5_ENC_H264_NV:
+        case FFH5_ENC_HEVC_NV:
+        case FFH5_ENC_AV1_NV:
+            c->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
+            break;
+        default:
+            // common supported pixel format 8bit (actually using 16bit)
             c->pix_fmt = AV_PIX_FMT_YUV420P;
+        }
 
         /* frames per second */
         c->time_base = (AVRational){1, 25};
@@ -773,6 +806,10 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 stpcpy(tune, "film-grain=");
                 strcat(tune, film_grain_buffer);
             }
+            strcat(tune, ":enable-tf=0");
+            if (color_mode == 1)
+                strcat(tune, ":enable-hdr=1");
+
             av_opt_set(c->priv_data, "svtav1-params", tune, 0);
             if (crf < 64)
                 av_opt_set_int(c->priv_data, "crf", crf, 0);
@@ -831,7 +868,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             return 0;
         }
 
-        src_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_RGB24;
+        src_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
         src_frame->width = c->width;
         src_frame->height = c->height;
 
@@ -843,7 +880,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         p_data = (uint8_t *)*buf;
 
-        frame_size = (color_mode == 0) ? width * height : width * height * 3;
+        frame_size = (color_mode == 0) ? width * height : width * height * 2;
         expected_size = frame_size * depth / EXPECTED_CS_RATIO;
         out_data = calloc(1, expected_size);
 
@@ -890,6 +927,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             }
 
             dst_frame->pts = i;
+            dst_frame->quality = c->global_quality;
 
             /* encode the frame */
             encode(c, dst_frame, pkt, &out_size, &out_data, &expected_size);
@@ -1040,8 +1078,39 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             fprintf(stderr, "Could not allocate video frame due to out of memory problem\n");
             return 0;
         }
-
-        src_frame->format = (strstr(codec_name, "cuvid")) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_YUV420P;
+        switch (c_id)
+        {
+        // list those who support 10bit encoding
+        case FFH5_DEC_H264:
+        case FFH5_DEC_AOMAV1:
+        case FFH5_DEC_DAV1D:
+            src_frame->format = (color_mode == 0) ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+            break;
+        case FFH5_DEC_HEVC:
+            switch (color_mode)
+            {
+            case 0: //8bit
+                src_frame->format = AV_PIX_FMT_YUV420P;
+                break;
+            case 1: //10bit
+                src_frame->format = AV_PIX_FMT_YUV420P10;
+                break;
+            case 2: //12bit
+                src_frame->format = AV_PIX_FMT_YUV420P12;
+                break;
+            default:
+                src_frame->format = AV_PIX_FMT_YUV420P;
+            }
+            break;
+        case FFH5_DEC_H264_CUVID:
+        case FFH5_DEC_HEVC_CUVID:
+        case FFH5_DEC_AV1_CUVID:
+            src_frame->format = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
+            break;
+        default:
+            // common supported pixel format 8bit
+            src_frame->format = AV_PIX_FMT_YUV420P;
+        }
         src_frame->width = c->width;
         src_frame->height = c->height;
 
@@ -1052,14 +1121,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             return 0;
         }
 
-        dst_frame->format = (color_mode == 1) ? AV_PIX_FMT_RGB24 : AV_PIX_FMT_GRAY8;
+        dst_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
         dst_frame->width = c->width;
         dst_frame->height = c->height;
 
         p_data = (uint8_t *)*buf;
         p_data_size = *buf_size;
 
-        frame_size = (color_mode == 0) ? width * height : width * height * 3;
+        frame_size = (color_mode == 0) ? width * height : width * height * 2;
         out_data = calloc(1, frame_size * depth + AV_INPUT_BUFFER_PADDING_SIZE);
 
         if (out_data == NULL)

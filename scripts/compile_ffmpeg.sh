@@ -66,8 +66,27 @@ cd $HOME/ffmpeg_sources && \
 wget -O x265.tar.bz2 https://bitbucket.org/multicoreware/x265_git/get/master.tar.bz2 && \
 tar xjvf x265.tar.bz2 && \
 cd multicoreware*/build/linux && \
-PATH="$HOME/bin:$PATH" cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DENABLE_SHARED=off ../../source && \
+mkdir -p 8bit 10bit 12bit && \
+cd 12bit && \
+PATH="$HOME/bin:$PATH" cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DHIGH_BIT_DEPTH=ON -DEXPORT_C_API=OFF -DENABLE_SHARED=OFF -DENABLE_CLI=OFF -DMAIN12=ON ../../../source && \
 PATH="$HOME/bin:$PATH" make -j$(nproc) && \
+cd ../10bit && \
+PATH="$HOME/bin:$PATH" cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DHIGH_BIT_DEPTH=ON -DEXPORT_C_API=OFF -DENABLE_SHARED=OFF -DENABLE_CLI=OFF ../../../source && \
+PATH="$HOME/bin:$PATH" make -j$(nproc) && \
+cd ../8bit && \
+ln -sf ../10bit/libx265.a libx265_main10.a && \
+ln -sf ../12bit/libx265.a libx265_main12.a && \
+PATH="$HOME/bin:$PATH" cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DEXTRA_LIB="x265_main10.a;x265_main12.a" -DEXTRA_LINK_FLAGS=-L. -DLINKED_10BIT=ON -DLINKED_12BIT=ON ../../../source && \
+PATH="$HOME/bin:$PATH" make -j$(nproc) && \
+mv libx265.a libx265_main.a && \
+ar -M <<EOF
+CREATE libx265.a
+ADDLIB libx265_main.a
+ADDLIB libx265_main10.a
+ADDLIB libx265_main12.a
+SAVE
+END
+EOF
 make install
 }
 
@@ -101,7 +120,7 @@ cd $HOME/ffmpeg_sources && \
 git -C SVT-AV1 pull 2> /dev/null || git clone https://gitlab.com/AOMediaCodec/SVT-AV1.git && \
 mkdir -p SVT-AV1/build && \
 cd SVT-AV1/build && \
-PATH="$HOME/bin:$PATH" cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DBUILD_DEC=OFF -DBUILD_SHARED_LIBS=OFF .. && \
+PATH="$HOME/bin:$PATH" cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" -DCMAKE_BUILD_TYPE=Release -DBUILD_DEC=OFF -DENABLE_AVX512=ON -DBUILD_SHARED_LIBS=OFF .. && \
 PATH="$HOME/bin:$PATH" make -j$(nproc) && \
 make install
 }
@@ -146,7 +165,7 @@ ninja install
 compileNVCodec(){
 echo "Compling nv-codec-headers"
 cd $HOME/ffmpeg_sources && \
-# git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git && \
+git clone https://git.videolan.org/git/ffmpeg/nv-codec-headers.git && \
 cd nv-codec-headers && \
 make -j$(nproc) && \
 make install PREFIX="$HOME/ffmpeg_build"
@@ -189,8 +208,6 @@ make install && \
 hash -r
 }
 
-# If got x265 not found by pkg-config error, 
-# delete the x265_config.h in ffmpeg_build/include.
 
 #######################################################################################
 # NOTE FOR NVCC ERROR WHILE COMPILING FFMPEG                                          #
@@ -210,11 +227,11 @@ setupCondaEnv
 # installYasm
 compileLibX264
 compileLibX265
-compileLibVpx
-compileLibaom
+# compileLibVpx
+# compileLibaom
 compileLibsvtav1
 compilelibrav1e
 compileLibdav1d
-compileNVCodec
+# compileNVCodec
 compileFfmpeg
 echo "Complete!"
