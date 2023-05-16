@@ -171,14 +171,81 @@ make -j$(nproc) && \
 make install PREFIX="$HOME/ffmpeg_build"
 }
 
+# libva (onevpl)
+compileLibva(){
+echo "Compling Libva"
+cd $HOME/ffmpeg_sources && \
+git clone https://github.com/intel/libva.git libva && \
+cd libva && \
+./autogen.sh --prefix="$HOME/ffmpeg_build" --libdir="$HOME/ffmpeg_build/lib" && \
+make -j$(nproc) && \
+make install PREFIX="$HOME/ffmpeg_build"
+}
+
+# libgmm (onevpl)
+compileLibgmm(){
+echo "Compling Libgmm"
+cd $HOME/ffmpeg_sources && \
+git clone https://github.com/intel/gmmlib.git libgmm && \
+cd libgmm && \
+mkdir build && \ 
+cd build && \
+PATH="$HOME/bin:$PATH" cmake .. -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" && \
+make -j$(nproc) && \
+make install PREFIX="$HOME/ffmpeg_build"
+}
+
+# media-driver (intel gpu)
+compileMediaDriver(){
+echo "Compling MediaDriver"
+cd $HOME/ffmpeg_sources && \
+git clone https://github.com/intel/media-driver.git media-driver && \
+cd media-driver && \
+mkdir build && \ 
+cd build && \
+PATH="$HOME/bin:$PATH" cmake .. -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" && \
+make -j$(nproc) && \
+make install PREFIX="$HOME/ffmpeg_build" && \
+export LIBVA_DRIVERS_PATH="$HOME/ffmpeg_build/lib/dri" && \
+export LIBVA_DRIVER_NAME=iHD
+}
+
+# onevpl (onevpl dispatcher)
+compileOnevpl(){
+echo "Compling Onevpl dispatcher"
+cd $HOME/ffmpeg_sources && \
+git clone https://github.com/oneapi-src/oneVPL.git onevpl && \
+cd onevpl && \
+mkdir build && \ 
+cd build && \
+PATH="$HOME/bin:$PATH" cmake .. -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" && \
+cmake --build . --config Release && \
+cmake --build . --config Release --target install && \
+source $HOME/ffmpeg_build/etc/vpl/vars.sh
+}
+
+# onevpl-gpu (intel arc gpus)
+compileOnevplGPU(){
+echo "Compling Onevpl for intel arc gpus"
+cd $HOME/ffmpeg_sources && \
+git clone https://github.com/oneapi-src/oneVPL-intel-gpu.git onevpl-gpu && \
+cd onevpl-gpu && \
+mkdir build && \ 
+cd build && \
+PATH="$HOME/bin:$PATH" cmake .. -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg_build" && \
+make -j$(nproc) && \
+make install PREFIX="$HOME/ffmpeg_build"
+}
+
+
 # ffmpeg
-compileFfmpeg(){
+compileFFmpeg(){
 echo "Compling ffmpeg from source"
 cd $HOME/ffmpeg_sources && \
 wget -O ffmpeg-snapshot.tar.bz2 https://ffmpeg.org/releases/ffmpeg-snapshot.tar.bz2 && \
 tar xjvf ffmpeg-snapshot.tar.bz2 && \
 cd ffmpeg && \
-PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig" ./configure \
+PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig:$PKG_CONFIG_PATH" ./configure \
   --prefix="$HOME/ffmpeg_build" \
   --pkg-config-flags="--static" \
   --extra-cflags="-I$HOME/ffmpeg_build/include" \
@@ -195,6 +262,7 @@ PATH="$HOME/bin:$PATH" PKG_CONFIG_PATH="$HOME/ffmpeg_build/lib/pkgconfig" ./conf
   --enable-libxvid \
   --enable-libx264 \
   --enable-libx265 \
+  --enable-libvpl \
   --enable-nonfree \
   --enable-cuda-nvcc \
   --enable-libnpp \
@@ -208,7 +276,6 @@ make install && \
 hash -r
 }
 
-
 #######################################################################################
 # NOTE FOR NVCC ERROR WHILE COMPILING FFMPEG                                          #
 #     might caused by the conflict of cudatoolkit                                     #
@@ -216,6 +283,18 @@ hash -r
 # Solution:                                                                           #
 #     1. Reinstall cudatoolkit-dev                                                    #
 #     2. and check compatiablity between nvidia-driver and nv-codec-headers           #
+#######################################################################################
+
+#######################################################################################
+# NOTE FOR INTEL ARC GPU ERROR WHILE USING THIS PLUGIN                                #
+# E.g., Cretate a MFX session failed (-9)                                             #
+# Solution (may be):                                                                  #
+#     1. Reinstall OneVPL and OneVPL-GPU                                              #
+#     2. and run system_analyser to check whether the GPU IMPL is picked up           #
+#                                                                                     #
+# some threads:                                                                       #
+#     1. https://github.com/HandBrake/HandBrake/pull/4958                             #
+#     2. https://github.com/oneapi-src/oneVPL/tree/master/examples/tutorials/         #
 #######################################################################################
 
 #Process
@@ -233,5 +312,10 @@ compileLibsvtav1
 compilelibrav1e
 compileLibdav1d
 # compileNVCodec
-compileFfmpeg
+compileLibva
+compileLibgmm
+compileMediaDriver
+compileOnevpl
+compileOnevplGPU
+compileFFmpeg
 echo "Complete!"

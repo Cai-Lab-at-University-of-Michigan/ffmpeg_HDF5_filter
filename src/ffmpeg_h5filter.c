@@ -20,7 +20,7 @@
 
 #include "ffmpeg_h5filter.h"
 
-#define EXPECTED_CS_RATIO 100
+#define EXPECTED_CS_RATIO 30
 
 #define PUSH_ERR(func, minor, str) \
     H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
@@ -604,6 +604,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[7] = tune
          * cd_values[8] = crf
          * cd_values[9] = film_grain [for svt-av1 only]
+         * cd_values[10] = fpu_id [for nvidia gpu only]
          */
         const AVCodec *codec;
         AVCodecContext *c = NULL;
@@ -641,9 +642,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         film_grain = cd_values[9]; // for svt-av1 particularly
         gpu_id = cd_values[10];    // for nvenc only
 
-        // av_log_set_level(AV_LOG_ERROR);
-        av_log_set_level(AV_LOG_INFO);
-
+        av_log_set_level(AV_LOG_ERROR);
         codec_name = calloc(1, 50);
         find_encoder_name(c_id, codec_name);
 
@@ -662,14 +661,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (!codec)
         {
             fprintf(stderr, "Codec not found\n");
-            return 0;
+            goto CompressFailure;
         }
 
         c = avcodec_alloc_context3(codec);
         if (!c)
         {
             fprintf(stderr, "Could not allocate video codec context\n");
-            return 0;
+            goto CompressFailure;
         }
 
         /* Add single threading just for testing purpose */
@@ -699,7 +698,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (!pkt)
         {
             fprintf(stderr, "Could not allocate packet\n");
-            return 0;
+            goto CompressFailure;
         }
 
         /* set width and height */
@@ -717,13 +716,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         case FFH5_ENC_X265:
             switch (color_mode)
             {
-            case 0: //8bit
+            case 0: // 8bit
                 c->pix_fmt = AV_PIX_FMT_YUV420P;
                 break;
-            case 1: //10bit
+            case 1: // 10bit
                 c->pix_fmt = AV_PIX_FMT_YUV420P10;
                 break;
-            case 2: //12bit
+            case 2: // 12bit
                 c->pix_fmt = AV_PIX_FMT_YUV420P12;
                 break;
             default:
@@ -734,6 +733,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         case FFH5_ENC_H264_NV:
         case FFH5_ENC_HEVC_NV:
         case FFH5_ENC_AV1_NV:
+        case FFH5_ENC_AV1_QSV:
             c->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
             break;
         default:
@@ -766,6 +766,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 av_opt_set(c->priv_data, "tune", tune, 0);
             if (crf < 52)
                 av_opt_set_int(c->priv_data, "crf", crf, 0);
+            av_opt_set(c->priv_data, "x265-params", "log-level=0", 0);
             break;
         case FFH5_ENC_H264_NV:
         case FFH5_ENC_HEVC_NV:
@@ -841,14 +842,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         {
             fprintf(stderr, "Could not open codec\n");
             printf(av_err2str(ret));
-            return 0;
+            goto CompressFailure;
         }
 
         dst_frame = av_frame_alloc();
         if (!dst_frame)
         {
             fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
-            return 0;
+            goto CompressFailure;
         }
 
         dst_frame->format = c->pix_fmt;
@@ -858,14 +859,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if ((av_frame_get_buffer(dst_frame, 0) < 0))
         {
             fprintf(stderr, "Could not allocate the video dst_frame data\n");
-            return 0;
+            goto CompressFailure;
         }
 
         src_frame = av_frame_alloc();
         if (!src_frame)
         {
             fprintf(stderr, "Could not allocate video src_frame due to out of memory problem\n");
-            return 0;
+            goto CompressFailure;
         }
 
         src_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
@@ -875,7 +876,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (av_frame_get_buffer(src_frame, 0) < 0)
         {
             fprintf(stderr, "Could not allocate the video src_frame data\n");
-            return 0;
+            goto CompressFailure;
         }
 
         p_data = (uint8_t *)*buf;
@@ -897,7 +898,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (!sws_context)
         {
             fprintf(stderr, "Could not initialize conversion context\n");
-            return 0;
+            goto CompressFailure;
         }
 
         /* real code for encoding buffer data */
@@ -907,13 +908,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             if (ret < 0)
             {
                 fprintf(stderr, "Frame not writable\n");
-                return 0;
+                goto CompressFailure;
             }
             ret = av_frame_make_writable(dst_frame);
             if (ret < 0)
             {
                 fprintf(stderr, "Frame not writable\n");
-                return 0;
+                goto CompressFailure;
             }
             /* put buffer data to frame and do colorspace conversion */
             av_image_fill_arrays(src_frame->data, src_frame->linesize, p_data, src_frame->format, width, height, 1);
@@ -923,7 +924,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             if (ret < 0)
             {
                 fprintf(stderr, "Could not do colorspace conversion\n");
-                return 0;
+                goto CompressFailure;
             }
 
             dst_frame->pts = i;
@@ -935,18 +936,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         /* flush the encoder */
         encode(c, NULL, pkt, &out_size, &out_data, &expected_size);
-
-        avcodec_free_context(&c);
-        av_frame_free(&src_frame);
-        av_frame_free(&dst_frame);
-        av_packet_free(&pkt);
-        sws_freeContext(sws_context);
-        if (codec_name)
-            free(codec_name);
-        if (preset)
-            free(preset);
-        if (tune)
-            free(tune);
 
         buf_size_out = out_size;
 
@@ -960,25 +949,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         memcpy(out_buf, out_data, buf_size_out);
         H5free_memory(*buf);
-        if (out_data)
-            free(out_data);
 
         *buf = out_buf;
         *buf_size = buf_size_out;
-        return buf_size_out;
 
-    CompressFailure:
-        fprintf(stderr, "Error compressing array\n");
-        if (codec_name)
-            free(codec_name);
-        if (preset)
-            free(preset);
-        if (tune)
-            free(tune);
-        if (out_data)
-            free(out_data);
-        if (out_buf)
-            H5free_memory(out_buf);
+        goto CompressFinish;
+
+    CompressFinish:
         if (c)
             avcodec_free_context(&c);
         if (src_frame)
@@ -989,6 +966,38 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             av_packet_free(&pkt);
         if (sws_context)
             sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
+        if (preset)
+            free(preset);
+        if (tune)
+            free(tune);
+        if (out_data)
+            free(out_data);
+        return buf_size_out;
+
+    CompressFailure:
+        fprintf(stderr, "Error compressing array\n");
+        if (c)
+            avcodec_free_context(&c);
+        if (src_frame)
+            av_frame_free(&src_frame);
+        if (dst_frame)
+            av_frame_free(&dst_frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (sws_context)
+            sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
+        if (preset)
+            free(preset);
+        if (tune)
+            free(tune);
+        if (out_data)
+            free(out_data);
+        if (out_buf)
+            H5free_memory(out_buf);
         return 0;
     }
     else
@@ -1028,11 +1037,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         depth = cd_values[4];
         color_mode = cd_values[5];
 
+        av_log_set_level(AV_LOG_ERROR);
+
         pkt = av_packet_alloc();
         if (!pkt)
         {
             fprintf(stderr, "Could not allocate packet\n");
-            return 0;
+            goto DecompressFailure;
         }
 
         codec_name = calloc(1, 50);
@@ -1042,23 +1053,23 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (!codec)
         {
             fprintf(stderr, "Codec not found\n");
-            return 0;
+            goto DecompressFailure;
         }
         parser = av_parser_init(codec->id);
         if (!parser)
         {
             fprintf(stderr, "parser not found\n");
-            return 0;
+            goto DecompressFailure;
         }
         c = avcodec_alloc_context3(codec);
         if (!c)
         {
             fprintf(stderr, "Could not allocate video codec context\n");
-            return 0;
+            goto DecompressFailure;
         }
 
         /* Add single threading just for testing purpose */
-        // c->thread_count = thread_count;
+        // c->thread_count = 16;
 
         /* For some codecs, such as msmpeg4 and mpeg4, width and height
            MUST be initialized there because this information is not
@@ -1070,13 +1081,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (avcodec_open2(c, codec, NULL) < 0)
         {
             fprintf(stderr, "Could not open codec\n");
-            return 0;
+            goto DecompressFailure;
         }
         src_frame = av_frame_alloc();
         if (!src_frame)
         {
             fprintf(stderr, "Could not allocate video frame due to out of memory problem\n");
-            return 0;
+            goto DecompressFailure;
         }
         switch (c_id)
         {
@@ -1089,13 +1100,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         case FFH5_DEC_HEVC:
             switch (color_mode)
             {
-            case 0: //8bit
+            case 0: // 8bit
                 src_frame->format = AV_PIX_FMT_YUV420P;
                 break;
-            case 1: //10bit
+            case 1: // 10bit
                 src_frame->format = AV_PIX_FMT_YUV420P10;
                 break;
-            case 2: //12bit
+            case 2: // 12bit
                 src_frame->format = AV_PIX_FMT_YUV420P12;
                 break;
             default:
@@ -1105,6 +1116,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         case FFH5_DEC_H264_CUVID:
         case FFH5_DEC_HEVC_CUVID:
         case FFH5_DEC_AV1_CUVID:
+        case FFH5_DEC_AV1_QSV:
             src_frame->format = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
             break;
         default:
@@ -1118,7 +1130,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (!dst_frame)
         {
             fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
-            return 0;
+            goto DecompressFailure;
         }
 
         dst_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
@@ -1156,7 +1168,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             if (ret < 0)
             {
                 fprintf(stderr, "Packet not readable\n");
-                return 0;
+                goto DecompressFailure;
             }
 
             p_data += ret;
@@ -1173,12 +1185,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         pkt->size = 0;
         decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
 
-        av_parser_close(parser);
-        avcodec_free_context(&c);
-        av_frame_free(&src_frame);
-        av_frame_free(&dst_frame);
-        av_packet_free(&pkt);
-
         buf_size_out = out_size;
 
         out_buf = H5allocate_memory(buf_size_out, false);
@@ -1191,25 +1197,12 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         memcpy(out_buf, out_data, buf_size_out);
 
         H5free_memory(*buf);
-        if (codec_name)
-            free(codec_name);
-        if (out_data)
-            free(out_data);
-        if (sws_context)
-            sws_freeContext(sws_context);
         *buf = out_buf;
         *buf_size = buf_size_out;
 
-        return buf_size_out;
+        goto DecompressFinish; // success
 
-    DecompressFailure:
-        fprintf(stderr, "Error decompressing packets\n");
-        if (codec_name)
-            free(codec_name);
-        if (out_data)
-            free(out_data);
-        if (out_buf)
-            H5free_memory(out_buf);
+    DecompressFinish:
         if (parser)
             av_parser_close(parser);
         if (c)
@@ -1222,6 +1215,32 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             av_packet_free(&pkt);
         if (sws_context)
             sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
+        if (out_data)
+            free(out_data);
+        return buf_size_out;
+
+    DecompressFailure:
+        fprintf(stderr, "Error decompressing packets\n");
+        if (parser)
+            av_parser_close(parser);
+        if (c)
+            avcodec_free_context(&c);
+        if (src_frame)
+            av_frame_free(&src_frame);
+        if (dst_frame)
+            av_frame_free(&dst_frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (sws_context)
+            sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
+        if (out_data)
+            free(out_data);
+        if (out_buf)
+            H5free_memory(out_buf);
         return 0;
     }
 }

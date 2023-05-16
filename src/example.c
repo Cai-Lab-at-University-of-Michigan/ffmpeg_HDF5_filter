@@ -28,7 +28,7 @@ int DisplayHelp()
 {
     printf("Usage :build/example <encoder id>\n");
     printf("\t<encoder id> : Which encoder to be used for compression? \n");
-    printf("\t\t[0-7] mpeg4, libxvid, libx264, h264_nvenc, libx265, hevc_nvenc, libsvtav1, librav1e\n");
+    printf("\t\t[0-9] mpeg4, libxvid, libx264, h264_nvenc, libx265, hevc_nvenc, libsvtav1, librav1e, nvenc_av1, qsv_av1\n");
     exit(1);
 }
 
@@ -62,6 +62,12 @@ int adjust_decoder_by_encoder(int c_id)
         break;
     case 7:
         decoder_id = 6;
+        break;
+    case 8:
+        decoder_id = 7;
+        break;
+    case 9:
+        decoder_id = 8;
         break;
 
     default:
@@ -137,9 +143,12 @@ int main(int argc, const char *argv[])
     cd_values[5] = 0;          /* Color mode (0=Mono, 1=RGB) */
     cd_values[6] = preset_id;  /* Preset for encoding codec */
     cd_values[7] = tune_type;  /* tuning for encoding codec */
+    cd_values[8] = 0;
+    cd_values[9] = 0;
+    cd_values[10] = 0;
 
     /* Set the filter with 8 params */
-    r = H5Pset_filter(plist, FFMPEG_H5FILTER, H5Z_FLAG_OPTIONAL, 8, cd_values);
+    r = H5Pset_filter(plist, FFMPEG_H5FILTER, H5Z_FLAG_OPTIONAL, 11, cd_values);
 
     if (r < 0)
         goto failed;

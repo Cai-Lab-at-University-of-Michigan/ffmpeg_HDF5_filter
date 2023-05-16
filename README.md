@@ -16,7 +16,7 @@
 ## Compliling the Filter
 - [x] install cmake >= 2.10 
 - [x] change -DFFMPEG_BUILD_PATH in `scripts/compile.sh`
-- [x] run `scripts/compile.sh` in current folder
+- [x] run `scripts/compile_ffmpeg.sh` in current folder
 - [x] set `$HDF5_PLUGIN_PATH` to the `build` dir of `ffmpeg_HDF5_filter`
 - [x] open `$HOME/.bashrc`, add one line at the end `export HDF5_PLUGIN_PATH=$HOME/ffmpeg_HDF5_filter/build`
 - [x] run `source $HOME/.bashrc`
