@@ -6,8 +6,16 @@
 tmp_video*
 *.log
 __pycache__
-.vscode
+**/.vscode
 python/*
 .ipynb_checkpoints
 unit_tests/*
 notebooks/*
+imagej-plugin/build/*
+imagej-plugin/.gradle/*
+imagej-plugin/bin/*
+imagej-plugin/.classpath
+imagej-plugin/.project
+imagej-plugin/.settings/
+imagej-plugin/target/
+
