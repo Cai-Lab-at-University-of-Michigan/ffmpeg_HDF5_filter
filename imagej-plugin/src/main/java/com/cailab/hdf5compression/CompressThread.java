@@ -16,6 +16,8 @@ public class CompressThread implements Runnable {
 	private int crf;
 	private int filmGrain;
 
+	final int[] CHUNK_SIZES = {256, 256, 8};
+
 	public CompressThread(MainWindow mw, String filename, int encoderId, int decoderId, int presetId, int tuneType,
 			int crf, int filmGrain) {
 		this.mw = mw;
@@ -69,9 +71,9 @@ public class CompressThread implements Runnable {
 			// Set filter parameters
 			cd_values[0] = encoderId;
 			cd_values[1] = decoderId;
-			cd_values[2] = 64;
-			cd_values[3] = 64;
-			cd_values[4] = 8;
+			cd_values[2] = CHUNK_SIZES[0];
+			cd_values[3] = CHUNK_SIZES[1];
+			cd_values[4] = CHUNK_SIZES[2];
 			cd_values[5] = 0;
 			cd_values[6] = presetId;
 			cd_values[7] = tuneType;
@@ -96,10 +98,10 @@ public class CompressThread implements Runnable {
 
 			// Set chunking
 			if (nChannels > 1 || nFrames > 1) { // multi-channel
-				long[] chunkshape = { 1, 8, 64, 64 };
+				long[] chunkshape = { 1, CHUNK_SIZES[2], CHUNK_SIZES[1], CHUNK_SIZES[0] };
 				r = H5.H5Pset_chunk(plist, 4, chunkshape);
 			} else { // single-channel
-				long[] chunkshape = { 8, 64, 64 };
+				long[] chunkshape = { CHUNK_SIZES[2], CHUNK_SIZES[1], CHUNK_SIZES[0] };
 				r = H5.H5Pset_chunk(plist, 3, chunkshape);
 			}
 
