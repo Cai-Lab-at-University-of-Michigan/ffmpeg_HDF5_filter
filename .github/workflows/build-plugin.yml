@@ -1,0 +1,24 @@
+name: Build Gradle project
+
+on:
+  push:
+
+jobs:
+  build-gradle-project:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout project sources
+      working-directory: ./imagej-plugin
+      uses: actions/checkout@v3
+    - name: Setup Gradle
+      working-directory: ./imagej-plugin
+      uses: gradle/gradle-build-action@v2
+    - name: Run build with Gradle Wrapper
+      working-directory: ./imagej-plugin
+      run: ./gradlew fatJar
+    - name: Upload build output
+      working-directory: ./imagej-plugin
+      uses: actions/upload-artifact@v3
+      with:
+        name: imagej-plugin.jar
+        path: build/libs
