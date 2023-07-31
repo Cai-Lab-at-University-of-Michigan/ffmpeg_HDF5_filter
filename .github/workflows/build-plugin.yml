@@ -15,8 +15,7 @@ jobs:
       working-directory: ./imagej-plugin
       run: ./gradlew fatJar
     - name: Upload build output
-      working-directory: ./imagej-plugin
       uses: actions/upload-artifact@v3
       with:
         name: imagej-plugin.jar
-        path: build/libs
+        path: imagej-plugin/build/libs
