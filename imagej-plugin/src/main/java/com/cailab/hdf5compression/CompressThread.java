@@ -42,6 +42,7 @@ public class CompressThread implements Runnable {
 			H5.H5PLappend(pluginPath);
 
 			ImagePlus imp = WindowManager.getCurrentImage();
+			imp.lock(); // lock image
 
 			int nChannels = imp.getNChannels();
 			int nFrames = imp.getNFrames();
@@ -198,6 +199,7 @@ public class CompressThread implements Runnable {
 			H5.H5Fclose(fid);
 			System.out.println("File closed");
 			mw.onCompressionComplete();
+			imp.unlock(); // unlock image stack
 		} catch (Exception e) {
 			e.printStackTrace();
 			try {
