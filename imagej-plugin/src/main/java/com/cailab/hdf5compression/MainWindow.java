@@ -4,21 +4,25 @@
  */
 package com.cailab.hdf5compression;
 
+import javax.swing.SwingUtilities;
+
+import ij.IJ;
 import ij.ImagePlus;
 import ij.io.SaveDialog;
 import ij.plugin.filter.PlugInFilter;
 import ij.process.ImageProcessor;
 
-import javax.swing.SwingUtilities;
 
 
 /**
  *
  * @author weijie
+ * @author duanb
  */
 public class MainWindow extends javax.swing.JFrame implements PlugInFilter {
     private String selectedFilename = null;
     private Thread currThread = null;
+    private long startTime = 0;
 
     /**
      * Creates new form MainWindow
@@ -281,26 +285,24 @@ public class MainWindow extends javax.swing.JFrame implements PlugInFilter {
 
     private int get_decoder_from_encoder(int c_id) {
 		switch(c_id) {
-			case 0:
-				return 0;
-			case 1:
-				return 0;
-			case 2:
-				return 1;
-			case 3:
-				return 2;
-			case 4:
-				return 3;
-			case 5:
-				return 4;
-			case 6:
-				return 6;
-			case 7:
-				return 6;
-			case 8:
-				return 7;
-			case 9:
-				return 8;
+			case Constants.FFH5_ENC_MPEG4:
+			case Constants.FFH5_ENC_XVID:
+				return Constants.FFH5_DEC_MPEG4;
+			case Constants.FFH5_ENC_X264:
+				return Constants.FFH5_DEC_H264;
+			case Constants.FFH5_ENC_H264_NV:
+				return Constants.FFH5_DEC_H264_CUVID;
+			case Constants.FFH5_ENC_X265:
+				return Constants.FFH5_DEC_HEVC;
+			case Constants.FFH5_ENC_HEVC_NV:
+				return Constants.FFH5_DEC_HEVC_CUVID;
+			case Constants.FFH5_ENC_SVTAV1:
+			case Constants.FFH5_ENC_RAV1E:
+				return Constants.FFH5_DEC_DAV1D;
+			case Constants.FFH5_ENC_AV1_NV:
+				return Constants.FFH5_DEC_AV1_CUVID;
+			case Constants.FFH5_ENC_AV1_QSV:
+				return Constants.FFH5_DEC_AV1_QSV;
 			default:
 				return c_id;
 		}
@@ -397,6 +399,8 @@ public class MainWindow extends javax.swing.JFrame implements PlugInFilter {
         int crf = 100 - qualitySlider.getValue();
         int filmGrain = filmGrainSlider.getValue();
 
+        this.startTime = System.currentTimeMillis();
+
         statusPanel.setVisible(true);
         statusText.setText("Compressing...");
         cancelButton.setVisible(true);
@@ -428,6 +432,7 @@ public class MainWindow extends javax.swing.JFrame implements PlugInFilter {
 
     protected void onCompressionComplete() {
         statusText.setText("Compression complete");
+        IJ.log("Compression took " + (System.currentTimeMillis() - this.startTime) / 1000 + "s");
         progressBar.setValue(100);
         cancelButton.setVisible(false);
         compressButton.setEnabled(true);

@@ -1,5 +1,7 @@
 package com.cailab.hdf5compression;
 
+import org.apache.commons.io.output.ByteArrayOutputStream;
+
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import ij.ImagePlus;
@@ -15,8 +17,6 @@ public class CompressThread implements Runnable {
 	private int tuneType;
 	private int crf;
 	private int filmGrain;
-
-	final int[] CHUNK_SIZES = {256, 256, 8};
 
 	public CompressThread(MainWindow mw, String filename, int encoderId, int decoderId, int presetId, int tuneType,
 			int crf, int filmGrain) {
@@ -50,6 +50,10 @@ public class CompressThread implements Runnable {
 			int nCols = imp.getWidth();
 			long[] dimensions;
 			long space;
+			final int[] CHUNK_SIZES = { nCols, nRows, 100 };
+
+			System.out.println("nChannels: " + nChannels + " nFrames: " + nFrames + " nSlices: " + nSlices + " Height: "
+					+ nRows + " Width : " + nCols);
 
 			if (nChannels > 1) { // Multi-channel
 				dimensions = new long[] { nChannels, nSlices, nRows, nCols };
@@ -106,33 +110,28 @@ public class CompressThread implements Runnable {
 			}
 
 			if (r >= 0) {
-				System.out.println("Chunking set successfully");
+				System.out.println("Chunking set successfully, chunkSize: " + CHUNK_SIZES[2] + "x" + CHUNK_SIZES[1]
+						+ "x" + CHUNK_SIZES[0]);
 			} else {
 				System.out.println("Error: " + r);
 				return;
 			}
 
 			// Create 8 bit dataset
-			ds = H5.H5Dcreate(fid, "dset", HDF5Constants.H5T_NATIVE_UINT8, space, HDF5Constants.H5P_DEFAULT, plist,
+			ds = H5.H5Dcreate(fid, "data", HDF5Constants.H5T_NATIVE_UINT8, space, HDF5Constants.H5P_DEFAULT, plist,
 					HDF5Constants.H5P_DEFAULT);
 
+			byte[] pixels = null;
+			ImageProcessor imageProcessor = null;
+			int slice = 1;
+
 			long targetSpace = H5.H5Scopy(space);
-			long memSpace = H5.H5Screate_simple(2, new long[] { nRows, nCols }, null);
+			long memSpace = H5.H5Screate_simple(3, new long[] { CHUNK_SIZES[2], nRows, nCols }, null);
+			ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
 			for (int c = 0; c < Math.max(nChannels, nFrames); c++) {
 				for (int i = 1; i <= nSlices; i++) {
-					// Select subset of target dataset to write to
-					if (nChannels > 1 || nFrames > 1) {
-						H5.H5Sselect_hyperslab(targetSpace, HDF5Constants.H5S_SELECT_SET, new long[] { c, i - 1, 0, 0 },
-								new long[] { 1, 1, 1, 1 }, new long[] { 1, 1, 1, 1 },
-								new long[] { 1, 1, nRows, nCols });
-					} else {
-						H5.H5Sselect_hyperslab(targetSpace, HDF5Constants.H5S_SELECT_SET, new long[] { i - 1, 0, 0 },
-								new long[] { 1, 1, 1 }, new long[] { 1, 1, 1 }, new long[] { 1, nRows, nCols });
-					}
-
 					// get slice for channel and coordinates
-					int slice;
 					if (nFrames > 0) {
 						slice = imp.getStackIndex(0, i, c);
 					} else {
@@ -140,14 +139,56 @@ public class CompressThread implements Runnable {
 					}
 
 					// convert input image to 8 bit
-					ImageProcessor imageProcessor = imp.getStack().getProcessor(slice).convertToByte(true);
-					byte[] pixels = (byte[]) imageProcessor.getPixels();
+					imageProcessor = imp.getStack().getProcessor(slice).convertToByte(true);
+					pixels = (byte[]) imageProcessor.getPixels();
+					outputStream.write(pixels);
+					
+					// write one chunk at a time
+					if (i % CHUNK_SIZES[2] == 0) {
+						// Select target space
+						if (nChannels > 1 || nFrames > 1) {
+							H5.H5Sselect_hyperslab(targetSpace, HDF5Constants.H5S_SELECT_SET,
+									new long[] { c, i - CHUNK_SIZES[2], 0, 0 },
+									new long[] { 1, 1, 1, 1 }, new long[] { 1, 1, 1, 1 },
+									new long[] { 1, CHUNK_SIZES[2], nRows, nCols });
+						} else {
+							H5.H5Sselect_hyperslab(targetSpace, HDF5Constants.H5S_SELECT_SET,
+									new long[] { i - CHUNK_SIZES[2], 0, 0 },
+									new long[] { 1, 1, 1 }, new long[] { 1, 1, 1 },
+									new long[] { CHUNK_SIZES[2], nRows, nCols });
+						}
+
+						// Write to dataset and update GUI
+						H5.H5Dwrite(ds, HDF5Constants.H5T_NATIVE_UINT8, memSpace, targetSpace,
+								HDF5Constants.H5P_DEFAULT, outputStream.toByteArray());
+						mw.updateProgress((int) Math
+								.floor((c * nSlices + i) / (float) (Math.max(nChannels, nFrames) * nSlices) * 100));
+						// clear out outputStream
+						outputStream.close();
+						outputStream = new ByteArrayOutputStream();
+					}
+				}
+
+				// write the rest data to h5 file
+				if (nSlices % CHUNK_SIZES[2] > 0) {
+					int rest = nSlices % CHUNK_SIZES[2];
+					int start = nSlices - (nSlices % CHUNK_SIZES[2]);
+					memSpace = H5.H5Screate_simple(3, new long[] { rest, nRows, nCols }, null);
+					if (nChannels > 1 || nFrames > 1) {
+						H5.H5Sselect_hyperslab(targetSpace, HDF5Constants.H5S_SELECT_SET, new long[] { c, start, 0, 0 },
+								new long[] { 1, 1, 1, 1 }, new long[] { 1, 1, 1, 1 },
+								new long[] { 1, rest, nRows, nCols });
+					} else {
+						H5.H5Sselect_hyperslab(targetSpace, HDF5Constants.H5S_SELECT_SET, new long[] { start, 0, 0 },
+								new long[] { 1, 1, 1 }, new long[] { 1, 1, 1 }, new long[] { rest, nRows, nCols });
+					}
 
 					// Write to dataset and update GUI
 					H5.H5Dwrite(ds, HDF5Constants.H5T_NATIVE_UINT8, memSpace, targetSpace, HDF5Constants.H5P_DEFAULT,
-							pixels);
-					mw.updateProgress((int) Math
-							.floor((c * nSlices + i) / (float) (Math.max(nChannels, nFrames) * nSlices) * 100));
+							outputStream.toByteArray());
+					mw.updateProgress(100);
+					// close outputStream
+					outputStream.close();
 				}
 			}
 

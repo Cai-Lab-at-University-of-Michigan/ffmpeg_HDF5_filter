@@ -13,6 +13,17 @@ public class Constants {
     static final int FFH5_ENC_RAV1E = 7;
     static final int FFH5_ENC_AV1_NV = 8;
     static final int FFH5_ENC_AV1_QSV = 9;
+    
+    // DECODERS
+    static final int FFH5_DEC_MPEG4 = 0;
+    static final int FFH5_DEC_H264 = 1;
+    static final int FFH5_DEC_H264_CUVID = 2;
+    static final int FFH5_DEC_HEVC = 3;
+    static final int FFH5_DEC_HEVC_CUVID = 4;
+    static final int FFH5_DEC_AOMAV1 = 5;
+    static final int FFH5_DEC_DAV1D = 6;
+    static final int FFH5_DEC_AV1_CUVID = 7;
+    static final int FFH5_DEC_AV1_QSV = 8;
 
     // PRESETS
     /*
