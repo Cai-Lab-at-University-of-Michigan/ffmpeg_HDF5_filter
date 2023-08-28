@@ -21,7 +21,7 @@
 
 #include "ffmpeg_h5filter.h"
 
-#define EXPECTED_CS_RATIO 30
+#define EXPECTED_CS_RATIO 100
 
 #define PUSH_ERR(func, minor, str) \
     H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
@@ -41,10 +41,8 @@ struct FFMPEGContextStruct
 /*
  * Global variables for ffmpeg context management
  */
-struct FFMPEGContextStruct EncContext = {-1, NULL, NULL, NULL, NULL, NULL, NULL};
-struct FFMPEGContextStruct DecContext = {-1, NULL, NULL, NULL, NULL, NULL, NULL};
-struct FFMPEGContextStruct *EncContextStruct = &EncContext;
-struct FFMPEGContextStruct *DecContextStruct = &DecContext;
+struct FFMPEGContextStruct *EncContextStruct = &(struct FFMPEGContextStruct){-1, NULL, NULL, NULL, NULL, NULL, NULL};
+struct FFMPEGContextStruct *DecContextStruct = &(struct FFMPEGContextStruct){-1, NULL, NULL, NULL, NULL, NULL, NULL};
 
 void sig_handler(int signo);
 
@@ -65,6 +63,8 @@ void destroy_encoder_context();
 int create_decoder_context(unsigned flags, const unsigned int cd_values[]);
 
 void destroy_decoder_context();
+
+void destroy_context();
 
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
                    size_t *out_size, uint8_t **out_data, size_t *expected_size);
@@ -89,8 +89,7 @@ void sig_handler(int signo)
     case SIGQUIT:
     case SIGABRT:
     case SIGSEGV:
-        destroy_encoder_context();
-        destroy_decoder_context();
+        destroy_context();
         break;
 
     default:
@@ -508,120 +507,6 @@ static void find_tune(int t_id, char *tune)
 }
 
 /*
- * Function:  encode
- * --------------------
- * encode a ffmpeg frame
- *
- *  *enc_ctx: AVCodecContext
- *  *frame: frame to be encoded
- *  *pkt: pkt where data being compressed into
- *  *out_size: accumulated compressed pkts data size
- *  **out_data: compressed pkts data
- *  *expected_size: expected size of the compressed buffer
- *
- */
-static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
-                   size_t *out_size, uint8_t **out_data, size_t *expected_size)
-{
-    int ret;
-    size_t offset = 0;
-    size_t updated_size = 0;
-
-    /* send the frame to the encoder */
-    // if (frame)
-    //     printf("Encode frame %3" PRId64 "\n", frame->pts);
-
-    ret = avcodec_send_frame(enc_ctx, frame);
-    if (ret < 0)
-        fprintf(stderr, "Error sending a frame for encoding\n");
-
-    while (ret >= 0)
-    {
-        ret = avcodec_receive_packet(enc_ctx, pkt);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            return;
-        if (ret < 0)
-            fprintf(stderr, "Error during encoding\n");
-
-        // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
-
-        offset = *out_size;
-        updated_size = *out_size + pkt->size;
-
-        // each time exceeds memory block then realloc two times bigger block
-        if (updated_size > *expected_size)
-        {
-            *out_data = realloc(*out_data, updated_size * 2);
-            *expected_size = updated_size * 2;
-        }
-
-        if (*out_data == NULL)
-            fprintf(stderr, "Out of memory occurred during encoding\n");
-
-        memcpy(*out_data + offset, pkt->data, pkt->size);
-        *out_size = updated_size;
-        av_packet_unref(pkt);
-    }
-}
-
-/*
- * Function:  decode
- * --------------------
- * decode a compressed pkt/pkts to frame/frames and convert colorspace of the frame/frames
- *
- *  *dec_ctx: AVCodecContext
- *  *src_frame: source frame where compressed pkt to be decoded
- *  *pkt: compressed pkt
- *  *sws_context: context of colorspace conversion
- *  *dst_frame: destination frame
- *  *out_size: accumulated destination frame data size
- *  *out_data: frame data took from destination frame
- *  frame_size: size of frame
- *
- */
-static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
-                   struct SwsContext *sws_context, AVFrame *dst_frame,
-                   size_t *out_size, uint8_t *out_data, size_t frame_size)
-{
-    int ret;
-    size_t offset = 0;
-
-    ret = avcodec_send_packet(dec_ctx, pkt);
-
-    if (ret < 0)
-        fprintf(stderr, "Error sending a pkt for encoding\n");
-
-    // printf("receiving packets %d\n", pkt->size);
-
-    while (ret >= 0)
-    {
-        ret = avcodec_receive_frame(dec_ctx, src_frame);
-        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
-            return;
-        else if (ret < 0)
-            fprintf(stderr, "Error receiving a frame for encoding\n");
-
-        // printf("Decode frame %3d\n", dec_ctx->frame_number);
-
-        /* do colorspace conversion */
-        sws_scale_frame(sws_context, dst_frame, src_frame);
-
-        /* put to buffer */
-        offset = *out_size;
-
-        av_image_copy_to_buffer(out_data + offset,
-                                frame_size,
-                                (const uint8_t *const *)dst_frame->data,
-                                dst_frame->linesize,
-                                dst_frame->format,
-                                dst_frame->width,
-                                dst_frame->height,
-                                1);
-        *out_size += frame_size;
-    }
-}
-
-/*
  * Function:  create_encoder_context
  * --------------------
  * Create context for encoder process
@@ -990,6 +875,8 @@ void destroy_encoder_context()
         av_packet_free(&EncContextStruct->pkt);
     if (EncContextStruct->sws_context)
         sws_freeContext(EncContextStruct->sws_context);
+    if (EncContextStruct)
+        free(EncContextStruct);
 }
 
 /*
@@ -1190,6 +1077,134 @@ void destroy_decoder_context()
         av_packet_free(&DecContextStruct->pkt);
     if (DecContextStruct->sws_context)
         sws_freeContext(DecContextStruct->sws_context);
+    if (DecContextStruct)
+        free(DecContextStruct);
+}
+
+/*
+ * Function:  destroy_context
+ * --------------------
+ * Destroy enconder and decoder contexts and free memory
+ *
+ */
+void destroy_context()
+{
+    destroy_encoder_context();
+    destroy_decoder_context();
+}
+
+/*
+ * Function:  encode
+ * --------------------
+ * encode a ffmpeg frame
+ *
+ *  *enc_ctx: AVCodecContext
+ *  *frame: frame to be encoded
+ *  *pkt: pkt where data being compressed into
+ *  *out_size: accumulated compressed pkts data size
+ *  **out_data: compressed pkts data
+ *  *expected_size: expected size of the compressed buffer
+ *
+ */
+static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
+                   size_t *out_size, uint8_t **out_data, size_t *expected_size)
+{
+    int ret;
+    size_t offset = 0;
+    size_t updated_size = 0;
+
+    /* send the frame to the encoder */
+    // if (frame)
+    //     printf("Encode frame %3" PRId64 "\n", frame->pts);
+
+    ret = avcodec_send_frame(enc_ctx, frame);
+    if (ret < 0)
+        fprintf(stderr, "Error sending a frame for encoding\n");
+
+    while (ret >= 0)
+    {
+        ret = avcodec_receive_packet(enc_ctx, pkt);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            return;
+        if (ret < 0)
+            fprintf(stderr, "Error during encoding\n");
+
+        // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
+
+        offset = *out_size;
+        updated_size = *out_size + pkt->size;
+
+        // each time exceeds memory block then realloc two times bigger block
+        if (updated_size > *expected_size)
+        {
+            *out_data = realloc(*out_data, updated_size * 2);
+            *expected_size = updated_size * 2;
+        }
+
+        if (*out_data == NULL)
+            fprintf(stderr, "Out of memory occurred during encoding\n");
+
+        memcpy(*out_data + offset, pkt->data, pkt->size);
+        *out_size = updated_size;
+        av_packet_unref(pkt);
+    }
+}
+
+/*
+ * Function:  decode
+ * --------------------
+ * decode a compressed pkt/pkts to frame/frames and convert colorspace of the frame/frames
+ *
+ *  *dec_ctx: AVCodecContext
+ *  *src_frame: source frame where compressed pkt to be decoded
+ *  *pkt: compressed pkt
+ *  *sws_context: context of colorspace conversion
+ *  *dst_frame: destination frame
+ *  *out_size: accumulated destination frame data size
+ *  *out_data: frame data took from destination frame
+ *  frame_size: size of frame
+ *
+ */
+static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
+                   struct SwsContext *sws_context, AVFrame *dst_frame,
+                   size_t *out_size, uint8_t *out_data, size_t frame_size)
+{
+    int ret;
+    size_t offset = 0;
+
+    ret = avcodec_send_packet(dec_ctx, pkt);
+
+    if (ret < 0)
+        fprintf(stderr, "Error sending a pkt for encoding\n");
+
+    // printf("receiving packets %d\n", pkt->size);
+
+    while (ret >= 0)
+    {
+        ret = avcodec_receive_frame(dec_ctx, src_frame);
+        if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
+            return;
+        else if (ret < 0)
+            fprintf(stderr, "Error receiving a frame for encoding\n");
+
+        // printf("Decode frame %3d\n", dec_ctx->frame_number);
+
+        /* do colorspace conversion */
+        sws_scale_frame(sws_context, dst_frame, src_frame);
+
+        /* put to buffer */
+        offset = *out_size;
+
+        av_image_copy_to_buffer(out_data + offset,
+                                frame_size,
+                                (const uint8_t *const *)dst_frame->data,
+                                dst_frame->linesize,
+                                dst_frame->format,
+                                dst_frame->width,
+                                dst_frame->height,
+                                1);
+        *out_size += frame_size;
+    }
 }
 
 /*
@@ -1315,7 +1330,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             free(out_data);
         if (out_buf)
             H5free_memory(out_buf);
-        destroy_encoder_context();
+        destroy_context();
         return 0;
     }
     else
@@ -1414,6 +1429,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             free(out_data);
         if (out_buf)
             H5free_memory(out_buf);
+        destroy_context();
         return 0;
     }
 }
