@@ -41,8 +41,10 @@ struct FFMPEGContextStruct
 /*
  * Global variables for ffmpeg context management
  */
-struct FFMPEGContextStruct EncContextStruct = {-1, NULL, NULL, NULL, NULL, NULL, NULL};
-struct FFMPEGContextStruct DecContextStruct = {-1, NULL, NULL, NULL, NULL, NULL, NULL};
+struct FFMPEGContextStruct EncContext = {-1, NULL, NULL, NULL, NULL, NULL, NULL};
+struct FFMPEGContextStruct DecContext = {-1, NULL, NULL, NULL, NULL, NULL, NULL};
+struct FFMPEGContextStruct *EncContextStruct = &EncContext;
+struct FFMPEGContextStruct *DecContextStruct = &DecContext;
 
 void sig_handler(int signo);
 
@@ -1261,7 +1263,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         p_data = (uint8_t *)*buf;
 
         /* real code for encoding buffer data */
-        for (i = 0; i < depth; i++)
+        for (int i = 0; i < depth; i++)
         {
             /* put buffer data to frame and do colorspace conversion */
             av_image_fill_arrays(EncContextStruct->src_frame->data, EncContextStruct->src_frame->linesize, p_data, EncContextStruct->src_frame->format, width, height, 1);
@@ -1275,7 +1277,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             }
 
             EncContextStruct->dst_frame->pts = i;
-            EncContextStruct->dst_frame->quality = ctx->global_quality;
+            EncContextStruct->dst_frame->quality = EncContextStruct->ctx->global_quality;
 
             /* encode the frame */
             encode(EncContextStruct->ctx, EncContextStruct->dst_frame, EncContextStruct->pkt, &out_size, &out_data, &expected_size);
@@ -1361,7 +1363,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         {
             eof = !p_data_size;
 
-            ret = av_parser_parse2(DecContextStruct->parser, c, &DecContextStruct->pkt->data, &DecContextStruct->pkt->size,
+            ret = av_parser_parse2(DecContextStruct->parser, DecContextStruct->ctx, &DecContextStruct->pkt->data, &DecContextStruct->pkt->size,
                                    p_data, p_data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 
             if (ret < 0)
