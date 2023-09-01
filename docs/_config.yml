@@ -13,3 +13,6 @@ search_enabled: true
 hljs_style: github-gist
 plugins:
   - jekyll-remote-theme
+exclude:
+  - Gemfile
+  - Gemfile.lock
