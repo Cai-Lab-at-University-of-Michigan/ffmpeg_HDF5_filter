@@ -536,7 +536,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
     ret = avcodec_send_packet(dec_ctx, pkt);
 
     if (ret < 0)
-        fprintf(stderr, "Error sending a pkt for encoding\n");
+        fprintf(stderr, "Error sending a pkt for decoding\n");
 
     // printf("receiving packets %d\n", pkt->size);
 
@@ -546,7 +546,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         else if (ret < 0)
-            fprintf(stderr, "Error receiving a frame for encoding\n");
+            fprintf(stderr, "Error receiving a frame for decoding\n");
 
         // printf("Decode frame %3d\n", dec_ctx->frame_number);
 
