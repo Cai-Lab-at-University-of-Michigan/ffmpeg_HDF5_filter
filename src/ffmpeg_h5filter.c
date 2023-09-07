@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <error.h>
-#include <signal.h>
 
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
@@ -21,30 +20,10 @@
 
 #include "ffmpeg_h5filter.h"
 
-#define EXPECTED_CS_RATIO 100
+#define EXPECTED_CS_RATIO 30
 
 #define PUSH_ERR(func, minor, str) \
     H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
-
-/* Define struct */
-struct FFMPEGContextStruct
-{
-    int is_initilized;
-    AVCodecContext *ctx;
-    AVPacket *pkt;
-    AVFrame *src_frame;
-    AVFrame *dst_frame;
-    struct SwsContext *sws_context;
-    AVCodecParserContext *parser;
-};
-
-/*
- * Global variables for ffmpeg context management
- */
-struct FFMPEGContextStruct *EncContextStruct = &(struct FFMPEGContextStruct){-1, NULL, NULL, NULL, NULL, NULL, NULL};
-struct FFMPEGContextStruct *DecContextStruct = &(struct FFMPEGContextStruct){-1, NULL, NULL, NULL, NULL, NULL, NULL};
-
-void sig_handler(int signo);
 
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
 
@@ -56,16 +35,6 @@ static void find_preset(int p_id, char *preset);
 
 static void find_tune(int t_id, char *tune);
 
-int create_encoder_context(unsigned flags, const unsigned int cd_values[]);
-
-void destroy_encoder_context();
-
-int create_decoder_context(unsigned flags, const unsigned int cd_values[]);
-
-void destroy_decoder_context();
-
-void destroy_context();
-
 static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
                    size_t *out_size, uint8_t **out_data, size_t *expected_size);
 
@@ -75,27 +44,6 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[],
                         size_t nbytes, size_t *buf_size, void **buf);
-
-/**
- * signal_handler to clean up contexts
- */
-void sig_handler(int signo)
-{
-    switch (signo)
-    {
-    case SIGINT:
-    case SIGKILL:
-    case SIGSTOP:
-    case SIGQUIT:
-    case SIGABRT:
-    case SIGSEGV:
-        destroy_context();
-        break;
-
-    default:
-        break;
-    }
-}
 
 /*
  * Function:  read_from_buffer
@@ -507,593 +455,6 @@ static void find_tune(int t_id, char *tune)
 }
 
 /*
- * Function:  create_encoder_context
- * --------------------
- * Create context for encoder process
- *
- *  flags:
- *  cd_values: auxiliary parameters
- *
- *  return: 0 (failed), 1 (success)
- *
- */
-int create_encoder_context(unsigned flags, const unsigned int cd_values[])
-{
-    const AVCodec *codec;
-    AVCodecContext *ctx = NULL;
-    AVFrame *src_frame = NULL, *dst_frame = NULL;
-    AVPacket *pkt;
-    struct SwsContext *sws_context = NULL;
-    // int thread_count = 16; // single thread
-
-    char *codec_name, *preset, *tune;
-    enum EncoderCodecEnum c_id;
-    enum PresetIDEnum p_id;
-    enum TuneTypeEnum t_id;
-
-    int color_mode;
-    int crf;
-    int film_grain;
-    int gpu_id;
-    char film_grain_buffer[10];
-
-    int width, height, depth;
-    int i, ret;
-
-    c_id = cd_values[0];
-    width = cd_values[2];
-    height = cd_values[3];
-    depth = cd_values[4];
-    color_mode = cd_values[5];
-    p_id = cd_values[6];
-    t_id = cd_values[7];
-    crf = cd_values[8];
-    film_grain = cd_values[9]; // for svt-av1 particularly
-    gpu_id = cd_values[10];    // for nvenc only
-
-    av_log_set_level(AV_LOG_ERROR);
-    codec_name = calloc(1, 50);
-    find_encoder_name(c_id, codec_name);
-
-    preset = calloc(1, 50);
-    tune = calloc(1, 100);
-    if (c_id == FFH5_ENC_MPEG4 || c_id == FFH5_ENC_XVID)
-    {
-        p_id = FFH5_PRESET_NONE;
-        t_id = FFH5_TUNE_NONE;
-    }
-
-    find_preset(p_id, preset);
-    find_tune(t_id, tune);
-
-    codec = avcodec_find_encoder_by_name(codec_name);
-    if (!codec)
-    {
-        fprintf(stderr, "Codec not found\n");
-        goto ENCContextCreationFailure;
-    }
-
-    ctx = avcodec_alloc_context3(codec);
-    if (!ctx)
-    {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        goto ENCContextCreationFailure;
-    }
-
-    /* Add single threading just for testing purpose */
-    // Actually, as of Jan. 2023, only x264, x265, svt-av1 support multithreading
-    // So we will focus on these codecs for now.
-    // ctx->thread_count = thread_count;
-    // switch (c_id)
-    // {
-    // case FFH5_ENC_X265:
-    //     av_opt_set(ctx->priv_data, "x265-params", "frame-threads=1:pools=1", 0);
-    //     break;
-    // case FFH5_ENC_SVTAV1:
-    //     /* This is not working since the last set will override the first one.
-    //      * We have to concat them together.
-    //      */
-    //     if (strlen(tune) > 0)
-    //         strcat(tune, ":lp=1:ss=1");
-    //     else
-    //         strcpy(tune, "lp=1:ss=1");
-    //     break;
-
-    // default:
-    //     break;
-    // }
-
-    pkt = av_packet_alloc();
-    if (!pkt)
-    {
-        fprintf(stderr, "Could not allocate packet\n");
-        goto ENCContextCreationFailure;
-    }
-
-    /* set width and height */
-    ctx->width = width;
-    ctx->height = height;
-
-    switch (c_id)
-    {
-    // list those who support 10bit encoding (actually using 16bit)
-    case FFH5_ENC_X264:
-    case FFH5_ENC_SVTAV1:
-    case FFH5_ENC_RAV1E:
-        ctx->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
-        break;
-    case FFH5_ENC_X265:
-        switch (color_mode)
-        {
-        case 0: // 8bit
-            ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-            break;
-        case 1: // 10bit
-            ctx->pix_fmt = AV_PIX_FMT_YUV420P10;
-            break;
-        case 2: // 12bit
-            ctx->pix_fmt = AV_PIX_FMT_YUV420P12;
-            break;
-        default:
-            ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-        }
-        break;
-    // We have to use NV12
-    case FFH5_ENC_H264_NV:
-    case FFH5_ENC_HEVC_NV:
-    case FFH5_ENC_AV1_NV:
-    case FFH5_ENC_AV1_QSV:
-        ctx->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
-        break;
-    default:
-        // common supported pixel format 8bit (actually using 16bit)
-        ctx->pix_fmt = AV_PIX_FMT_YUV420P;
-    }
-
-    /* frames per second */
-    ctx->time_base = (AVRational){1, 25};
-    ctx->framerate = (AVRational){25, 1};
-
-    /* emit one intra frame every ten frames
-     * check frame pict_type before passing frame
-     * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
-     * then gop_size is ignored and the output of encoder
-     * will always be I frame irrespective to gop_size
-     */
-
-    // ctx->gop_size = 10;
-    // ctx->max_b_frames = 1;
-
-    /* Presets and Tunes and CRFS */
-    switch (c_id)
-    {
-    case FFH5_ENC_X264:
-    case FFH5_ENC_X265:
-        if (strlen(preset) > 0)
-            av_opt_set(ctx->priv_data, "preset", preset, 0);
-        if (strlen(tune) > 0)
-            av_opt_set(ctx->priv_data, "tune", tune, 0);
-        if (crf < 52)
-            av_opt_set_int(ctx->priv_data, "crf", crf, 0);
-        av_opt_set(ctx->priv_data, "x265-params", "log-level=0", 0);
-        break;
-    case FFH5_ENC_H264_NV:
-    case FFH5_ENC_HEVC_NV:
-    case FFH5_ENC_AV1_NV:
-        if (strlen(preset) > 0)
-            av_opt_set(ctx->priv_data, "preset", preset, 0);
-        if (strlen(tune) > 0)
-            av_opt_set(ctx->priv_data, "tune", tune, 0);
-        if (crf < 52)
-        {
-            /* we have to use constqp for Variable bitrate mode and set bit_rate to 0 (auto),
-            /* otherwise the bitrate will be capped to ~2Mbs by NVENC
-            /* instead of using cq mode, constqp is better to reflect different qps
-            */
-            av_opt_set(ctx->priv_data, "rc", "constqp", 0);
-            ctx->bit_rate = 0;
-            av_opt_set_int(ctx->priv_data, "qp", crf, 0);
-        }
-
-        av_opt_set_int(ctx->priv_data, "gpu", gpu_id, 0);
-        break;
-    case FFH5_ENC_SVTAV1:
-        if (strlen(preset) > 0)
-            av_opt_set_int(ctx->priv_data, "preset", atoi(preset), 0);
-
-        if (film_grain > 50)
-            film_grain = 50;
-
-        snprintf(film_grain_buffer, 10, "%d", film_grain);
-
-        if (strlen(tune) > 0)
-        {
-            strcat(tune, ":film-grain=");
-            strcat(tune, film_grain_buffer);
-        }
-        else
-        {
-            stpcpy(tune, "film-grain=");
-            strcat(tune, film_grain_buffer);
-        }
-        strcat(tune, ":enable-tf=0");
-        if (color_mode == 1)
-            strcat(tune, ":enable-hdr=1");
-
-        av_opt_set(ctx->priv_data, "svtav1-params", tune, 0);
-        if (crf < 64)
-            av_opt_set_int(ctx->priv_data, "crf", crf, 0);
-        break;
-    case FFH5_ENC_RAV1E:
-        if (strlen(preset) > 0)
-            av_opt_set_int(ctx->priv_data, "speed", atoi(preset), 0);
-        if (strlen(tune) > 0)
-            av_opt_set(ctx->priv_data, "rav1e-params", tune, 0);
-        if (crf < 255)
-            av_opt_set_int(ctx->priv_data, "qp", crf, 0);
-        break;
-    case FFH5_ENC_AV1_QSV:
-        if (strlen(preset) > 0)
-            av_opt_set(ctx->priv_data, "preset", preset, 0);
-        if (strlen(tune) > 0)
-            av_opt_set(ctx->priv_data, "scenario", tune, 0);
-        if (crf < 52)
-            av_opt_set_int(ctx->priv_data, "global_quality", crf, 0);
-        break;
-
-    default:
-        break;
-    }
-
-    /* open it */
-    ret = avcodec_open2(ctx, codec, NULL);
-    if (ret < 0)
-    {
-        fprintf(stderr, "Could not open codec\n");
-        printf(av_err2str(ret));
-        goto ENCContextCreationFailure;
-    }
-
-    dst_frame = av_frame_alloc();
-    if (!dst_frame)
-    {
-        fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
-        goto ENCContextCreationFailure;
-    }
-
-    dst_frame->format = ctx->pix_fmt;
-    dst_frame->width = ctx->width;
-    dst_frame->height = ctx->height;
-
-    if ((av_frame_get_buffer(dst_frame, 0) < 0))
-    {
-        fprintf(stderr, "Could not allocate the video dst_frame data\n");
-        goto ENCContextCreationFailure;
-    }
-
-    src_frame = av_frame_alloc();
-    if (!src_frame)
-    {
-        fprintf(stderr, "Could not allocate video src_frame due to out of memory problem\n");
-        goto ENCContextCreationFailure;
-    }
-
-    src_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
-    src_frame->width = ctx->width;
-    src_frame->height = ctx->height;
-
-    if (av_frame_get_buffer(src_frame, 0) < 0)
-    {
-        fprintf(stderr, "Could not allocate the video src_frame data\n");
-        goto ENCContextCreationFailure;
-    }
-
-    sws_context = sws_getContext(width,
-                                 height,
-                                 src_frame->format,
-                                 width,
-                                 height,
-                                 dst_frame->format,
-                                 SWS_BILINEAR,
-                                 NULL,
-                                 NULL,
-                                 NULL);
-    if (!sws_context)
-    {
-        fprintf(stderr, "Could not initialize conversion context\n");
-        goto ENCContextCreationFailure;
-    }
-
-    ret = av_frame_make_writable(src_frame);
-    if (ret < 0)
-    {
-        fprintf(stderr, "Frame not writable\n");
-        goto ENCContextCreationFailure;
-    }
-    ret = av_frame_make_writable(dst_frame);
-    if (ret < 0)
-    {
-        fprintf(stderr, "Frame not writable\n");
-        goto ENCContextCreationFailure;
-    }
-
-    goto ENCContextCreationFinish;
-
-ENCContextCreationFinish:
-    EncContextStruct->is_initilized = 1;
-    EncContextStruct->ctx = ctx;
-    EncContextStruct->src_frame = src_frame;
-    EncContextStruct->dst_frame = dst_frame;
-    EncContextStruct->pkt = pkt;
-    EncContextStruct->sws_context = sws_context;
-    // clean up
-    if (codec_name)
-        free(codec_name);
-    if (preset)
-        free(preset);
-    if (tune)
-        free(tune);
-    return 1;
-
-ENCContextCreationFailure:
-    fprintf(stderr, "Error creating context for ffmpeg encoder\n");
-    EncContextStruct->is_initilized = -1;
-    if (ctx)
-        avcodec_free_context(&ctx);
-    if (src_frame)
-        av_frame_free(&src_frame);
-    if (dst_frame)
-        av_frame_free(&dst_frame);
-    if (pkt)
-        av_packet_free(&pkt);
-    if (sws_context)
-        sws_freeContext(sws_context);
-    if (codec_name)
-        free(codec_name);
-    if (preset)
-        free(preset);
-    if (tune)
-        free(tune);
-    return 0;
-}
-
-/*
- * Function:  destroy_encoder_context
- * --------------------
- * Destroy encoder context and free memory
- *
- */
-void destroy_encoder_context()
-{
-    if (EncContextStruct->ctx)
-        avcodec_free_context(&EncContextStruct->ctx);
-    if (EncContextStruct->src_frame)
-        av_frame_free(&EncContextStruct->src_frame);
-    if (EncContextStruct->dst_frame)
-        av_frame_free(&EncContextStruct->dst_frame);
-    if (EncContextStruct->pkt)
-        av_packet_free(&EncContextStruct->pkt);
-    if (EncContextStruct->sws_context)
-        sws_freeContext(EncContextStruct->sws_context);
-    if (EncContextStruct)
-        free(EncContextStruct);
-}
-
-/*
- * Function:  create_decoder_context
- * --------------------
- * Create context for decoder process
- *
- *  flags:
- *  cd_values: auxiliary parameters
- *
- *  return: 0 (failed), 1 (success)
- *
- */
-int create_decoder_context(unsigned flags, const unsigned int cd_values[])
-{
-    const AVCodec *codec;
-    AVCodecParserContext *parser;
-    AVCodecContext *ctx = NULL;
-    AVFrame *src_frame = NULL, *dst_frame = NULL;
-    AVPacket *pkt;
-    struct SwsContext *sws_context = NULL;
-    // int thread_count = 1; // single thread
-
-    const char *codec_name;
-    enum DecoderCodecEnum c_id;
-
-    int width, height, depth;
-    int color_mode;
-
-    c_id = cd_values[1];
-    width = cd_values[2];
-    height = cd_values[3];
-    depth = cd_values[4];
-    color_mode = cd_values[5];
-
-    av_log_set_level(AV_LOG_ERROR);
-
-    pkt = av_packet_alloc();
-    if (!pkt)
-    {
-        fprintf(stderr, "Could not allocate packet\n");
-        goto DECContexCreationFailure;
-    }
-
-    codec_name = calloc(1, 50);
-    find_decoder_name(c_id, codec_name);
-
-    codec = avcodec_find_decoder_by_name(codec_name);
-    if (!codec)
-    {
-        fprintf(stderr, "Codec not found\n");
-        goto DECContexCreationFailure;
-    }
-    parser = av_parser_init(codec->id);
-    if (!parser)
-    {
-        fprintf(stderr, "parser not found\n");
-        goto DECContexCreationFailure;
-    }
-    ctx = avcodec_alloc_context3(codec);
-    if (!ctx)
-    {
-        fprintf(stderr, "Could not allocate video codec context\n");
-        goto DECContexCreationFailure;
-    }
-
-    /* Add single threading just for testing purpose */
-    // ctx->thread_count = 16;
-
-    /* For some codecs, such as msmpeg4 and mpeg4, width and height
-        MUST be initialized there because this information is not
-        available in the bitstream. */
-    ctx->width = width;
-    ctx->height = height;
-
-    /* open it */
-    if (avcodec_open2(ctx, codec, NULL) < 0)
-    {
-        fprintf(stderr, "Could not open codec\n");
-        goto DECContexCreationFailure;
-    }
-    src_frame = av_frame_alloc();
-    if (!src_frame)
-    {
-        fprintf(stderr, "Could not allocate video frame due to out of memory problem\n");
-        goto DECContexCreationFailure;
-    }
-    switch (c_id)
-    {
-    // list those who support 10bit encoding
-    case FFH5_DEC_H264:
-    case FFH5_DEC_AOMAV1:
-    case FFH5_DEC_DAV1D:
-        src_frame->format = (color_mode == 0) ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
-        break;
-    case FFH5_DEC_HEVC:
-        switch (color_mode)
-        {
-        case 0: // 8bit
-            src_frame->format = AV_PIX_FMT_YUV420P;
-            break;
-        case 1: // 10bit
-            src_frame->format = AV_PIX_FMT_YUV420P10;
-            break;
-        case 2: // 12bit
-            src_frame->format = AV_PIX_FMT_YUV420P12;
-            break;
-        default:
-            src_frame->format = AV_PIX_FMT_YUV420P;
-        }
-        break;
-    case FFH5_DEC_H264_CUVID:
-    case FFH5_DEC_HEVC_CUVID:
-    case FFH5_DEC_AV1_CUVID:
-    case FFH5_DEC_AV1_QSV:
-        src_frame->format = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
-        break;
-    default:
-        // common supported pixel format 8bit
-        src_frame->format = AV_PIX_FMT_YUV420P;
-    }
-    src_frame->width = ctx->width;
-    src_frame->height = ctx->height;
-
-    dst_frame = av_frame_alloc();
-    if (!dst_frame)
-    {
-        fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
-        goto DECContexCreationFailure;
-    }
-
-    dst_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
-    dst_frame->width = ctx->width;
-    dst_frame->height = ctx->height;
-
-    sws_context = sws_getContext(width,
-                                 height,
-                                 src_frame->format,
-                                 width,
-                                 height,
-                                 dst_frame->format,
-                                 SWS_BILINEAR,
-                                 NULL,
-                                 NULL,
-                                 NULL);
-
-    goto DECContexCreationFinish;
-
-DECContexCreationFinish:
-    DecContextStruct->is_initilized = 1;
-    DecContextStruct->parser = parser;
-    DecContextStruct->ctx = ctx;
-    DecContextStruct->src_frame = src_frame;
-    DecContextStruct->dst_frame = dst_frame;
-    DecContextStruct->pkt = pkt;
-    DecContextStruct->sws_context = sws_context;
-    if (codec_name)
-        free(codec_name);
-    return 1;
-
-DECContexCreationFailure:
-    fprintf(stderr, "Error create context for ffmpeg decoder\n");
-    DecContextStruct->is_initilized = -1;
-    if (parser)
-        av_parser_close(parser);
-    if (ctx)
-        avcodec_free_context(&ctx);
-    if (src_frame)
-        av_frame_free(&src_frame);
-    if (dst_frame)
-        av_frame_free(&dst_frame);
-    if (pkt)
-        av_packet_free(&pkt);
-    if (sws_context)
-        sws_freeContext(sws_context);
-    if (codec_name)
-        free(codec_name);
-    return 0;
-}
-
-/*
- * Function:  destroy_decoder_context
- * --------------------
- * Destroy decoder context and free memory
- *
- */
-void destroy_decoder_context()
-{
-    if (DecContextStruct->parser)
-        av_parser_close(DecContextStruct->parser);
-    if (DecContextStruct->ctx)
-        avcodec_free_context(&DecContextStruct->ctx);
-    if (DecContextStruct->src_frame)
-        av_frame_free(&DecContextStruct->src_frame);
-    if (DecContextStruct->dst_frame)
-        av_frame_free(&DecContextStruct->dst_frame);
-    if (DecContextStruct->pkt)
-        av_packet_free(&DecContextStruct->pkt);
-    if (DecContextStruct->sws_context)
-        sws_freeContext(DecContextStruct->sws_context);
-    if (DecContextStruct)
-        free(DecContextStruct);
-}
-
-/*
- * Function:  destroy_context
- * --------------------
- * Destroy enconder and decoder contexts and free memory
- *
- */
-void destroy_context()
-{
-    destroy_encoder_context();
-    destroy_decoder_context();
-}
-
-/*
  * Function:  encode
  * --------------------
  * encode a ffmpeg frame
@@ -1229,13 +590,6 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
     size_t buf_size_out = 0;
     void *out_buf = NULL;
 
-    signal(SIGINT, sig_handler);
-    signal(SIGKILL, sig_handler);
-    signal(SIGSTOP, sig_handler);
-    signal(SIGQUIT, sig_handler);
-    signal(SIGABRT, sig_handler);
-    signal(SIGSEGV, sig_handler);
-
     if (!(flags & H5Z_FLAG_REVERSE))
     {
         /* Compress */
@@ -1252,54 +606,336 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[9] = film_grain [for svt-av1 only]
          * cd_values[10] = fpu_id [for nvidia gpu only]
          */
+        const AVCodec *codec;
+        AVCodecContext *c = NULL;
+        AVFrame *src_frame = NULL, *dst_frame = NULL;
+        AVPacket *pkt;
+        struct SwsContext *sws_context = NULL;
+        // int thread_count = 16; // single thread
+
+        char *codec_name, *preset, *tune;
+        enum EncoderCodecEnum c_id;
+        enum PresetIDEnum p_id;
+        enum TuneTypeEnum t_id;
+
+        int width, height, depth;
+        int color_mode;
+        int crf;
+        int film_grain;
+        int gpu_id;
+        char film_grain_buffer[10];
 
         size_t expected_size = 0, frame_size = 0;
         uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
 
-        int width, height, depth, color_mode;
-        int ret;
+        int i, ret;
 
-        if (EncContextStruct->is_initilized < 0)
-            ret = create_encoder_context(flags, cd_values);
-
-        if (ret == 0)
-            goto CompressFailure;
-
+        c_id = cd_values[0];
         width = cd_values[2];
         height = cd_values[3];
         depth = cd_values[4];
         color_mode = cd_values[5];
+        p_id = cd_values[6];
+        t_id = cd_values[7];
+        crf = cd_values[8];
+        film_grain = cd_values[9]; // for svt-av1 particularly
+        gpu_id = cd_values[10];    // for nvenc only
+
+        av_log_set_level(AV_LOG_ERROR);
+        codec_name = calloc(1, 50);
+        find_encoder_name(c_id, codec_name);
+
+        preset = calloc(1, 50);
+        tune = calloc(1, 100);
+        if (c_id == FFH5_ENC_MPEG4 || c_id == FFH5_ENC_XVID)
+        {
+            p_id = FFH5_PRESET_NONE;
+            t_id = FFH5_TUNE_NONE;
+        }
+
+        find_preset(p_id, preset);
+        find_tune(t_id, tune);
+
+        codec = avcodec_find_encoder_by_name(codec_name);
+        if (!codec)
+        {
+            fprintf(stderr, "Codec not found\n");
+            goto CompressFailure;
+        }
+
+        c = avcodec_alloc_context3(codec);
+        if (!c)
+        {
+            fprintf(stderr, "Could not allocate video codec context\n");
+            goto CompressFailure;
+        }
+
+        /* Add single threading just for testing purpose */
+        // Actually, as of Jan. 2023, only x264, x265, svt-av1 support multithreading
+        // So we will focus on these codecs for now.
+        // c->thread_count = thread_count;
+        // switch (c_id)
+        // {
+        // case FFH5_ENC_X265:
+        //     av_opt_set(c->priv_data, "x265-params", "frame-threads=1:pools=1", 0);
+        //     break;
+        // case FFH5_ENC_SVTAV1:
+        //     /* This is not working since the last set will override the first one.
+        //      * We have to concat them together.
+        //      */
+        //     if (strlen(tune) > 0)
+        //         strcat(tune, ":lp=1:ss=1");
+        //     else
+        //         strcpy(tune, "lp=1:ss=1");
+        //     break;
+
+        // default:
+        //     break;
+        // }
+
+        pkt = av_packet_alloc();
+        if (!pkt)
+        {
+            fprintf(stderr, "Could not allocate packet\n");
+            goto CompressFailure;
+        }
+
+        /* set width and height */
+        c->width = width;
+        c->height = height;
+
+        switch (c_id)
+        {
+        // list those who support 10bit encoding (actually using 16bit)
+        case FFH5_ENC_X264:
+        case FFH5_ENC_SVTAV1:
+        case FFH5_ENC_RAV1E:
+            c->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+            break;
+        case FFH5_ENC_X265:
+            switch (color_mode)
+            {
+            case 0: // 8bit
+                c->pix_fmt = AV_PIX_FMT_YUV420P;
+                break;
+            case 1: // 10bit
+                c->pix_fmt = AV_PIX_FMT_YUV420P10;
+                break;
+            case 2: // 12bit
+                c->pix_fmt = AV_PIX_FMT_YUV420P12;
+                break;
+            default:
+                c->pix_fmt = AV_PIX_FMT_YUV420P;
+            }
+            break;
+        // We have to use NV12
+        case FFH5_ENC_H264_NV:
+        case FFH5_ENC_HEVC_NV:
+        case FFH5_ENC_AV1_NV:
+        case FFH5_ENC_AV1_QSV:
+            c->pix_fmt = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
+            break;
+        default:
+            // common supported pixel format 8bit (actually using 16bit)
+            c->pix_fmt = AV_PIX_FMT_YUV420P;
+        }
+
+        /* frames per second */
+        c->time_base = (AVRational){1, 25};
+        c->framerate = (AVRational){25, 1};
+
+        /* emit one intra frame every ten frames
+         * check frame pict_type before passing frame
+         * to encoder, if frame->pict_type is AV_PICTURE_TYPE_I
+         * then gop_size is ignored and the output of encoder
+         * will always be I frame irrespective to gop_size
+         */
+
+        // c->gop_size = 10;
+        // c->max_b_frames = 1;
+
+        /* Presets and Tunes and CRFS */
+        switch (c_id)
+        {
+        case FFH5_ENC_X264:
+        case FFH5_ENC_X265:
+            if (strlen(preset) > 0)
+                av_opt_set(c->priv_data, "preset", preset, 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "tune", tune, 0);
+            if (crf < 52)
+                av_opt_set_int(c->priv_data, "crf", crf, 0);
+            av_opt_set(c->priv_data, "x265-params", "log-level=0", 0);
+            break;
+        case FFH5_ENC_H264_NV:
+        case FFH5_ENC_HEVC_NV:
+        case FFH5_ENC_AV1_NV:
+            if (strlen(preset) > 0)
+                av_opt_set(c->priv_data, "preset", preset, 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "tune", tune, 0);
+            if (crf < 52)
+            {
+                /* we have to use constqp for Variable bitrate mode and set bit_rate to 0 (auto),
+                /* otherwise the bitrate will be capped to ~2Mbs by NVENC
+                /* instead of using cq mode, constqp is better to reflect different qps
+                */
+                av_opt_set(c->priv_data, "rc", "constqp", 0);
+                c->bit_rate = 0;
+                av_opt_set_int(c->priv_data, "qp", crf, 0);
+            }
+
+            av_opt_set_int(c->priv_data, "gpu", gpu_id, 0);
+            break;
+        case FFH5_ENC_SVTAV1:
+            if (strlen(preset) > 0)
+                av_opt_set_int(c->priv_data, "preset", atoi(preset), 0);
+
+            if (film_grain > 50)
+                film_grain = 50;
+
+            snprintf(film_grain_buffer, 10, "%d", film_grain);
+
+            if (strlen(tune) > 0)
+            {
+                strcat(tune, ":film-grain=");
+                strcat(tune, film_grain_buffer);
+            }
+            else
+            {
+                stpcpy(tune, "film-grain=");
+                strcat(tune, film_grain_buffer);
+            }
+            strcat(tune, ":enable-tf=0");
+            if (color_mode == 1)
+                strcat(tune, ":enable-hdr=1");
+
+            av_opt_set(c->priv_data, "svtav1-params", tune, 0);
+            if (crf < 64)
+                av_opt_set_int(c->priv_data, "crf", crf, 0);
+            break;
+        case FFH5_ENC_RAV1E:
+            if (strlen(preset) > 0)
+                av_opt_set_int(c->priv_data, "speed", atoi(preset), 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "rav1e-params", tune, 0);
+            if (crf < 255)
+                av_opt_set_int(c->priv_data, "qp", crf, 0);
+            break;
+        case FFH5_ENC_AV1_QSV:
+            if (strlen(preset) > 0)
+                av_opt_set(c->priv_data, "preset", preset, 0);
+            if (strlen(tune) > 0)
+                av_opt_set(c->priv_data, "scenario", tune, 0);
+            if (crf < 52)
+                av_opt_set_int(c->priv_data, "global_quality", crf, 0);
+            break;
+
+        default:
+            break;
+        }
+
+        /* open it */
+        ret = avcodec_open2(c, codec, NULL);
+        if (ret < 0)
+        {
+            fprintf(stderr, "Could not open codec\n");
+            printf(av_err2str(ret));
+            goto CompressFailure;
+        }
+
+        dst_frame = av_frame_alloc();
+        if (!dst_frame)
+        {
+            fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
+            goto CompressFailure;
+        }
+
+        dst_frame->format = c->pix_fmt;
+        dst_frame->width = c->width;
+        dst_frame->height = c->height;
+
+        if ((av_frame_get_buffer(dst_frame, 0) < 0))
+        {
+            fprintf(stderr, "Could not allocate the video dst_frame data\n");
+            goto CompressFailure;
+        }
+
+        src_frame = av_frame_alloc();
+        if (!src_frame)
+        {
+            fprintf(stderr, "Could not allocate video src_frame due to out of memory problem\n");
+            goto CompressFailure;
+        }
+
+        src_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
+        src_frame->width = c->width;
+        src_frame->height = c->height;
+
+        if (av_frame_get_buffer(src_frame, 0) < 0)
+        {
+            fprintf(stderr, "Could not allocate the video src_frame data\n");
+            goto CompressFailure;
+        }
+
+        p_data = (uint8_t *)*buf;
 
         frame_size = (color_mode == 0) ? width * height : width * height * 2;
         expected_size = frame_size * depth / EXPECTED_CS_RATIO;
         out_data = calloc(1, expected_size);
 
-        p_data = (uint8_t *)*buf;
+        sws_context = sws_getContext(width,
+                                     height,
+                                     src_frame->format,
+                                     width,
+                                     height,
+                                     dst_frame->format,
+                                     SWS_BILINEAR,
+                                     NULL,
+                                     NULL,
+                                     NULL);
+        if (!sws_context)
+        {
+            fprintf(stderr, "Could not initialize conversion context\n");
+            goto CompressFailure;
+        }
 
         /* real code for encoding buffer data */
-        for (int i = 0; i < depth; i++)
+        for (i = 0; i < depth; i++)
         {
+            ret = av_frame_make_writable(src_frame);
+            if (ret < 0)
+            {
+                fprintf(stderr, "Frame not writable\n");
+                goto CompressFailure;
+            }
+            ret = av_frame_make_writable(dst_frame);
+            if (ret < 0)
+            {
+                fprintf(stderr, "Frame not writable\n");
+                goto CompressFailure;
+            }
             /* put buffer data to frame and do colorspace conversion */
-            av_image_fill_arrays(EncContextStruct->src_frame->data, EncContextStruct->src_frame->linesize, p_data, EncContextStruct->src_frame->format, width, height, 1);
+            av_image_fill_arrays(src_frame->data, src_frame->linesize, p_data, src_frame->format, width, height, 1);
             p_data += frame_size;
 
-            ret = sws_scale_frame(EncContextStruct->sws_context, EncContextStruct->dst_frame, EncContextStruct->src_frame);
+            ret = sws_scale_frame(sws_context, dst_frame, src_frame);
             if (ret < 0)
             {
                 fprintf(stderr, "Could not do colorspace conversion\n");
                 goto CompressFailure;
             }
 
-            EncContextStruct->dst_frame->pts = i;
-            EncContextStruct->dst_frame->quality = EncContextStruct->ctx->global_quality;
+            dst_frame->pts = i;
+            dst_frame->quality = c->global_quality;
 
             /* encode the frame */
-            encode(EncContextStruct->ctx, EncContextStruct->dst_frame, EncContextStruct->pkt, &out_size, &out_data, &expected_size);
+            encode(c, dst_frame, pkt, &out_size, &out_data, &expected_size);
         }
 
         /* flush the encoder */
-        encode(EncContextStruct->ctx, NULL, EncContextStruct->pkt, &out_size, &out_data, &expected_size);
+        encode(c, NULL, pkt, &out_size, &out_data, &expected_size);
 
         buf_size_out = out_size;
 
@@ -1320,17 +956,48 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         goto CompressFinish;
 
     CompressFinish:
+        if (c)
+            avcodec_free_context(&c);
+        if (src_frame)
+            av_frame_free(&src_frame);
+        if (dst_frame)
+            av_frame_free(&dst_frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (sws_context)
+            sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
+        if (preset)
+            free(preset);
+        if (tune)
+            free(tune);
         if (out_data)
             free(out_data);
         return buf_size_out;
 
     CompressFailure:
         fprintf(stderr, "Error compressing array\n");
+        if (c)
+            avcodec_free_context(&c);
+        if (src_frame)
+            av_frame_free(&src_frame);
+        if (dst_frame)
+            av_frame_free(&dst_frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (sws_context)
+            sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
+        if (preset)
+            free(preset);
+        if (tune)
+            free(tune);
         if (out_data)
             free(out_data);
         if (out_buf)
             H5free_memory(out_buf);
-        destroy_context();
         return 0;
     }
     else
@@ -1344,6 +1011,19 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[4] = depth
          * cd_values[5] = 0=Mono, 1=RGB
          */
+        const AVCodec *codec;
+        AVCodecParserContext *parser;
+        AVCodecContext *c = NULL;
+        AVFrame *src_frame = NULL, *dst_frame = NULL;
+        AVPacket *pkt;
+        struct SwsContext *sws_context = NULL;
+        // int thread_count = 1; // single thread
+
+        const char *codec_name;
+        enum DecoderCodecEnum c_id;
+
+        int width, height, depth;
+        int color_mode;
 
         size_t p_data_size = 0, frame_size = 0;
         uint8_t *out_data = NULL, *p_data = NULL;
@@ -1351,18 +1031,111 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         int ret, eof;
 
-        int width, height, depth, color_mode;
-
-        if (DecContextStruct->is_initilized < 0)
-            ret = create_decoder_context(flags, cd_values);
-
-        if (ret == 0)
-            goto DecompressFailure;
-
+        c_id = cd_values[1];
         width = cd_values[2];
         height = cd_values[3];
         depth = cd_values[4];
         color_mode = cd_values[5];
+
+        av_log_set_level(AV_LOG_ERROR);
+
+        pkt = av_packet_alloc();
+        if (!pkt)
+        {
+            fprintf(stderr, "Could not allocate packet\n");
+            goto DecompressFailure;
+        }
+
+        codec_name = calloc(1, 50);
+        find_decoder_name(c_id, codec_name);
+
+        codec = avcodec_find_decoder_by_name(codec_name);
+        if (!codec)
+        {
+            fprintf(stderr, "Codec not found\n");
+            goto DecompressFailure;
+        }
+        parser = av_parser_init(codec->id);
+        if (!parser)
+        {
+            fprintf(stderr, "parser not found\n");
+            goto DecompressFailure;
+        }
+        c = avcodec_alloc_context3(codec);
+        if (!c)
+        {
+            fprintf(stderr, "Could not allocate video codec context\n");
+            goto DecompressFailure;
+        }
+
+        /* Add single threading just for testing purpose */
+        // c->thread_count = 16;
+
+        /* For some codecs, such as msmpeg4 and mpeg4, width and height
+           MUST be initialized there because this information is not
+           available in the bitstream. */
+        c->width = width;
+        c->height = height;
+
+        /* open it */
+        if (avcodec_open2(c, codec, NULL) < 0)
+        {
+            fprintf(stderr, "Could not open codec\n");
+            goto DecompressFailure;
+        }
+        src_frame = av_frame_alloc();
+        if (!src_frame)
+        {
+            fprintf(stderr, "Could not allocate video frame due to out of memory problem\n");
+            goto DecompressFailure;
+        }
+        switch (c_id)
+        {
+        // list those who support 10bit encoding
+        case FFH5_DEC_H264:
+        case FFH5_DEC_AOMAV1:
+        case FFH5_DEC_DAV1D:
+            src_frame->format = (color_mode == 0) ? AV_PIX_FMT_YUV420P : AV_PIX_FMT_YUV420P10;
+            break;
+        case FFH5_DEC_HEVC:
+            switch (color_mode)
+            {
+            case 0: // 8bit
+                src_frame->format = AV_PIX_FMT_YUV420P;
+                break;
+            case 1: // 10bit
+                src_frame->format = AV_PIX_FMT_YUV420P10;
+                break;
+            case 2: // 12bit
+                src_frame->format = AV_PIX_FMT_YUV420P12;
+                break;
+            default:
+                src_frame->format = AV_PIX_FMT_YUV420P;
+            }
+            break;
+        case FFH5_DEC_H264_CUVID:
+        case FFH5_DEC_HEVC_CUVID:
+        case FFH5_DEC_AV1_CUVID:
+        case FFH5_DEC_AV1_QSV:
+            src_frame->format = (color_mode == 0) ? AV_PIX_FMT_NV12 : AV_PIX_FMT_P010;
+            break;
+        default:
+            // common supported pixel format 8bit
+            src_frame->format = AV_PIX_FMT_YUV420P;
+        }
+        src_frame->width = c->width;
+        src_frame->height = c->height;
+
+        dst_frame = av_frame_alloc();
+        if (!dst_frame)
+        {
+            fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
+            goto DecompressFailure;
+        }
+
+        dst_frame->format = (color_mode == 0) ? AV_PIX_FMT_GRAY8 : AV_PIX_FMT_GRAY10;
+        dst_frame->width = c->width;
+        dst_frame->height = c->height;
 
         p_data = (uint8_t *)*buf;
         p_data_size = *buf_size;
@@ -1373,12 +1146,23 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         if (out_data == NULL)
             fprintf(stderr, "Out of memory occurred during decoding\n");
 
+        sws_context = sws_getContext(width,
+                                     height,
+                                     src_frame->format,
+                                     width,
+                                     height,
+                                     dst_frame->format,
+                                     SWS_BILINEAR,
+                                     NULL,
+                                     NULL,
+                                     NULL);
+
         /* real code for decoding buffer data */
         while (p_data_size >= 0 || eof)
         {
             eof = !p_data_size;
 
-            ret = av_parser_parse2(DecContextStruct->parser, DecContextStruct->ctx, &DecContextStruct->pkt->data, &DecContextStruct->pkt->size,
+            ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
                                    p_data, p_data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 
             if (ret < 0)
@@ -1390,16 +1174,16 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             p_data += ret;
             p_data_size -= ret;
 
-            if (DecContextStruct->pkt->size)
-                decode(DecContextStruct->ctx, DecContextStruct->src_frame, DecContextStruct->pkt, DecContextStruct->sws_context, DecContextStruct->dst_frame, &out_size, out_data, frame_size);
+            if (pkt->size)
+                decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
             else if (eof)
                 break;
         }
 
         /* flush the decoder */
-        DecContextStruct->pkt->data = NULL;
-        DecContextStruct->pkt->size = 0;
-        decode(DecContextStruct->ctx, DecContextStruct->src_frame, DecContextStruct->pkt, DecContextStruct->sws_context, DecContextStruct->dst_frame, &out_size, out_data, frame_size);
+        pkt->data = NULL;
+        pkt->size = 0;
+        decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
 
         buf_size_out = out_size;
 
@@ -1419,17 +1203,44 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         goto DecompressFinish; // success
 
     DecompressFinish:
+        if (parser)
+            av_parser_close(parser);
+        if (c)
+            avcodec_free_context(&c);
+        if (src_frame)
+            av_frame_free(&src_frame);
+        if (dst_frame)
+            av_frame_free(&dst_frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (sws_context)
+            sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
         if (out_data)
             free(out_data);
         return buf_size_out;
 
     DecompressFailure:
-        fprintf(stderr, "Error decompressing array\n");
+        fprintf(stderr, "Error decompressing packets\n");
+        if (parser)
+            av_parser_close(parser);
+        if (c)
+            avcodec_free_context(&c);
+        if (src_frame)
+            av_frame_free(&src_frame);
+        if (dst_frame)
+            av_frame_free(&dst_frame);
+        if (pkt)
+            av_packet_free(&pkt);
+        if (sws_context)
+            sws_freeContext(sws_context);
+        if (codec_name)
+            free(codec_name);
         if (out_data)
             free(out_data);
         if (out_buf)
             H5free_memory(out_buf);
-        destroy_context();
         return 0;
     }
 }
