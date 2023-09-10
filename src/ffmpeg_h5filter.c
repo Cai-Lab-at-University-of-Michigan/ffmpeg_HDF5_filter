@@ -9,7 +9,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <error.h>
+#include <libavutil/error.h>
+#include <signal.h>
 
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>
@@ -804,7 +805,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             }
             else
             {
-                stpcpy(tune, "film-grain=");
+                strcpy(tune, "film-grain=");
                 strcat(tune, film_grain_buffer);
             }
             strcat(tune, ":enable-tf=0");

@@ -4,6 +4,6 @@ then
     rm -rf build
 fi
 mkdir build && cd build
-cmake .. -DFFMPEG_BUILD_PATH=$HOME/ffmpeg_build -DVPL_ROOT_DIR=$HOME/ffmpeg_build -DUSE_VPL_ENCODER=ON -DBUILD_PLUGIN=ON
+TO_CMAKE_PATH="C:\Users\Wei\hdf5" cmake .. -DFFMPEG_BUILD_PATH="C:\Users\Wei\ffmpeg" -DVPL_ROOT_DIR="C:\Users\Wei\ffmpeg" -DUSE_VPL_ENCODER=ON -DBUILD_PLUGIN=ON
 make
 cd ..
