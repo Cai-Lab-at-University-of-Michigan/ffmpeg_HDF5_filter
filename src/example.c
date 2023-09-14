@@ -195,14 +195,13 @@ int main(int argc, const char *argv[])
 
     avg_diff /= SIZE;
 
-    printf("Success, %f percent of different elements, average difference is %f\n", 100. * (double)num_diff / SIZE, avg_diff);
+    fprintf(stdout, "Success, %f percent of different elements, average difference is %f\n", 100. * (double)num_diff / SIZE, avg_diff);
     stat("example.h5", &st);
-    printf("Success, compression ratio %f for %d bytes to %d bytes \n", (double)SIZE / (double)st.st_size, SIZE, st.st_size);
+    fprintf(stdout, "Success, compression ratio %f for %d bytes to %d bytes \n", (double)SIZE / (double)st.st_size, SIZE, st.st_size);
 
     return_code = 0;
 
 failed:
-    printf("FAILED\n");
     if (dset > 0)
         H5Dclose(dset);
     if (sid > 0)
