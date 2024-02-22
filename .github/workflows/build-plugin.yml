@@ -7,29 +7,15 @@ jobs:
   build-plugin:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout project sources
-        uses: actions/checkout@v3
-
-      - name: Setup Gradle
-        uses: gradle/gradle-build-action@v2
-
-      - name: Build imagej-hdf5-encoder plugin
-        working-directory: ./imagej-hdf5-encoder
-        run: ./gradlew fatJar
-
-      - name: Build imagej-hdf5-viewer plugin
-        working-directory: ./imagej-hdf5-viewer
-        run: ./gradlew fatJar
-
-      - name: Upload encoder build output
-        uses: actions/upload-artifact@v3
-        with:
-          name: HDF5_Compression.jar
-          path: imagej-hdf5-encoder/build/libs
-
-      - name: Upload viewer build output
-        uses: actions/upload-artifact@v3
-        with:
-          name: HDF5_Viewer.jar
-          path: imagej-hdf5-viewer/build/libs
-
+    - name: Checkout project sources
+      uses: actions/checkout@v3
+    - name: Setup Gradle
+      uses: gradle/gradle-build-action@v2
+    - name: Run build with Gradle Wrapper
+      working-directory: ./imagej-hdf5-encoder
+      run: ./gradlew fatJar
+    - name: Upload build output
+      uses: actions/upload-artifact@v3
+      with:
+        name: HDF5_Compression.jar
+        path: imagej-hdf5-encoder/build/libs
