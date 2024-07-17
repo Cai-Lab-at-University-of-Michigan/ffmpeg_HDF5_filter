@@ -30,4 +30,4 @@
 
 
 ## Acknowledgments
-The cmake file borrows heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encoding and decoding codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). Very much thanks.
+The cmake file borrows heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encoding and decoding codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). The imagej-hdf5-viewer is modified based on [ch.psi.imagej.hdf5](https://github.com/paulscherrerinstitute/ch.psi.imagej.hdf5). Very much thanks for their great work.
