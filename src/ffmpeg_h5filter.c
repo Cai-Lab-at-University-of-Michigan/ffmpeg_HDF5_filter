@@ -792,8 +792,12 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             if (strlen(preset) > 0)
                 av_opt_set_int(c->priv_data, "preset", atoi(preset), 0);
 
-            if (film_grain > 50)
-                film_grain = 50;
+            /* By default, for SVT-AV1, the maximum value for film_grain parameter,
+             * If we want to enable film_grain parameter value > 50,
+             * we have to change the SVT-AV1 source code and recompile it.
+            */
+            // if (film_grain > 50)
+            //     film_grain = 50;
 
             snprintf(film_grain_buffer, 10, "%d", film_grain);
 
