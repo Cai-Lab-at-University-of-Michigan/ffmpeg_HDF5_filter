@@ -1,5 +1,5 @@
 ## FFMPEG HDF5 Filter
-***Lossy compression supprted filter based on ffmpeg.***
+***Lossy compression filter based on ffmpeg.***
 
 ## Getting Started
 We recommend using our precompiled files listed in the release. Our plugin supports multiple Operation Systems, which are Windows, Ubuntu, and MacOS.
