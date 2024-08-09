@@ -1,7 +1,7 @@
 package com.cailab.hdf5compression;
 
 public class Constants {
-    static final int FILTER_ID = 32030;
+    static final int FILTER_ID = 32027;
 
     // Image stack layout
     static final int IMAGE_ZYX = 0;
