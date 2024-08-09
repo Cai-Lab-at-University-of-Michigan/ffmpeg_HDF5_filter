@@ -13,7 +13,7 @@
 
 #include "hdf5.h"
 
-#define FFMPEG_H5FILTER 32027 /* filter id here */
+#define FFMPEG_H5FILTER 32030 /* filter id here */
 
 H5_DLLVAR H5Z_class_t ffmpeg_H5Filter[1];
 
