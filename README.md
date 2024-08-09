@@ -8,7 +8,7 @@ We recommend using our precompiled files listed in the release. Our plugin suppo
 Download the assets in the release, and put them under the ```plugins``` folder of ImageJ/Fiji.
 
 ## For Python Users
-We provide notebook examples in the ```examples``` folder.
+We provide notebook examples in the ```examples``` folder. To set up for python, we use [hdf5plugin](https://github.com/Cai-Lab-at-University-of-Michigan/hdf5plugin) to register our plugin.
 
 ## Feedback and Questions
 Feel free to reach to us. We will try our best to be there.
