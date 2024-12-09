@@ -48,3 +48,8 @@ $RECYCLE.BIN/
 .directory
 .Trash-*
 .nfs*
+
+#java
+*.class
+.gradle
+imagej-hdf5-encoder/bin/main/*
