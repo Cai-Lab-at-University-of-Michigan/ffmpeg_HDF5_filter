@@ -811,6 +811,8 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 stpcpy(tune, "film-grain=");
                 strcat(tune, film_grain_buffer);
             }
+            if (film_grain > 0):
+                stpcpy(tune, ":film-grain-denoise=1");
             strcat(tune, ":enable-tf=0");
             if (color_mode == 1)
                 strcat(tune, ":enable-hdr=1");
