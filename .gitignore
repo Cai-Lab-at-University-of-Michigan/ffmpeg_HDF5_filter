@@ -11,13 +11,14 @@ python/*
 .ipynb_checkpoints
 unit_tests/*
 notebooks/*
-imagej-plugin/build/*
-imagej-plugin/.gradle/*
-imagej-plugin/bin/*
-imagej-plugin/.classpath
-imagej-plugin/.project
-imagej-plugin/.settings/
-imagej-plugin/target/
+imagej-hdf5-wrapper/build
+imagej-hdf5-wrapper/build/*
+imagej-hdf5-wrapper/.gradle/*
+imagej-hdf5-wrapper/bin/*
+imagej-hdf5-wrapper/.classpath
+imagej-hdf5-wrapper/.project
+imagej-hdf5-wrapper/.settings/
+imagej-hdf5-wrapper/target/
 
 
 ######################
@@ -53,3 +54,14 @@ $RECYCLE.BIN/
 *.class
 .gradle
 imagej-hdf5-encoder/bin/main/*
+
+# ffmpeg
+ffmpeg_build
+ffmpeg_src
+ffmpeg_build/*
+ffmpeg_src/*
+
+# python 
+*.egg-info
+__pycache__
+h5ffmpeg/*.so

@@ -1,17 +1,157 @@
-## FFMPEG HDF5 Filter
-***Lossy compression filter based on ffmpeg.***
+# FFMPEG HDF5 Filter
 
-## Getting Started
-We recommend using our precompiled files listed in the release. Our plugin supports multiple Operation Systems, which are Windows, Ubuntu, and MacOS.
+## High-Ratio Image Compression for Scientific Data
 
-## For ImageJ/Fiji Users
-Download the assets in the release, and put them under the ```plugins``` folder of ImageJ/Fiji.
+The FFMPEG HDF5 filter enables high-ratio compression of scientific datasets in HDF5 files using video codec technology. It supports a wide range of codecs (H.264, H.265/HEVC, AV1, etc.) with hardware acceleration options for NVIDIA GPUs and Intel QuickSync.
 
-## For Python Users
-We provide notebook examples in the ```examples``` folder. To set up for python, we use [hdf5plugin](https://github.com/Cai-Lab-at-University-of-Michigan/hdf5plugin) to register our plugin.
+## Features
 
-## Feedback and Questions
-Feel free to reach to us. We will try our best to be there.
+- **High Compression Ratios**: Achieve 10-10,000× compression while preserving analysis fidelity
+- **Multiple Codec Support**: H.264, H.265/HEVC, AV1, and more
+- **Hardware Acceleration**: NVIDIA GPU and Intel QuickSync support
+- **Simple Python API**: Easy-to-use interface for H5Py
+- **Automated Optimization**: Film grain synthesis and artifact minimization
+- **Cross-Platform**: Works on Linux, macOS, and Windows
+- **ImageJ/Fiji Plugin Support**: Direct visualization and analysis in popular scientific imaging tools
+
+## Installation
+
+### Via pip (recommended)
+
+```bash
+# Basic installation
+pip install h5ffmpeg
+```
+
+### Using pre-built binaries for ImageJ/Fiji
+
+We recommend using our imageJ update sites.
+
+### From source
+
+```bash
+git clone https://github.com/Cai-Lab-at-University-of-Michigan/ffmpeg_HDF5_filter.git
+cd ffmpeg_HDF5_filter
+pip install -e .
+```
+
+## Quick Start
+
+```python
+import h5py
+import numpy as np
+import h5ffmpeg as hf
+
+# Create sample data
+data = np.random.rand(100, 512, 512).astype(np.uint8)
+
+# Save with default settings (H.264)
+with h5py.File("compressed.h5", "w") as f:
+    f.create_dataset("data", data=data, **hf.x264())
+
+# Save with H.265/HEVC compression
+with h5py.File("compressed_hevc.h5", "w") as f:
+    f.create_dataset("data", data=data, **hf.x265(crf=28))
+
+# Save with AV1 compression (highest ratio)
+with h5py.File("compressed_av1.h5", "w") as f:
+    f.create_dataset("data", data=data, **hf.svtav1(crf=30))
+
+# Use with NVIDIA GPU acceleration
+with h5py.File("compressed_gpu.h5", "w") as f:
+    f.create_dataset("data", data=data, **hf.h264_nvenc())
+```
+
+## Advanced Usage
+
+### Custom Codec Configuration
+
+```python
+import h5ffmpeg as hf
+
+# Access the full ffmpeg API for complete control
+compression_options = hf.ffmpeg(
+    codec="libx264",        # Codec to use
+    preset="medium",        # Encoding speed vs compression efficiency
+    tune="film",            # Content-specific optimization
+    crf=23,                 # Quality level (lower = higher quality)
+    bit_mode=hf.BitMode.BIT_10,  # 8, 10, or 12-bit encoding
+    film_grain=50,          # Film grain synthesis (0-100)
+    gpu_id=0                # GPU ID (Default: 0)
+)
+```
+
+### Automated Hardware Acceleration
+
+The library can detect and use available hardware acceleration:
+
+```python
+import h5ffmpeg as hf
+
+# This will automatically use NVIDIA GPU if available, 
+# or fall back to CPU if not
+compression_options = hf.ffmpeg(
+    codec="h264_nvenc" if hf.has_nvidia_gpu() else "libx264",
+    preset="p4" if hf.has_nvidia_gpu() else "medium",
+    crf=23
+)
+```
+
+## ImageJ/Fiji Integration
+
+The FFMPEG HDF5 filter can be used directly within ImageJ/Fiji:
+
+1. Install the plugin from our pre-built binaries
+2. Open your HDF5 files with compressed datasets
+3. The plugin will automatically handle decompression for visualization
+
+Check the `examples` folder in the repository for Jupyter notebook examples showing various use cases.
+
+## Available Codecs
+
+| Codec | Implementation | Description | Typical Use Case |
+|-------|-------------|-------------|------------------|
+| XVID | `libxvid` | MPEG-4 codec | Legacy support |
+| H.264 | `libx264` | General-purpose codec | Good balance of quality and speed |
+| H.265/HEVC | `libx265` | Higher efficiency than H.264 | Better compression for same quality |
+| AV1 | `libsvtav1` | Next-gen open codec | Highest compression ratio |
+| AV1 | `librav1e` | Rust AV1 encoder | Alternative AV1 implementation |
+| H.264 NVENC | `h264_nvenc` | NVIDIA GPU-accelerated H.264 | Fast encoding on NVIDIA GPUs |
+| HEVC NVENC | `hevc_nvenc` | NVIDIA GPU-accelerated HEVC | High-quality, fast encoding on NVIDIA GPUs |
+| AV1 NVENC | `av1_nvenc` | NVIDIA GPU-accelerated AV1 | Next-gen encoding on newest NVIDIA GPUs |
+| AV1 QSV | `av1_qsv` | Intel QuickSync AV1 | Hardware acceleration on Intel GPUs |
+
+## Compatibility
+
+- **Python**: 3.10+
+- **Operating Systems**: Linux, macOS, Windows
+- **HDF5**: 1.10+
+- **H5Py**: 3.0+
+
+## License
+
+MIT License
+
+## Citation
+
+If you use this software in your research, please cite:
+
+```
+Duan, B., Walker, L.A., Xie, B., Lee, W.J., Lin, A., Yan, Y., and Cai, D. (2024).
+Artifact-Minimized High-Ratio Image Compression with Preserved Analysis Fidelity.
+```
 
 ## Acknowledgments
-The cmake file borrows heavily from the [jpegHDF5](https://github.com/CARS-UChicago/jpegHDF5). Part of the encoding and decoding codes are modified from [ffmpeg examples](https://github.com/FFmpeg/FFmpeg). The imagej-hdf5-viewer is modified based on [ch.psi.imagej.hdf5](https://github.com/paulscherrerinstitute/ch.psi.imagej.hdf5). Very much thanks for their great work.
+
+This work was funded by the United States National Institutes of Health (NIH) grants RF1MH123402, RF1MH124611, and RF1MH133764.
+
+## Community and Support
+
+- **GitHub Issues**: For bug reports and feature requests
+- **Contact**: Feel free to reach out to us with questions
+
+## Related Projects
+
+Check out other tools from the Cai Lab:
+- [nGauge](https://github.com/Cai-Lab-at-University-of-Michigan/nGauge): Python library for neuron morphology analysis
+- [nTracer2](https://github.com/Cai-Lab-at-University-of-Michigan/nTracer2): Browser-based tool for neuron tracing

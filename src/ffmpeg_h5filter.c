@@ -23,7 +23,13 @@
 #define EXPECTED_CS_RATIO 30
 
 #define PUSH_ERR(func, minor, str) \
-    H5Epush(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
+    H5Epush2(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
+
+herr_t raise_ffmpeg_h5_error(const char *msg) {
+    PUSH_ERR("HDF5_FILTER_FFMPEG", H5E_CALLBACK, msg);
+    fprintf(stderr, "\e[96;40m[HDF5_FILTER_FFMPEG]\e[91;40m %s\e[0m", msg);
+    fflush(stderr);
+}
 
 static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
 
@@ -43,7 +49,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
                    size_t *out_size, uint8_t *out_data, size_t frame_size);
 
 size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_values[],
-                        size_t nbytes, size_t *buf_size, void **buf);
+                        size_t nbytes, size_t *buf_size, void **buf);                        
 
 /*
  * Function:  read_from_buffer
@@ -332,7 +338,7 @@ static void find_preset(int p_id, char *preset)
         break;
 
     default:
-        printf("No such preset for this codec, default preset will be used\n");
+        // printf("No such preset for this codec, default preset will be used\n");
         break;
     }
 }
@@ -449,7 +455,7 @@ static void find_tune(int t_id, char *tune)
         break;
 
     default:
-        printf("No such tune for this codec, default tune will be used\n");
+        // printf("No such tune for this codec, default tune will be used\n");
         break;
     }
 }
@@ -480,7 +486,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
 
     ret = avcodec_send_frame(enc_ctx, frame);
     if (ret < 0)
-        fprintf(stderr, "Error sending a frame for encoding\n");
+        raise_ffmpeg_h5_error("Error sending a frame for encoding\n");
 
     while (ret >= 0)
     {
@@ -488,7 +494,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         if (ret < 0)
-            fprintf(stderr, "Error during encoding\n");
+            raise_ffmpeg_h5_error("Error during encoding\n");
 
         // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
 
@@ -503,7 +509,7 @@ static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
         }
 
         if (*out_data == NULL)
-            fprintf(stderr, "Out of memory occurred during encoding\n");
+            raise_ffmpeg_h5_error("Out of memory occurred during encoding\n");
 
         memcpy(*out_data + offset, pkt->data, pkt->size);
         *out_size = updated_size;
@@ -536,7 +542,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
     ret = avcodec_send_packet(dec_ctx, pkt);
 
     if (ret < 0)
-        fprintf(stderr, "Error sending a pkt for decoding\n");
+        raise_ffmpeg_h5_error("Error sending a pkt for decoding\n");
 
     // printf("receiving packets %d\n", pkt->size);
 
@@ -546,7 +552,7 @@ static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         else if (ret < 0)
-            fprintf(stderr, "Error receiving a frame for decoding\n");
+            raise_ffmpeg_h5_error("Error receiving a frame for decoding\n");
 
         // printf("Decode frame %3d\n", dec_ctx->frame_number);
 
@@ -660,14 +666,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         codec = avcodec_find_encoder_by_name(codec_name);
         if (!codec)
         {
-            fprintf(stderr, "Codec not found\n");
+            raise_ffmpeg_h5_error("Codec not found\n");
             goto CompressFailure;
         }
 
         c = avcodec_alloc_context3(codec);
         if (!c)
         {
-            fprintf(stderr, "Could not allocate video codec context\n");
+            raise_ffmpeg_h5_error("Could not allocate video codec context\n");
             goto CompressFailure;
         }
 
@@ -697,7 +703,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         pkt = av_packet_alloc();
         if (!pkt)
         {
-            fprintf(stderr, "Could not allocate packet\n");
+            raise_ffmpeg_h5_error("Could not allocate packet\n");
             goto CompressFailure;
         }
 
@@ -811,7 +817,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 stpcpy(tune, "film-grain=");
                 strcat(tune, film_grain_buffer);
             }
-            if (film_grain > 0):
+            if (film_grain > 0)
                 stpcpy(tune, ":film-grain-denoise=1");
             strcat(tune, ":enable-tf=0");
             if (color_mode == 1)
@@ -846,15 +852,15 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         ret = avcodec_open2(c, codec, NULL);
         if (ret < 0)
         {
-            fprintf(stderr, "Could not open codec\n");
-            printf(av_err2str(ret));
+            raise_ffmpeg_h5_error("Could not open codec\n");
+            // printf(av_err2str(ret));
             goto CompressFailure;
         }
 
         dst_frame = av_frame_alloc();
         if (!dst_frame)
         {
-            fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
+            raise_ffmpeg_h5_error("Could not allocate video dst_frame due to out of memory problem\n");
             goto CompressFailure;
         }
 
@@ -864,14 +870,14 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         if ((av_frame_get_buffer(dst_frame, 0) < 0))
         {
-            fprintf(stderr, "Could not allocate the video dst_frame data\n");
+            raise_ffmpeg_h5_error("Could not allocate the video dst_frame data\n");
             goto CompressFailure;
         }
 
         src_frame = av_frame_alloc();
         if (!src_frame)
         {
-            fprintf(stderr, "Could not allocate video src_frame due to out of memory problem\n");
+            raise_ffmpeg_h5_error("Could not allocate video src_frame due to out of memory problem\n");
             goto CompressFailure;
         }
 
@@ -881,7 +887,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         if (av_frame_get_buffer(src_frame, 0) < 0)
         {
-            fprintf(stderr, "Could not allocate the video src_frame data\n");
+            raise_ffmpeg_h5_error("Could not allocate the video src_frame data\n");
             goto CompressFailure;
         }
 
@@ -903,7 +909,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                                      NULL);
         if (!sws_context)
         {
-            fprintf(stderr, "Could not initialize conversion context\n");
+            raise_ffmpeg_h5_error("Could not initialize conversion context\n");
             goto CompressFailure;
         }
 
@@ -913,13 +919,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             ret = av_frame_make_writable(src_frame);
             if (ret < 0)
             {
-                fprintf(stderr, "Frame not writable\n");
+                raise_ffmpeg_h5_error("Frame not writable\n");
                 goto CompressFailure;
             }
             ret = av_frame_make_writable(dst_frame);
             if (ret < 0)
             {
-                fprintf(stderr, "Frame not writable\n");
+                raise_ffmpeg_h5_error("Frame not writable\n");
                 goto CompressFailure;
             }
             /* put buffer data to frame and do colorspace conversion */
@@ -929,7 +935,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
             ret = sws_scale_frame(sws_context, dst_frame, src_frame);
             if (ret < 0)
             {
-                fprintf(stderr, "Could not do colorspace conversion\n");
+                raise_ffmpeg_h5_error("Could not do colorspace conversion\n");
                 goto CompressFailure;
             }
 
@@ -949,7 +955,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         if (!out_buf)
         {
-            fprintf(stderr, "Failed to allocate memory for image array\n");
+            raise_ffmpeg_h5_error("Failed to allocate memory for image array\n");
             goto CompressFailure;
         }
 
@@ -983,7 +989,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         return buf_size_out;
 
     CompressFailure:
-        fprintf(stderr, "Error compressing array\n");
+        raise_ffmpeg_h5_error("Error compressing array\n");
         if (c)
             avcodec_free_context(&c);
         if (src_frame)
@@ -1048,7 +1054,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         pkt = av_packet_alloc();
         if (!pkt)
         {
-            fprintf(stderr, "Could not allocate packet\n");
+            raise_ffmpeg_h5_error("Could not allocate packet\n");
             goto DecompressFailure;
         }
 
@@ -1058,19 +1064,19 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         codec = avcodec_find_decoder_by_name(codec_name);
         if (!codec)
         {
-            fprintf(stderr, "Codec not found\n");
+            raise_ffmpeg_h5_error("Codec not found\n");
             goto DecompressFailure;
         }
         parser = av_parser_init(codec->id);
         if (!parser)
         {
-            fprintf(stderr, "parser not found\n");
+            raise_ffmpeg_h5_error("parser not found\n");
             goto DecompressFailure;
         }
         c = avcodec_alloc_context3(codec);
         if (!c)
         {
-            fprintf(stderr, "Could not allocate video codec context\n");
+            raise_ffmpeg_h5_error("Could not allocate video codec context\n");
             goto DecompressFailure;
         }
 
@@ -1086,13 +1092,13 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         /* open it */
         if (avcodec_open2(c, codec, NULL) < 0)
         {
-            fprintf(stderr, "Could not open codec\n");
+            raise_ffmpeg_h5_error("Could not open codec\n");
             goto DecompressFailure;
         }
         src_frame = av_frame_alloc();
         if (!src_frame)
         {
-            fprintf(stderr, "Could not allocate video frame due to out of memory problem\n");
+            raise_ffmpeg_h5_error("Could not allocate video frame due to out of memory problem\n");
             goto DecompressFailure;
         }
         switch (c_id)
@@ -1135,7 +1141,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         dst_frame = av_frame_alloc();
         if (!dst_frame)
         {
-            fprintf(stderr, "Could not allocate video dst_frame due to out of memory problem\n");
+            raise_ffmpeg_h5_error("Could not allocate video dst_frame due to out of memory problem\n");
             goto DecompressFailure;
         }
 
@@ -1150,7 +1156,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         out_data = calloc(1, frame_size * depth + AV_INPUT_BUFFER_PADDING_SIZE);
 
         if (out_data == NULL)
-            fprintf(stderr, "Out of memory occurred during decoding\n");
+            raise_ffmpeg_h5_error("Out of memory occurred during decoding\n");
 
         sws_context = sws_getContext(width,
                                      height,
@@ -1173,7 +1179,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
             if (ret < 0)
             {
-                fprintf(stderr, "Packet not readable\n");
+                raise_ffmpeg_h5_error("Packet not readable\n");
                 goto DecompressFailure;
             }
 
@@ -1197,7 +1203,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
 
         if (!out_buf)
         {
-            fprintf(stderr, "Failed to allocate memory for image array\n");
+            raise_ffmpeg_h5_error("Failed to allocate memory for image array\n");
             goto DecompressFailure;
         }
         memcpy(out_buf, out_data, buf_size_out);
@@ -1228,7 +1234,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
         return buf_size_out;
 
     DecompressFailure:
-        fprintf(stderr, "Error decompressing packets\n");
+        raise_ffmpeg_h5_error("Error decompressing packets\n");
         if (parser)
             av_parser_close(parser);
         if (c)

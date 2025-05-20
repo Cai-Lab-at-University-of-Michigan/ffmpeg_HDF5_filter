@@ -1,0 +1,38 @@
+[build-system]
+requires = [
+    "setuptools>=42",
+    "wheel",
+    "h5py>=3.8.0",
+    "numpy>=1.15.0",
+    "colorama>=0.4.6",
+    "tabulate>=0.9.0",
+    "matplotlib>=3.9.3",
+    "scikit-image>=0.22.0"
+]
+build-backend = "setuptools.build_meta"
+
+[tool.cibuildwheel]
+# Which wheels to build - updated to Python 3.9+
+build = ["cp39-*", "cp310-*", "cp311-*", "cp312-*"]
+skip = ["*-musllinux*", "*-win32", "*-manylinux_i686"]
+
+[tool.cibuildwheel.linux]
+before-all = """
+if command -v yum > /dev/null; then
+    yum install -y hdf5-devel
+elif command -v apt-get > /dev/null; then
+    apt-get update && apt-get install -y libhdf5-dev
+else
+    echo "Neither yum nor apt-get found. Cannot install HDF5 dependencies."
+    exit 1
+fi
+"""
+environment = { FFMPEG_ROOT="/project/ffmpeg_build", PKG_CONFIG_PATH="/project/ffmpeg_build/lib/pkgconfig" }
+
+[tool.cibuildwheel.macos]
+before-all = "brew install hdf5"
+environment = { FFMPEG_ROOT="/project/ffmpeg_build", PKG_CONFIG_PATH="/project/ffmpeg_build/lib/pkgconfig" }
+
+[tool.cibuildwheel.windows]
+before-all = "pip install delvewheel"
+environment = { FFMPEG_ROOT="D:\\a\\ffmpeg_HDF5_filter\\ffmpeg_HDF5_filter\\ffmpeg_build" }

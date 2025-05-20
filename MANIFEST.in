@@ -1,0 +1,7 @@
+include README.md
+include LICENSE
+recursive-include src *.h *.c
+recursive-include h5ffmpeg *.py *.c
+include pyproject.toml
+include setup.py
+recursive-include scripts *.sh
