@@ -1,18 +1,22 @@
 name: Build and publish wheels
 
+# Add permissions to allow the workflow to create/delete releases
+permissions:
+  contents: write
+
 on:
   push:
     branches: [main, master]
     tags: ['v*']
   pull_request:
     branches: [main, master]
-  workflow_dispatch:  # Allow manual triggering
+  workflow_dispatch:
 
 jobs:
-  # ================= BUILD FFMPEG LIBRARIES =================
   build_ffmpeg:
     name: Build FFmpeg libraries
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       matrix:
         os: [ubuntu-22.04, windows-2022, macos-12]
@@ -58,11 +62,11 @@ jobs:
           path: ffmpeg_build/
           retention-days: 7
 
-  # ================= BUILD PYTHON WHEELS =================
   build_wheels:
     name: Build wheels on ${{ matrix.os }} for ${{ matrix.python }}
     needs: build_ffmpeg
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -93,7 +97,6 @@ jobs:
       - name: Setup environment
         run: |
           echo "FFMPEG_ROOT=${{ github.workspace }}/ffmpeg_build" >> $GITHUB_ENV
-          # Make FFmpeg binaries executable (Linux/macOS)
           if [ "$RUNNER_OS" != "Windows" ]; then
             chmod -R +x ${{ github.workspace }}/ffmpeg_build/bin
           fi
@@ -123,68 +126,82 @@ jobs:
             python -m pip install delvewheel
           fi
 
-      - name: Build wheels
+      - name: Cache Rust dependencies
+        uses: actions/cache@v3
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-${{ matrix.python }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-${{ matrix.python }}-
+            ${{ runner.os }}-cargo-
+
+      - name: Build wheels with progress reporting
         run: |
+          # Add a background task to output something every minute to prevent timeout
+          while true; do echo "Still building wheel... $(date)"; sleep 60; done &
+          PROGRESS_PID=$!
+          
+          # Run the actual build
           python -m cibuildwheel --output-dir wheelhouse
+          
+          # Kill the progress reporter
+          kill $PROGRESS_PID || true
         env:
           CIBW_BUILD: "${{ matrix.python }}-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
-          
-          # For manylinux: install HDF5 development headers and copy FFmpeg
           CIBW_BEFORE_ALL_LINUX: >
             yum install -y epel-release && 
             yum install -y hdf5-devel patchelf && 
             mkdir -p /usr/local/ffmpeg && 
             cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
-          
-          # For macOS wheels: ensure dynamic libraries are properly linked
           CIBW_BEFORE_ALL_MACOS: >
             brew install hdf5 pkg-config && 
             mkdir -p /usr/local/ffmpeg && 
             cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
-
-          # For Windows wheels: prepare environment
           CIBW_BEFORE_ALL_WINDOWS: >
             mkdir -p C:/ffmpeg && 
             cp -r ${FFMPEG_ROOT}/* C:/ffmpeg/
-          
-          # Wheel repair commands
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs x86_64 -w {dest_dir} {wheel}
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair -w {dest_dir} {wheel}
-          
-          # Custom environment variables for setup.py
           CIBW_ENVIRONMENT_LINUX: >
             FFMPEG_ROOT=/usr/local/ffmpeg 
             PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
             LD_LIBRARY_PATH=/usr/local/ffmpeg/lib:$LD_LIBRARY_PATH
             PATH=/usr/local/ffmpeg/bin:$PATH
-          
+            CARGO_BUILD_FLAGS="--release --jobs 2"
+            CARGO_NET_FETCH_WITH_CLI=true
+            RUST_LOG=info
           CIBW_ENVIRONMENT_MACOS: >
             FFMPEG_ROOT=/usr/local/ffmpeg 
             PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
             DYLD_LIBRARY_PATH=/usr/local/ffmpeg/lib:$DYLD_LIBRARY_PATH
             PATH=/usr/local/ffmpeg/bin:$PATH
-          
+            CARGO_BUILD_FLAGS="--release --jobs 2"
+            CARGO_NET_FETCH_WITH_CLI=true
+            RUST_LOG=info
           CIBW_ENVIRONMENT_WINDOWS: >
             FFMPEG_ROOT=C:/ffmpeg 
             PKG_CONFIG_PATH=C:/ffmpeg/lib/pkgconfig 
             PATH=C:/ffmpeg/bin;$PATH
-          
-          # Test wheel installation and importing
+            CARGO_BUILD_FLAGS="--release --jobs 2"
+            CARGO_NET_FETCH_WITH_CLI=true
+            RUST_LOG=info
+          CIBW_BUILD_VERBOSITY: 3
           CIBW_TEST_REQUIRES: pytest numpy
           CIBW_TEST_COMMAND: pytest {package}/tests/basic_test.py -v
 
-      # Extract shared objects from wheel for Java to use
       - name: Extract shared libraries from wheels
         shell: bash
         run: |
           mkdir -p native_libs/${{ runner.os }}
           
           if [ "$RUNNER_OS" == "Linux" ]; then
-            # Extract .so files from the wheel
             python -c "
             import zipfile, os, glob, shutil
             wheels = glob.glob('wheelhouse/*.whl')
@@ -193,12 +210,10 @@ jobs:
                     so_files = [f for f in wheel.namelist() if f.endswith('.so')]
                     for so_file in so_files:
                         wheel.extract(so_file, 'extracted_wheel')
-                        # Move to native_libs directory
                         os.makedirs('native_libs/Linux', exist_ok=True)
                         shutil.copy(f'extracted_wheel/{so_file}', 'native_libs/Linux/')
             "
           elif [ "$RUNNER_OS" == "macOS" ]; then
-            # Extract .dylib files from the wheel
             python -c "
             import zipfile, os, glob, shutil
             wheels = glob.glob('wheelhouse/*.whl')
@@ -207,12 +222,10 @@ jobs:
                     dylib_files = [f for f in wheel.namelist() if f.endswith('.dylib')]
                     for dylib_file in dylib_files:
                         wheel.extract(dylib_file, 'extracted_wheel')
-                        # Move to native_libs directory
                         os.makedirs('native_libs/macOS', exist_ok=True)
                         shutil.copy(f'extracted_wheel/{dylib_file}', 'native_libs/macOS/')
             "
           elif [ "$RUNNER_OS" == "Windows" ]; then
-            # Extract .dll files from the wheel
             python -c "
             import zipfile, os, glob, shutil
             wheels = glob.glob('wheelhouse/*.whl')
@@ -221,13 +234,11 @@ jobs:
                     dll_files = [f for f in wheel.namelist() if f.endswith('.dll')]
                     for dll_file in dll_files:
                         wheel.extract(dll_file, 'extracted_wheel')
-                        # Move to native_libs directory
                         os.makedirs('native_libs/Windows', exist_ok=True)
                         shutil.copy(f'extracted_wheel/{dll_file}', 'native_libs/Windows/')
             "
           fi
           
-          # List extracted libraries
           find native_libs -type f | sort
 
       - name: Upload native libraries
@@ -244,10 +255,10 @@ jobs:
           name: wheels-${{ runner.os }}-${{ matrix.python }}
           retention-days: 7
 
-  # ================= BUILD SOURCE DISTRIBUTION =================
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v3
         with:
@@ -268,7 +279,6 @@ jobs:
           python -m pip install --upgrade pip build setuptools wheel
           python -m build --sdist
         env:
-          # Ensure pkg-config can find HDF5
           PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 
       - name: Upload sdist
@@ -278,12 +288,11 @@ jobs:
           name: sdist
           retention-days: 7
 
-  # ================= BUILD JAVA LIBRARY =================
   build_java:
     name: Build Java library
-    # Now depends on build_wheels instead of directly on build_ffmpeg
     needs: build_wheels
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v3
       
@@ -293,7 +302,6 @@ jobs:
           java-version: '8'
           distribution: 'temurin'
       
-      # Download both FFmpeg artifacts and the native libraries extracted from wheels
       - name: Download FFmpeg artifacts from all platforms
         uses: actions/download-artifact@v4
         with:
@@ -301,11 +309,115 @@ jobs:
       
       - name: Prepare native library structure
         run: |
-          # Create native libs directory structure
           mkdir -p native_libs/linux native_libs/windows native_libs/macos
           
-          # Copy libraries from the wheel extractions (prioritize these)
           find downloads/native-libs-* -type f -name "*.so" -exec cp {} native_libs/linux/ \;
+          find downloads/native-libs-* -type f -name "*.dll" -exec cp {} native_libs/windows/ \;
+          find downloads/native-libs-* -type f -name "*.dylib" -exec cp {} native_libs/macos/ \;
+          
+          echo "Libraries extracted from Python wheels:"
+          find native_libs -type f | sort
+          
+          cp scripts/prepare_native_libs.sh ./prepare_native_libs.sh
+          chmod +x ./prepare_native_libs.sh
+          
+          ./prepare_native_libs.sh
+      
+      - name: Setup Gradle and build JAR
+        uses: gradle/gradle-build-action@v2
+        with:
+          build-root-directory: imagej-hdf5-wrapper
+          arguments: packJar
+      
+      - name: Upload JAR
+        uses: actions/upload-artifact@v4
+        with:
+          name: hdf5-ffmpeg-jar
+          path: imagej-hdf5-wrapper/build/libs/HDF5-ffmpeg-*.jar
+
+  publish:
+    name: Publish to PyPI and GitHub Releases
+    needs: [build_wheels, build_sdist, build_java]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+      
+      - name: Download all wheels and sdist
+        run: |
+          python -m pip install --upgrade pip twine
+          mkdir -p dist
+      
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+          pattern: wheels-*
+          merge-multiple: true
+      
+      - name: Download sdist
+        uses: actions/download-artifact@v4
+        with:
+          name: sdist
+          path: dist/
+      
+      - name: Download Java JAR
+        uses: actions/download-artifact@v4
+        with:
+          name: hdf5-ffmpeg-jar
+          path: java-dist/
+      
+      - name: Check distribution files
+        run: |
+          find dist -type f -name "*.whl" -o -name "*.tar.gz" | sort
+          python -m twine check dist/*.whl dist/*.tar.gz
+      
+      - name: Publish to TestPyPI
+        env:
+          TWINE_USERNAME: ${{ secrets.TESTPYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.TESTPYPI_PASSWORD }}
+        run: python -m twine upload --repository testpypi dist/*.whl dist/*.tar.gz
+      
+      - name: Publish to PyPI
+        if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+        env:
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+        run: python -m twine upload dist/*.whl dist/*.tar.gz
+      
+      - name: Delete previous snapshot release
+        if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: dev-drprasad/delete-tag-and-release@v0.2.1
+        with:
+          tag_name: snapshot-${{ github.ref_name }}
+          delete_release: true
+          repo: ${{ github.repository }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Get timestamp for snapshot version
+        id: timestamp
+        if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+      
+      - name: Upload JAR to GitHub release
+        if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+        uses: softprops/action-gh-release@v1
+        with:
+          files: java-dist/HDF5-ffmpeg-*.jar
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('snapshot-{0}', github.ref_name) }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Snapshot {0} ({1})', github.ref_name, steps.timestamp.outputs.timestamp) }}
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
+          draft: false
+          body: ${{ !startsWith(github.ref, 'refs/tags/') && format('Development build from {0} branch, commit {1} created at {2}', github.ref_name, github.sha, steps.timestamp.outputs.timestamp) || '' }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}-* -type f -name "*.so" -exec cp {} native_libs/linux/ \;
           find downloads/native-libs-* -type f -name "*.dll" -exec cp {} native_libs/windows/ \;
           find downloads/native-libs-* -type f -name "*.dylib" -exec cp {} native_libs/macos/ \;
           
