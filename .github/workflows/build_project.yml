@@ -1,4 +1,4 @@
-name: Build and publish project
+name: Build and publish wheels
 
 on:
   push:
@@ -85,7 +85,7 @@ jobs:
           python -m pip install cibuildwheel setuptools wheel
 
       - name: Download FFmpeg artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: ffmpeg-${{ runner.os }}
           path: ffmpeg_build
@@ -257,11 +257,19 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
+          
+      - name: Install HDF5 development packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libhdf5-dev pkg-config
 
       - name: Build sdist
         run: |
           python -m pip install --upgrade pip build setuptools wheel
           python -m build --sdist
+        env:
+          # Ensure pkg-config can find HDF5
+          PKG_CONFIG_PATH: /usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 
       - name: Upload sdist
         uses: actions/upload-artifact@v4
@@ -287,7 +295,7 @@ jobs:
       
       # Download both FFmpeg artifacts and the native libraries extracted from wheels
       - name: Download FFmpeg artifacts from all platforms
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: downloads/
       
@@ -346,20 +354,20 @@ jobs:
           mkdir -p dist
       
       - name: Download wheels
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: dist/
           pattern: wheels-*
           merge-multiple: true
       
       - name: Download sdist
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: sdist
           path: dist/
       
       - name: Download Java JAR
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: hdf5-ffmpeg-jar
           path: java-dist/
