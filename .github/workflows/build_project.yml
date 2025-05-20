@@ -52,7 +52,7 @@ jobs:
           fi
 
       - name: Upload FFmpeg artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ffmpeg-${{ runner.os }}
           path: ffmpeg_build/
@@ -231,14 +231,14 @@ jobs:
           find native_libs -type f | sort
 
       - name: Upload native libraries
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: native-libs-${{ runner.os }}-${{ matrix.python }}
           path: native_libs/
           retention-days: 7
 
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
           name: wheels-${{ runner.os }}-${{ matrix.python }}
@@ -264,7 +264,7 @@ jobs:
           python -m build --sdist
 
       - name: Upload sdist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           path: ./dist/*.tar.gz
           name: sdist
@@ -319,7 +319,7 @@ jobs:
           arguments: packJar
       
       - name: Upload JAR
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: hdf5-ffmpeg-jar
           path: imagej-hdf5-wrapper/build/libs/HDF5-ffmpeg-*.jar
