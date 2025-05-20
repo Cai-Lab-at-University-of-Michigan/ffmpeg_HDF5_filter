@@ -624,6 +624,13 @@ build_ffmpeg() {
 verify_build() {
     print_info "Verifying FFmpeg build..."
     
+    # Set proper library paths before verification
+    if [ "$OS" == "linux" ]; then
+        export LD_LIBRARY_PATH="${BUILD_DIR}/lib:$LD_LIBRARY_PATH"
+    elif [ "$OS" == "macos" ]; then
+        export DYLD_LIBRARY_PATH="${BUILD_DIR}/lib:$DYLD_LIBRARY_PATH"
+    fi
+    
     # Verify FFmpeg executables
     if [ ! -f "${BUILD_DIR}/bin/ffmpeg" ]; then
         print_error "FFmpeg executable not found!"

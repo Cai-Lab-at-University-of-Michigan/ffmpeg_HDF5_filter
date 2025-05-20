@@ -615,6 +615,13 @@ build_ffmpeg() {
 verify_build() {
     print_info "Verifying FFmpeg build..."
     
+    export PATH="${BUILD_DIR}/bin:$PATH"# Verify the build for Windows
+verify_build() {
+    print_info "Verifying FFmpeg build..."
+    
+    # Set proper PATH for Windows
+    export PATH="${BUILD_DIR}/bin:$PATH"
+    
     # Verify FFmpeg executables
     if [ ! -f "${BUILD_DIR}/bin/ffmpeg.exe" ]; then
         print_error "FFmpeg executable not found!"

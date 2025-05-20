@@ -129,11 +129,7 @@ install_linux_deps() {
         python3-numpy \
         libhdf5-dev
     
-    # Check for NVIDIA development tools
-    if [ -f /proc/driver/nvidia/version ] || command -v nvidia-smi &> /dev/null; then
-        print_info "NVIDIA GPU detected. Installing CUDA development headers..."
-        sudo apt-get install -y nvidia-cuda-toolkit
-    fi
+    sudo apt-get install -y nvidia-cuda-toolkit
     
     # Rust for rav1e
     if ! command -v cargo &> /dev/null; then
