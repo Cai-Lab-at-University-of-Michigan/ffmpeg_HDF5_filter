@@ -29,11 +29,17 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Clean build directories
+        shell: bash
+        run: |
+          rm -rf ffmpeg_build ffmpeg_src
+          mkdir -p ffmpeg_build
+
       - name: Cache FFmpeg Dependencies
         uses: actions/cache@v3
         with:
           path: ffmpeg_build
-          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('scripts/build_ffmpeg.sh', 'scripts/build_ffmpeg_win.sh') }}
+          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('scripts/build_linux.sh', 'scripts/build_windows.sh', 'scripts/build_macos.sh') }}
           restore-keys: |
             ${{ runner.os }}-ffmpeg-
 
