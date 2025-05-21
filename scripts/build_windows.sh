@@ -2,13 +2,13 @@
 
 set -e  # Exit on error
 
-# Colors for output
+# Console output colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
-# Function to print colored messages
+# Logging functions
 print_info() {
     echo -e "${GREEN}[INFO]${NC} $1"
 }
@@ -21,149 +21,52 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Install Windows dependencies
 install_dependencies() {
     print_info "Installing FFmpeg build dependencies for Windows..."
     
-    # Skip Visual Studio installation as it's already included in the runner
     print_info "Visual Studio is pre-installed in GitHub Actions, skipping..."
     
-    # Install NASM and YASM directly via chocolatey
-    print_info "Installing NASM and YASM..."
-    choco install -y nasm yasm
+    choco install -y nasm
     
-    # Add NASM to PATH explicitly
     export PATH="/c/Program Files/NASM:$PATH"
     
-    # Verify NASM installation
     print_info "Verifying NASM installation..."
     nasm -v || print_error "NASM not properly installed!"
     
-    # Add MSYS2 for Unix-like environment
-    print_info "Installing MSYS2..."
     choco install -y msys2
     
-    # Update path to include MSYS2 binaries
     MSYS2_PATH="C:/msys64"
     if [ -d "/c/msys64" ]; then
         MSYS2_PATH="/c/msys64"
     fi
     export PATH="$MSYS2_PATH/usr/bin:$PATH"
-    export PATH="$MSYS2_PATH/mingw64/bin:$PATH"
     
-    # Update MSYS2 packages with error handling
-    print_info "Updating MSYS2 packages..."
     pacman -Syu --noconfirm || print_warning "MSYS2 update failed, continuing anyway..."
     
-    # Install build dependencies via MSYS2 with error handling - combine into one command for efficiency
-    print_info "Installing MSYS2/MinGW packages..."
-    pacman -S --noconfirm --needed \
-        mingw-w64-x86_64-toolchain \
-        mingw-w64-x86_64-cmake \
-        mingw-w64-x86_64-autotools \
-        mingw-w64-x86_64-nasm \
-        mingw-w64-x86_64-yasm \
-        mingw-w64-x86_64-pkg-config \
-        mingw-w64-x86_64-ninja \
-        mingw-w64-x86_64-meson \
-        mingw-w64-x86_64-dlfcn \
-        mingw-w64-x86_64-x264 \
-        mingw-w64-x86_64-x265 \
-        mingw-w64-x86_64-dav1d \
-        mingw-w64-x86_64-aom \
-        mingw-w64-x86_64-libpng \
-        mingw-w64-x86_64-freetype \
-        mingw-w64-x86_64-fontconfig \
-        mingw-w64-x86_64-SDL2 \
-        mingw-w64-x86_64-fribidi \
-        diffutils \
-        patch \
-        make || true
+    # Install all required MSYS2 packages in a single command for better efficiency
+    pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-autotools || true
+    pacman -S --noconfirm mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-dlfcn || true
+    pacman -S --noconfirm mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-dav1d || true
+    pacman -S --noconfirm mingw-w64-x86_64-aom mingw-w64-x86_64-libpng mingw-w64-x86_64-freetype || true
+    pacman -S --noconfirm mingw-w64-x86_64-fontconfig mingw-w64-x86_64-SDL2 mingw-w64-x86_64-fribidi || true
     
-    # Install Python packages
-    print_info "Installing Python packages..."
     pip install -U setuptools wheel numpy cython || true
 
-    # Install Rust for rav1e
-    print_info "Installing Rust..."
-    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-    source $HOME/.cargo/env
-    export PATH="$HOME/.cargo/bin:$PATH"
+    # Rust needed for rav1e
     rustup default stable || true
-    rustup target add x86_64-pc-windows-gnu || true
     cargo install cargo-c || true
     
-    # Display PATH for debugging
-    print_info "Current PATH:"
-    echo $PATH
+    print_info "Current PATH: $PATH"
     
-    # Check for essential tools
+    # Verify essential build tools
     which nasm || print_error "NASM not in PATH!"
-    which yasm || print_error "YASM not in PATH!"
     which cmake || print_error "CMake not in PATH!"
     which ninja || print_error "Ninja not in PATH!"
     
     print_info "Windows dependencies installed successfully."
 }
 
-# Setup cross-compilation environment
-setup_cross_compile_env() {
-    print_info "Setting up cross-compilation environment..."
-    
-    # Create directory for helper scripts
-    mkdir -p "${BUILD_DIR}/bin"
-    
-    # Create wrapper scripts for common cross-compilation tools
-    for tool in strings ar nm objdump ranlib strip; do
-        cat > "${BUILD_DIR}/bin/x86_64-w64-mingw32-${tool}" << EOF
-#!/bin/sh
-${tool} "\$@"
-EOF
-        chmod +x "${BUILD_DIR}/bin/x86_64-w64-mingw32-${tool}"
-    done
-    
-    # Add to PATH
-    export PATH="${BUILD_DIR}/bin:$PATH"
-    
-    # Create a helper for configure scripts to detect endianness correctly
-    mkdir -p "${SRC_DIR}/config_helpers"
-    cat > "${SRC_DIR}/config_helpers/endian_detect.c" << 'EOF'
-#include <stdio.h>
-int main() {
-    unsigned int x = 1;
-    char *c = (char*)&x;
-    printf("%s\n", *c ? "little" : "big");
-    return 0;
-}
-EOF
-    gcc -o "${SRC_DIR}/config_helpers/endian_detect" "${SRC_DIR}/config_helpers/endian_detect.c" || true
-    
-    # Create a meson cross file for Windows
-    mkdir -p "${SRC_DIR}/config_helpers"
-    cat > "${SRC_DIR}/config_helpers/meson_cross_file.txt" << 'EOF'
-[binaries]
-c = 'gcc'
-cpp = 'g++'
-ar = 'ar'
-strip = 'strip'
-pkgconfig = 'pkg-config'
-windres = 'windres'
-
-[host_machine]
-system = 'windows'
-cpu_family = 'x86_64'
-cpu = 'x86_64'
-endian = 'little'
-EOF
-    
-    # Pre-set endianness environment variables for configure scripts
-    export ac_cv_c_bigendian=no
-    export ac_cv_c_littleendian=yes
-    
-    print_info "Cross-compilation environment setup complete."
-}
-
-# Set build directories
+# Initialize build directories
 ROOT_DIR="$(pwd)"
 BUILD_DIR="${ROOT_DIR}/ffmpeg_build"
 SRC_DIR="${ROOT_DIR}/ffmpeg_src"
@@ -188,12 +91,11 @@ print_info "Using ${NPROC} CPU cores for build"
 export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
 export PATH="${BUILD_DIR}/bin:${PATH}"
 
-# Set compiler flags - Windows-specific
-CFLAGS="-I${BUILD_DIR}/include -O2 -static-libgcc"
-LDFLAGS="-L${BUILD_DIR}/lib -static-libgcc"
+# Compiler flags - Windows-specific
+CFLAGS="-I${BUILD_DIR}/include -O2"
+LDFLAGS="-L${BUILD_DIR}/lib"
 EXTRAFLAGS="-lm -lstdc++"
 
-# Function to download source using git
 git_clone() {
     local repo_url=$1
     local target_dir=$2
@@ -210,7 +112,6 @@ git_clone() {
     fi
 }
 
-# Function to download source files
 download_source() {
     local url=$1
     local output_file=$2
@@ -232,155 +133,116 @@ download_source() {
     fi
 }
 
-# Build x264
 build_x264() {
     print_info "Building x264..."
     cd "${SRC_DIR}"
     git_clone "https://code.videolan.org/videolan/x264.git" "x264"
     cd x264
     
-    # Display NASM version and location for debugging
-    print_info "NASM version:"
-    nasm -v || print_error "NASM not found!"
+    print_info "NASM version: $(nasm -v || echo 'not found')"
     which nasm || print_error "NASM not in PATH!"
     
-    # Manually handle endian detection 
-    export ac_cv_c_bigendian=no
-    export ac_cv_c_littleendian=yes
-    
-    # Create a local patch file for endian detection
-    cat > endian_fix.patch << 'EOF'
---- configure.orig
-+++ configure
-@@ -1098,15 +1098,7 @@
- 
- # test for endianness
- if test "$cross_compile" = yes ; then
--    # Can't check endianness when cross compiling, assume target is little endian
--    if test "$x86_64" = yes -o "$ARCH" = X86 -o "$ARCH" = ARM -o "$ARCH" = AARCH64 -o "$ARCH" = MIPS ; then
--        define WORDS_BIGENDIAN 0
--    else
--        predictors_4x4="CHROMA_4x4
--                        LUMA_4x4"
--        deblock_strength="NORMAL"
--        define WORDS_BIGENDIAN 1
--    fi
-+    define WORDS_BIGENDIAN 0
- else
-     echo "int i[2] = {0x42494745,0}; double f[2] = {0,0}; int main(){return f[0];}" > conftest.c
-     $CC conftest.c -o conftest 2>/dev/null || die "endian test failed"
-EOF
-    
-    # Apply the patch
-    patch -p0 < endian_fix.patch || print_warning "Patch application failed, continuing anyway..."
-    
-    # Configure with endianness explicitly set
+    # Configure for shared library to better support Python bindings
     CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}" ./configure \
         --prefix="${BUILD_DIR}" \
         --enable-shared \
         --enable-pic \
-        --host=x86_64-w64-mingw32 \
-        --cross-prefix=x86_64-w64-mingw32- \
-        --disable-cli \
-        ac_cv_c_bigendian=no
+        --disable-cli
     
     make -j${NPROC}
     make install
     
-    # Copy DLL to bin directory for runtime loading
     cp "${BUILD_DIR}/lib/libx264"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     print_info "x264 build completed."
 }
 
-# Build x265
 build_x265() {
     print_info "Building x265..."
     cd "${SRC_DIR}"
     git_clone "https://bitbucket.org/multicoreware/x265_git.git" "x265"
     
-    # For multi-bit depth support
     mkdir -p x265/build/windows
     cd x265/build/windows
     mkdir -p 8bit 10bit 12bit
     
     # Build 12-bit
     cd 12bit
-    CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
-        "-DHIGH_BIT_DEPTH=ON"
-        "-DEXPORT_C_API=OFF"
-        "-DENABLE_SHARED=OFF"
-        "-DENABLE_CLI=OFF"
-        "-DMAIN12=ON"
-    )
-    cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ../../../source
+    cmake -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
+        -DHIGH_BIT_DEPTH=ON \
+        -DEXPORT_C_API=OFF \
+        -DENABLE_SHARED=OFF \
+        -DENABLE_CLI=OFF \
+        -DMAIN12=ON \
+        ../../../source
     make -j${NPROC}
     
     # Build 10-bit
     cd ../10bit
-    CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
-        "-DHIGH_BIT_DEPTH=ON"
-        "-DEXPORT_C_API=OFF"
-        "-DENABLE_SHARED=OFF"
-        "-DENABLE_CLI=OFF"
-    )
-    cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ../../../source
+    cmake -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
+        -DHIGH_BIT_DEPTH=ON \
+        -DEXPORT_C_API=OFF \
+        -DENABLE_SHARED=OFF \
+        -DENABLE_CLI=OFF \
+        ../../../source
     make -j${NPROC}
     
     # Build 8-bit with links to 10 and 12-bit
     cd ../8bit
     
-    # For Windows, instead of symbolic links, create copies
-    cp ../10bit/libx265.a libx265_main10.a
-    cp ../12bit/libx265.a libx265_main12.a
+    ln -sf ../10bit/libx265.a libx265_main10.a
+    ln -sf ../12bit/libx265.a libx265_main12.a
     
-    CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
-        "-DEXTRA_LIB=x265_main10.a;x265_main12.a"
-        "-DEXTRA_LINK_FLAGS=-L."
-        "-DLINKED_10BIT=ON"
-        "-DLINKED_12BIT=ON"
-        "-DENABLE_CLI=OFF"
-        "-DENABLE_SHARED=ON"
-        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
-    )
-    cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ../../../source
+    cmake -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
+        -DEXTRA_LIB="x265_main10.a;x265_main12.a" \
+        -DEXTRA_LINK_FLAGS=-L. \
+        -DLINKED_10BIT=ON \
+        -DLINKED_12BIT=ON \
+        -DENABLE_CLI=OFF \
+        -DENABLE_SHARED=OFF \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        ../../../source
     make -j${NPROC}
     
-    # Create combined library
+    # Create combined static library
     mv libx265.a libx265_main.a
-    
-    # Use copy and script instead of ar -M on Windows
-    echo "CREATE libx265.a" > merge.ar
-    echo "ADDLIB libx265_main.a" >> merge.ar
-    echo "ADDLIB libx265_main10.a" >> merge.ar
-    echo "ADDLIB libx265_main12.a" >> merge.ar
-    echo "SAVE" >> merge.ar
-    echo "END" >> merge.ar
-    
-    ar -M < merge.ar || {
-        print_warning "ar merge failed, trying alternate method"
-        # Fallback method using object files
-        mkdir -p objects
-        cd objects
-        ar x ../libx265_main.a
-        ar x ../libx265_main10.a
-        ar x ../libx265_main12.a
-        ar rcs ../libx265.a *.o
-        cd ..
-    }
-    
+    ar -M <<EOF
+CREATE libx265.a
+ADDLIB libx265_main.a
+ADDLIB libx265_main10.a
+ADDLIB libx265_main12.a
+SAVE
+END
+EOF
+
     make install
     
-    # Ensure DLL is in bin directory
     cp "${BUILD_DIR}/lib/libx265"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
+    
+    # Create pkg-config file if necessary
+    if [ ! -f "${BUILD_DIR}/lib/pkgconfig/x265.pc" ]; then
+        mkdir -p "${BUILD_DIR}/lib/pkgconfig"
+        cat > "${BUILD_DIR}/lib/pkgconfig/x265.pc" << EOF
+prefix=${BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: x265
+Description: H.265/HEVC video encoder
+Version: 3.5
+Libs: -L\${libdir} -lx265
+Libs.private: -lstdc++ -lm
+Cflags: -I\${includedir}
+EOF
+    fi
     
     print_info "x265 build with multi-bit-depth support completed."
 }
 
-# Build dav1d (AV1 decoder)
 build_dav1d() {
     print_info "Building dav1d (AV1 decoder)..."
     cd "${SRC_DIR}"
@@ -389,25 +251,23 @@ build_dav1d() {
     mkdir -p dav1d/build
     cd dav1d/build
     
-    # Configure with Meson for Windows
-    CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}" meson setup \
+    meson setup \
         --prefix="${BUILD_DIR}" \
         --libdir=lib \
-        --buildtype=release \
         --default-library=shared \
-        --cross-file="${SRC_DIR}/config_helpers/meson_cross_file.txt" \
+        -Db_pgo=generate \
+        -Dc_args="-march=native" \
+        -Dcpp_args="-march=native" \
         ..
     
     ninja
     ninja install
     
-    # Copy DLL to bin directory
     cp "${BUILD_DIR}/lib/libdav1d"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     print_info "dav1d build completed."
 }
 
-# Build SVT-AV1
 build_svtav1() {
     print_info "Building SVT-AV1..."
     cd "${SRC_DIR}"
@@ -417,72 +277,66 @@ build_svtav1() {
     mkdir -p build
     cd build
     
-    # Windows-specific CMake configuration
-    CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
-        "-DBUILD_SHARED_LIBS=ON"
-        "-DCMAKE_SYSTEM_NAME=Windows"
-        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
-        "-DCMAKE_C_FLAGS=-static-libgcc"
-        "-DCMAKE_CXX_FLAGS=-static-libgcc -static-libstdc++"
-    )
-    
-    cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ..
+    cmake -G "MSYS Makefiles" \
+        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
+        -DBUILD_SHARED_LIBS=ON \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        ..
     
     make -j${NPROC}
     make install
     
-    # Copy DLL to bin directory
     cp "${BUILD_DIR}/lib/libSvtAv1"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     cp "${BUILD_DIR}/bin/SvtAv1"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     print_info "SVT-AV1 build completed."
 }
 
-# Build rav1e (Rust AV1 encoder)
 build_rav1e() {
     print_info "Building rav1e (Rust AV1 encoder)..."
     cd "${SRC_DIR}"
     
-    # Ensure Rust is installed and in PATH
     if ! command -v cargo &> /dev/null; then
-        print_info "Rust is required for rav1e. Installing..."
+        print_info "Installing Rust..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
         source $HOME/.cargo/env
-        export PATH="$HOME/.cargo/bin:$PATH"
     fi
     
     git_clone "https://github.com/xiph/rav1e.git" "rav1e"
     cd rav1e
     
-    # Add Windows GNU target (for MinGW)
-    rustup target add x86_64-pc-windows-gnu
-    
-    # For a simpler build approach, use the Windows-compatible cargo build
-    print_info "Building rav1e with cargo..."
-    RUSTFLAGS="-C target-feature=+crt-static" cargo build --release --target x86_64-pc-windows-gnu
-    
-    # Manually install the built files
-    mkdir -p "${BUILD_DIR}/lib"
-    mkdir -p "${BUILD_DIR}/include/rav1e"
-    mkdir -p "${BUILD_DIR}/bin"
-    
-    # Copy the library and binary
-    cp target/x86_64-pc-windows-gnu/release/rav1e.exe "${BUILD_DIR}/bin/" 2>/dev/null || true
-    cp target/x86_64-pc-windows-gnu/release/*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    cp target/x86_64-pc-windows-gnu/release/*.a "${BUILD_DIR}/lib/" 2>/dev/null || true
-    
-    # Generate C header for rav1e
-    print_info "Generating C header for rav1e..."
-    if ! command -v cbindgen &> /dev/null; then
-        cargo install cbindgen
+    if ! rustup target list | grep -q 'x86_64-pc-windows-msvc'; then
+        print_info "Adding Windows target to Rust..."
+        rustup target add x86_64-pc-windows-msvc
     fi
     
-    cbindgen --output "${BUILD_DIR}/include/rav1e/rav1e.h"
+    if ! command -v cargo-cinstall &> /dev/null; then
+        print_info "Installing cargo-c..."
+        cargo install cargo-c
+    fi
     
-    # Create pkg-config file
-    mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-    cat > "${BUILD_DIR}/lib/pkgconfig/rav1e.pc" << EOF
+    print_info "Building rav1e C API with cargo-c..."
+    cargo cinstall --release --prefix="${BUILD_DIR}" --libdir="${BUILD_DIR}/lib" --includedir="${BUILD_DIR}/include" --library-type=cdylib
+    
+    if [ $? -ne 0 ]; then
+        print_warning "cargo-c installation failed, trying alternative method..."
+        
+        cargo build --release
+        
+        mkdir -p "${BUILD_DIR}/lib"
+        mkdir -p "${BUILD_DIR}/include/rav1e"
+        
+        cp target/release/rav1e.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
+        cp target/release/rav1e.lib "${BUILD_DIR}/lib/" 2>/dev/null || true
+        
+        if ! command -v cbindgen &> /dev/null; then
+            cargo install cbindgen
+        fi
+        
+        cbindgen --crate rav1e --output "${BUILD_DIR}/include/rav1e/rav1e.h"
+        
+        mkdir -p "${BUILD_DIR}/lib/pkgconfig"
+        cat > "${BUILD_DIR}/lib/pkgconfig/rav1e.pc" << EOF
 prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
@@ -494,18 +348,17 @@ Version: 0.6.0
 Libs: -L\${libdir} -lrav1e
 Cflags: -I\${includedir}
 EOF
+    fi
     
     print_info "rav1e build completed."
 }
 
-# Build libaom (AV1 reference implementation)
 build_libaom() {
     print_info "Building libaom (AV1 reference implementation)..."
     cd "${SRC_DIR}"
     
     git_clone "https://aomedia.googlesource.com/aom" "aom"
     
-    # Configure and build with shared library
     mkdir -p aom_build
     cd aom_build
     
@@ -513,15 +366,12 @@ build_libaom() {
         "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
         "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
         "-DBUILD_SHARED_LIBS=ON"
-        "-DCMAKE_SYSTEM_NAME=Windows"
         "-DENABLE_TESTS=OFF"
         "-DENABLE_EXAMPLES=OFF"
         "-DENABLE_TOOLS=OFF"
         "-DCONFIG_AV1_ENCODER=1"
         "-DCONFIG_AV1_DECODER=1"
         "-DCONFIG_MULTITHREAD=1"
-        "-DCMAKE_C_FLAGS=-static-libgcc"
-        "-DCMAKE_CXX_FLAGS=-static-libgcc -static-libstdc++"
     )
     
     cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ../aom
@@ -529,105 +379,42 @@ build_libaom() {
     make -j${NPROC}
     make install
     
-    # Copy DLL to bin directory
-    cp "${BUILD_DIR}/bin/"*aom*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    cp "${BUILD_DIR}/lib/"*aom*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
+    cp "${BUILD_DIR}/bin/aom"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     print_info "libaom build completed."
 }
 
-# Build Xvid
 build_xvid() {
     print_info "Building Xvid..."
     cd "${SRC_DIR}"
     
-    # Remove any existing directory to avoid issues
     if [ -d "xvidcore" ]; then
         rm -rf xvidcore
     fi
     
-    # Create a fresh directory
     mkdir -p xvidcore
     cd xvidcore
     
-    # Download the archive
-    print_info "Downloading Xvid..."
     download_source "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz" "xvidcore-1.3.7.tar.gz"
     
-    # Extract the tarball
     tar -xf xvidcore-1.3.7.tar.gz
     
-    # Try to build with MinGW directly with patches
-    print_info "Building Xvid with MinGW patches..."
-    cd xvidcore/build/generic
+    cd xvidcore/build/win32
     
-    # Create patch for configure to fix endian detection
-    cat > xvid_endian_fix.patch << 'EOF'
---- configure.orig
-+++ configure
-@@ -1098,7 +1098,7 @@
- # Test for endianness
--if test "$cross_compile" = "no"; then
-+if test "no" = "no"; then
-   cat > conftest.c << EOF
- #include <stdio.h>
- 
-@@ -1114,16 +1114,7 @@
-   fi
-   rm -f conftest.c conftest
- else
--  # Cannot test for endianness when cross compiling
--  if test x"$enable_bigendian" = x"yes" ; then
--    bigendian="yes"
--  elif test x"$enable_bigendian" = x"no"; then
--    bigendian="no"
--  else
--    echo "WARNING: Cannot test endianness when cross compiling..."
--    echo "         Use the --enable-bigendian/--disable-bigendian options if you need to force it."
--    bigendian="no"
--  fi
-+  bigendian="no"
- fi
-EOF
-    
-    patch -p0 < xvid_endian_fix.patch || print_warning "Xvid patch failed, continuing anyway..."
-    
-    # Pre-define endianness and configure with host system
-    export ac_cv_c_bigendian=no
-    
-    # Manually set strings tool availability
-    if ! command -v x86_64-w64-mingw32-strings &> /dev/null; then
-        print_info "Creating x86_64-w64-mingw32-strings wrapper..."
-        cat > "${BUILD_DIR}/bin/x86_64-w64-mingw32-strings" << 'EOF'
-#!/bin/sh
-strings "$@"
-EOF
-        chmod +x "${BUILD_DIR}/bin/x86_64-w64-mingw32-strings"
-        export PATH="${BUILD_DIR}/bin:$PATH"
+    if [ -f "./configure.exe" ]; then
+        print_info "Using Windows build method for Xvid..."
+        ./configure.exe --prefix="${BUILD_DIR}" --enable-shared
+        make -j${NPROC}
+        make install
+    else
+        print_info "Falling back to generic build for Xvid..."
+        cd ../generic
+        ./configure --prefix="${BUILD_DIR}" --enable-shared --host=x86_64-w64-mingw32
+        make -j${NPROC}
+        make install
     fi
     
-    ./configure \
-        --prefix="${BUILD_DIR}" \
-        --enable-shared \
-        --host=x86_64-w64-mingw32 \
-        --disable-assembly
-    
-    # Remove shared library first to avoid conflicts
-    if [ -f "${BUILD_DIR}/lib/libxvidcore.dll.a" ]; then
-        rm -f "${BUILD_DIR}/lib/libxvidcore.dll.a"
-    fi
-    if [ -f "${BUILD_DIR}/lib/libxvidcore.a" ]; then
-        rm -f "${BUILD_DIR}/lib/libxvidcore.a"
-    fi
-    if [ -f "${BUILD_DIR}/bin/xvidcore.dll" ]; then
-        rm -f "${BUILD_DIR}/bin/xvidcore.dll"
-    fi
-    
-    make -j${NPROC}
-    make install
-    
-    # Copy DLL to bin directory (may be in different locations)
-    find "${BUILD_DIR}" -name "*.dll" -exec cp {} "${BUILD_DIR}/bin/" \;
+    cp "${BUILD_DIR}/lib/xvidcore"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     # Create pkg-config file
     mkdir -p "${BUILD_DIR}/lib/pkgconfig"
@@ -647,7 +434,6 @@ EOF
     print_info "Xvid build completed."
 }
 
-# Function to build nvenc support (headers only)
 build_nvenc() {
     print_info "Setting up NVIDIA encoder/decoder headers..."
     cd "${SRC_DIR}"
@@ -655,12 +441,10 @@ build_nvenc() {
     git_clone "https://github.com/FFmpeg/nv-codec-headers.git" "nv-codec-headers"
     cd nv-codec-headers
     
-    # Use PREFIX for consistent cross-platform installation
     make install PREFIX="${BUILD_DIR}"
     print_info "NVIDIA headers installed."
 }
 
-# Function to verify pkg-config files
 verify_pkg_config() {
     local package=$1
     local description=$2
@@ -668,7 +452,6 @@ verify_pkg_config() {
     
     print_info "Verifying pkg-config for ${package}..."
     
-    # Check if pkg-config file exists
     if [ ! -f "${BUILD_DIR}/lib/pkgconfig/${package}.pc" ]; then
         print_warning "pkg-config file for ${package} not found. Creating..."
         
@@ -689,31 +472,22 @@ EOF
     fi
 }
 
-# Build Intel Media SDK/oneVPL for QSV support
 build_qsv() {
     print_info "Building Intel oneVPL (Video Processing Library) for QSV support on Windows..."
     cd "${SRC_DIR}"
     
-    # Clone and build oneVPL
     git_clone "https://github.com/oneapi-src/oneVPL.git" "oneVPL"
     cd oneVPL
     mkdir -p build
     cd build
     
-    # Configure with shared library for Python compatibility
-    # Use Windows style paths for CMAKE
-    WIN_BUILD_DIR=$(cygpath -w "${BUILD_DIR}" 2>/dev/null || echo "${BUILD_DIR}")
-    
     CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${WIN_BUILD_DIR}"
+        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
         "-DBUILD_SHARED_LIBS=ON"
         "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
         "-DBUILD_TOOLS=OFF"
         "-DBUILD_EXAMPLES=OFF"
         "-DBUILD_TESTS=OFF"
-        "-DCMAKE_SYSTEM_NAME=Windows"
-        "-DCMAKE_C_FLAGS=-static-libgcc"
-        "-DCMAKE_CXX_FLAGS=-static-libgcc -static-libstdc++"
     )
     
     cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ..
@@ -721,14 +495,41 @@ build_qsv() {
     make -j${NPROC}
     make install
     
-    # Fix permissions and ensure DLLs are in bin directory
-    chmod +x "${BUILD_DIR}/bin/"*.dll 2>/dev/null || true
-    find "${BUILD_DIR}/lib" -name "*.dll" -exec cp {} "${BUILD_DIR}/bin/" \;
+    # Create compatibility links from vpl to mfx
+    if [ -d "${BUILD_DIR}/include/vpl" ]; then
+        mkdir -p "${BUILD_DIR}/include/mfx"
+        print_info "Creating compatibility links from vpl to mfx"
+        cp -r "${BUILD_DIR}/include/vpl/"* "${BUILD_DIR}/include/mfx/" 2>/dev/null || true
+    fi
+    
+    cp "${BUILD_DIR}/lib/"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     print_info "Intel oneVPL build completed."
+    
+    # Create pkg-config file if needed
+    if [ -d "${BUILD_DIR}/include/vpl" ]; then
+        print_info "Intel oneVPL headers found."
+        if [ ! -f "${BUILD_DIR}/lib/pkgconfig/libvpl.pc" ]; then
+            mkdir -p "${BUILD_DIR}/lib/pkgconfig"
+            cat > "${BUILD_DIR}/lib/pkgconfig/libvpl.pc" << EOF
+prefix=${BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: libvpl
+Description: Intel oneAPI Video Processing Library
+Version: 2.8.0
+Libs: -L\${libdir} -lvpl
+Cflags: -I\${includedir}
+EOF
+            print_info "Created pkg-config file for libvpl"
+        fi
+    else
+        print_warning "Intel oneVPL headers not found, QSV support may be limited"
+    fi
 }
 
-# Build FFmpeg
 build_ffmpeg() {
     print_info "Building FFmpeg for Windows..."
     cd "${SRC_DIR}"
@@ -736,7 +537,7 @@ build_ffmpeg() {
     
     cd ffmpeg
     
-    # Check for QSV support
+    # Check hardware acceleration support
     if [ -d "${BUILD_DIR}/include/vpl" ]; then
         INTEL_MEDIA_OPTION="--enable-libvpl"
         print_info "Enabling Intel QSV support via oneVPL"
@@ -745,7 +546,6 @@ build_ffmpeg() {
         print_warning "Intel QSV support not available"
     fi
     
-    # Add CUDA support if nvcc is available
     if command -v nvcc &> /dev/null; then
         NVIDIA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
         print_info "Enabling full NVIDIA CUDA support"
@@ -754,21 +554,12 @@ build_ffmpeg() {
         NVIDIA_FLAGS=""
     fi
     
-    # Windows-specific compiler/linker flags
-    WIN_FLAGS="-static-libgcc"
-    CFLAGS="${CFLAGS} ${WIN_FLAGS}"
-    LDFLAGS="${LDFLAGS} -static-libgcc"
-    
-    # Basic configuration
+    # Configure FFmpeg with all necessary options
     CONFIG_OPTIONS=(
         "--prefix=${BUILD_DIR}"
         "--extra-cflags=${CFLAGS}"
         "--extra-ldflags=${LDFLAGS}"
         "--extra-libs=${EXTRAFLAGS}"
-        "--arch=x86_64"
-        "--target-os=mingw64"
-        "--enable-cross-compile"
-        "--cross-prefix=x86_64-w64-mingw32-"
         "--enable-shared"
         "--disable-static"
         "--enable-pic"
@@ -783,9 +574,9 @@ build_ffmpeg() {
         
         # AV1 codecs
         "--enable-libaom"
-        "--enable-libdav1d"
         "--enable-librav1e"
         "--enable-libsvtav1"
+        "--enable-libdav1d"
         
         # Hardware acceleration
         ${NVIDIA_FLAGS}
@@ -800,63 +591,47 @@ build_ffmpeg() {
         "--disable-stripping"  # Important for debugging
     )
     
-    # Use explicit ac_cv values to prevent configure errors
-    export ac_cv_c_bigendian=no
-    export ac_cv_c_littleendian=yes
-    
-    # Configure FFmpeg
     ./configure "${CONFIG_OPTIONS[@]}"
     
-    # Build and install
     make -j${NPROC}
     make install
     
-    # Ensure all DLLs are in the bin directory
-    print_info "Copying FFmpeg DLLs to bin directory..."
-    find "${BUILD_DIR}/lib" -name "*.dll" -exec cp {} "${BUILD_DIR}/bin/" \;
-    find "${BUILD_DIR}" -name "*.dll" | sort
+    cp "${BUILD_DIR}/bin/"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     print_info "FFmpeg build completed."
 }
 
-# Verify the build for Windows
 verify_build() {
     print_info "Verifying FFmpeg build..."
     
-    # Set proper PATH for Windows
     export PATH="${BUILD_DIR}/bin:$PATH"
     
-    # Verify FFmpeg executables
     if [ ! -f "${BUILD_DIR}/bin/ffmpeg.exe" ]; then
         print_error "FFmpeg executable not found!"
         exit 1
     fi
     
-    # Check version
     "${BUILD_DIR}/bin/ffmpeg.exe" -version
     
-    # Verify libraries - Windows uses DLLs
     if [ -z "$(ls -A ${BUILD_DIR}/bin/*.dll 2>/dev/null)" ]; then
         print_error "FFmpeg DLLs not found!"
         exit 1
     fi
     print_info "Found $(ls -1 ${BUILD_DIR}/bin/*.dll | wc -l) DLL files"
     
-    # Verify headers
     if [ ! -d "${BUILD_DIR}/include/libavcodec" ] || [ ! -d "${BUILD_DIR}/include/libavutil" ]; then
         print_error "FFmpeg headers not found!"
         exit 1
     fi
     print_info "FFmpeg headers verified"
     
-    # Verify pkg-config files
     if [ ! -d "${BUILD_DIR}/lib/pkgconfig" ] || [ -z "$(ls -A ${BUILD_DIR}/lib/pkgconfig/lib*.pc 2>/dev/null)" ]; then
         print_error "FFmpeg pkg-config files not found!"
         exit 1
-    fi
+    }
     print_info "pkg-config files verified"
     
-    # Check for QSV support
+    # Check for hardware encoding/decoding support
     print_info "Checking for QSV support:"
     if "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep -q qsv; then
         print_info "QSV encoders found"
@@ -865,25 +640,21 @@ verify_build() {
         print_warning "No QSV encoders found"
     fi
     
-    # Check for NVIDIA support
     print_info "Checking for NVIDIA support:"
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep nvenc || print_warning "No NVENC encoders found"
     
-    # Check for AV1 support
     print_info "Checking for AV1 support:"
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep av1 || print_warning "No AV1 encoders found"
     
     print_info "FFmpeg build verification completed successfully."
 }
 
-# Main build process
 main() {
     print_info "Starting FFmpeg build process for Windows..."
 
     install_dependencies
-    setup_cross_compile_env  # Add this line to set up cross-compilation environment
     
-    # Build dependencies
+    # Build dependencies in sequence
     build_x264
     build_x265
     build_dav1d
@@ -892,10 +663,8 @@ main() {
     build_libaom
     build_xvid
     
-    # Build QSV support
+    # Build hardware acceleration support
     build_qsv
-    
-    # NVIDIA headers
     build_nvenc
     
     # Verify pkg-config files before FFmpeg build
