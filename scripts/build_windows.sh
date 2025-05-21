@@ -628,7 +628,7 @@ verify_build() {
     if [ ! -d "${BUILD_DIR}/lib/pkgconfig" ] || [ -z "$(ls -A ${BUILD_DIR}/lib/pkgconfig/lib*.pc 2>/dev/null)" ]; then
         print_error "FFmpeg pkg-config files not found!"
         exit 1
-    }
+    fi
     print_info "pkg-config files verified"
     
     # Check for hardware encoding/decoding support
