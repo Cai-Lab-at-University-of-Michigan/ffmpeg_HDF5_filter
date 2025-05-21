@@ -171,6 +171,7 @@ make install
 X264_EOF
     
     cmd.exe /c build_x264.bat || print_error "x264 build failed, stopping."
+    print_info "x264 build completed."
 }
 
 build_x265() {
@@ -197,6 +198,8 @@ cmake --build . --config Release --target install
 X265_EOF
     
     cmd.exe /c build_x265.bat || print_error "x265 build failed, stopping."
+   
+    print_info "x265 build completed."
 }
 
 build_dav1d() {
@@ -218,6 +221,8 @@ ninja install
 DAV1D_EOF
     
     cmd.exe /c build_dav1d.bat || print_error "dav1d build failed, stopping."
+
+    print_info "dav1d build completed."
 }
 
 build_libaom() {
@@ -244,6 +249,8 @@ cmake --build . --config Release --target install
 AOM_EOF
     
     cmd.exe /c build_aom.bat || print_error "libaom build failed, stopping."
+
+    print_info "aom build completed."
 }
 
 build_rav1e() {
@@ -266,7 +273,7 @@ build_rav1e() {
     print_info "Building rav1e C API..."
     cargo cinstall --release --prefix="${BUILD_DIR}" --libdir="${BUILD_DIR}/lib" --includedir="${BUILD_DIR}/include" --library-type=cdylib || print_error "rav1e build failed, stopping."
     
-    print_info "rav1e build completed"
+    print_info "rav1e build completed."
 }
 
 build_svtav1() {
@@ -293,14 +300,14 @@ SVTAV1_EOF
     
     cmd.exe /c build_svtav1.bat || print_error "SVT-AV1 build failed, stopping."
     
-    print_info "SVT-AV1 build completed"
+    print_info "SVT-AV1 build completed."
 }
 
 build_onevpl() {
     print_info "Building Intel oneVPL for QSV support..."
     
     cd "${SRC_DIR}"
-    git_clone "https://github.com/oneapi-src/oneVPL.git" "oneVPL"
+    git_clone "https://github.com/intel/libvpl.git" "oneVPL"
     
     cd oneVPL
     mkdir -p build
@@ -359,6 +366,7 @@ setup_nvenc_headers() {
     cp include/ffnvcodec/*.h "${BUILD_DIR}/include/ffnvcodec"
     
     setup_cuda_support || print_warning "CUDA setup failed, NVENC support will be limited."
+    
     print_info "NVIDIA encoder headers installed successfully."
 }
 

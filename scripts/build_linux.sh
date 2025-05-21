@@ -85,12 +85,8 @@ install_dependencies() {
         libx265-dev \
         libnuma-dev \
         libvpx-dev \
-        libopus-dev \
         libdav1d-dev \
         libaom-dev \
-        libfdk-aac-dev \
-        libmp3lame-dev \
-        libvorbis-dev \
         libtheora-dev \
         libfreetype6-dev \
         libfontconfig1-dev
