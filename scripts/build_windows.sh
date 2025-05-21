@@ -46,28 +46,95 @@ print_info "Using ${NPROC} CPU cores for build"
 setup_vs_environment() {
     print_info "Setting up Visual Studio environment..."
     
-    # Find Visual Studio installation using vswhere
-    if [ ! -f "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" ]; then
-        print_error "vswhere.exe not found! Is Visual Studio installed?"
-        exit 1
+    # Try multiple paths for vswhere.exe
+    VSWHERE_PATHS=(
+        "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+        "/c/Program Files/Microsoft Visual Studio/Installer/vswhere.exe"
+        "$(which vswhere.exe 2>/dev/null)"
+    )
+    
+    VSWHERE_EXE=""
+    for path in "${VSWHERE_PATHS[@]}"; do
+        if [ -f "$path" ]; then
+            VSWHERE_EXE="$path"
+            break
+        fi
+    done
+    
+    if [ -z "$VSWHERE_EXE" ]; then
+        print_warning "vswhere.exe not found, trying alternative VS detection..."
+        
+        # Try common VS installation paths
+        VS_PATHS=(
+            "/c/Program Files/Microsoft Visual Studio/2022/Enterprise"
+            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise"
+            "/c/Program Files/Microsoft Visual Studio/2022/Professional"
+            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional"
+            "/c/Program Files/Microsoft Visual Studio/2022/Community"
+            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Community"
+        )
+        
+        for vs_path in "${VS_PATHS[@]}"; do
+            if [ -d "$vs_path" ] && [ -f "$vs_path/VC/Auxiliary/Build/vcvars64.bat" ]; then
+                VS_PATH="$vs_path"
+                print_info "Found Visual Studio at: $VS_PATH"
+                break
+            fi
+        done
+        
+        if [ -z "$VS_PATH" ]; then
+            print_error "Visual Studio not found! Checked paths:"
+            for vs_path in "${VS_PATHS[@]}"; do
+                print_error "  - $vs_path"
+            done
+            
+            # List what's actually available
+            print_info "Available directories in Program Files:"
+            ls -la "/c/Program Files/" 2>/dev/null || true
+            ls -la "/c/Program Files (x86)/" 2>/dev/null || true
+            
+            exit 1
+        fi
+    else
+        print_info "Found vswhere.exe at: $VSWHERE_EXE"
+        
+        # Use vswhere to find VS installation
+        VS_PATH=$("$VSWHERE_EXE" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>/dev/null)
+        
+        if [ -z "$VS_PATH" ]; then
+            # Try without specific component requirement
+            VS_PATH=$("$VSWHERE_EXE" -latest -products * -property installationPath 2>/dev/null)
+        fi
+        
+        if [ -z "$VS_PATH" ]; then
+            print_error "Visual Studio not found via vswhere!"
+            
+            # Show what vswhere finds
+            print_info "Available Visual Studio installations:"
+            "$VSWHERE_EXE" -all -property displayName,installationPath 2>/dev/null || true
+            
+            exit 1
+        fi
+        
+        VS_PATH=$(echo "$VS_PATH" | tr -d '\r' | head -n1)
+        print_info "Found Visual Studio at: $VS_PATH"
     fi
     
-    VS_PATH=$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
-    
-    if [ -z "$VS_PATH" ]; then
-        print_error "Visual Studio not found!"
+    # Verify the VS installation has the required files
+    if [ ! -f "$VS_PATH/VC/Auxiliary/Build/vcvars64.bat" ]; then
+        print_error "vcvars64.bat not found at: $VS_PATH/VC/Auxiliary/Build/vcvars64.bat"
+        print_info "Contents of VS directory:"
+        ls -la "$VS_PATH/" 2>/dev/null || true
+        ls -la "$VS_PATH/VC/" 2>/dev/null || true
         exit 1
     fi
-    
-    VS_PATH=$(echo "$VS_PATH" | tr -d '\r')
-    print_info "Found Visual Studio at: $VS_PATH"
     
     # Create a script to set environment variables
-    cat > "${BUILD_DIR}/vsenv.bat" << EOF
+    cat > "${BUILD_DIR}/vsenv.bat" << 'VSENV_EOF'
 @echo off
 call "${VS_PATH}\\VC\\Auxiliary\\Build\\vcvars64.bat"
 echo VS_ENV_READY
-EOF
+VSENV_EOF
     
     print_info "Visual Studio environment script created: ${BUILD_DIR}/vsenv.bat"
 }
