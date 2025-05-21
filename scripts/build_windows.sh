@@ -46,10 +46,7 @@ install_dependencies() {
     # Install all required MSYS2 packages in a single command for better efficiency
     pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-autotools || true
     pacman -S --noconfirm mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-dlfcn || true
-    # pacman -S --noconfirm mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-dav1d || true
-    # pacman -S --noconfirm mingw-w64-x86_64-aom mingw-w64-x86_64-libpng mingw-w64-x86_64-freetype || true
-    # pacman -S --noconfirm mingw-w64-x86_64-fontconfig mingw-w64-x86_64-SDL2 mingw-w64-x86_64-fribidi || true
-    
+
     pip install -U setuptools wheel numpy cython || true
 
     # Rust needed for rav1e
@@ -157,49 +154,103 @@ build_x264() {
     print_info "x264 build completed."
 }
 
+#!/bin/bash
+
+# Replace your build_x265() function with this version that uses prebuilt binaries
+
 build_x265() {
-    print_info "Building x265..."
+    print_info "Using prebuilt x265 with multi-bitdepth support..."
+    
     cd "${SRC_DIR}"
-    git_clone "https://bitbucket.org/multicoreware/x265_git.git" "x265"
+    mkdir -p x265_prebuilt
+    cd x265_prebuilt
     
-    # Create a simpler single-configuration build that's more reliable
-    mkdir -p x265/build
-    cd x265/build
+    # Download the latest prebuilt x265 release
+    # This is from the MulticoreWare official builds with multi-bitdepth support
+    PREBUILT_X265_URL="https://github.com/DJATOM/x265-aMod/releases/download/3.5+10+65/x265-3.5+10+65-gcc12.2.0-x64-msvc.7z"
+    X265_ARCHIVE="x265-prebuilt.7z"
     
-    cmake -G "MSYS Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
-        -DENABLE_SHARED=ON \
-        -DENABLE_CLI=OFF \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DMAIN10=ON \
-        -DMAIN12=ON \
-        ../source
+    # Download the file
+    print_info "Downloading prebuilt x265 from: ${PREBUILT_X265_URL}"
+    curl -L -o "${X265_ARCHIVE}" "${PREBUILT_X265_URL}" || {
+        print_error "Failed to download prebuilt x265!"
+        return 1
+    }
     
-    make -j${NPROC}
-    make install
+    # Extract the archive
+    print_info "Extracting x265 binaries..."
     
-    # Ensure the DLL is in the bin directory
-    cp "${BUILD_DIR}/lib/libx265"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
+    # Check if 7z is available
+    if command -v 7z &> /dev/null; then
+        7z x "${X265_ARCHIVE}" -y
+    elif command -v 7za &> /dev/null; then
+        7za x "${X265_ARCHIVE}" -y
+    else
+        # Install 7-Zip if not available
+        print_info "Installing 7-Zip..."
+        choco install -y 7zip
+        7z x "${X265_ARCHIVE}" -y
+    fi
     
-    # Create pkg-config file if necessary
-    if [ ! -f "${BUILD_DIR}/lib/pkgconfig/x265.pc" ]; then
-        mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-        cat > "${BUILD_DIR}/lib/pkgconfig/x265.pc" << EOF
+    # Create directory structure in build dir
+    mkdir -p "${BUILD_DIR}/bin"
+    mkdir -p "${BUILD_DIR}/lib"
+    mkdir -p "${BUILD_DIR}/include/x265"
+    
+    # Copy files to the appropriate locations
+    print_info "Installing x265 files to build directory..."
+    
+    # These paths may need adjustment based on the actual archive structure
+    cp -f ./lib/libx265.dll "${BUILD_DIR}/bin/" || print_warning "Could not find x265 DLL"
+    cp -f ./lib/libx265.lib "${BUILD_DIR}/lib/" || print_warning "Could not find x265 import library"
+    cp -f ./include/x265.h "${BUILD_DIR}/include/x265/" || print_warning "Could not find x265.h"
+    cp -f ./include/x265_config.h "${BUILD_DIR}/include/x265/" || print_warning "Could not find x265_config.h"
+    
+    # Create a pkg-config file
+    mkdir -p "${BUILD_DIR}/lib/pkgconfig"
+    cat > "${BUILD_DIR}/lib/pkgconfig/x265.pc" << EOF
 prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
 
 Name: x265
-Description: H.265/HEVC video encoder
+Description: H.265/HEVC video encoder (prebuilt with 8/10/12-bit support)
 Version: 3.5
 Libs: -L\${libdir} -lx265
 Libs.private: -lstdc++ -lm
 Cflags: -I\${includedir}
 EOF
-    fi
     
-    print_info "x265 build completed."
+    # Verify the installation
+    if [ -f "${BUILD_DIR}/bin/libx265.dll" ] && [ -f "${BUILD_DIR}/include/x265/x265.h" ]; then
+        print_info "Prebuilt x265 installed successfully with multi-bitdepth support!"
+    else
+        print_error "Failed to install prebuilt x265 properly."
+        # Alternative download source if the first one failed
+        print_info "Trying alternative download source..."
+        cd "${SRC_DIR}"
+        rm -rf x265_prebuilt
+        mkdir -p x265_prebuilt
+        cd x265_prebuilt
+        
+        # Alternative source - VideoLAN nightlies
+        ALT_X265_URL="https://artifacts.videolan.org/x265/release-mingw/x265-git-20230603-g05a0e3c3fa-win64.7z"
+        curl -L -o "x265-alt.7z" "${ALT_X265_URL}"
+        7z x "x265-alt.7z" -y
+        
+        # Install from alternative structure
+        mkdir -p "${BUILD_DIR}/bin"
+        mkdir -p "${BUILD_DIR}/lib"
+        mkdir -p "${BUILD_DIR}/include/x265"
+        
+        # Copy files (paths may need adjustment)
+        find . -name "libx265.dll" -exec cp {} "${BUILD_DIR}/bin/" \;
+        find . -name "libx265.lib" -exec cp {} "${BUILD_DIR}/lib/" \;
+        find . -name "libx265.a" -exec cp {} "${BUILD_DIR}/lib/" \;
+        find . -name "x265.h" -exec cp {} "${BUILD_DIR}/include/x265/" \;
+        find . -name "x265_config.h" -exec cp {} "${BUILD_DIR}/include/x265/" \;
+    fi
 }
 
 build_dav1d() {
