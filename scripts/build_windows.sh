@@ -222,7 +222,7 @@ download_prebuilt_deps() {
     mkdir -p build
     cd build
     
-    cat > "build_onevpl.bat" << EOF
+    cat > "build_onevpl.bat" << 'ONEVPL_EOF'
 @echo off
 call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
 
@@ -240,7 +240,7 @@ cmake --build . --config Release --target install -j ${NPROC}
 
 rem Copy DLLs to bin directory
 copy "${WIN_BUILD_DIR}\bin\*.dll" "${WIN_BUILD_DIR}\bin\" 2>nul
-EOF
+ONEVPL_EOF
     
     # Build oneVPL
     cmd.exe /c build_onevpl.bat
@@ -359,11 +359,11 @@ setup_nvenc_headers() {
     cd nv-codec-headers
     
     # Create batch file to install headers
-    cat > "install_headers.bat" << EOF
+    cat > "install_headers.bat" << 'NVENC_EOF'
 @echo off
 mkdir "${WIN_BUILD_DIR}\include\ffnvcodec"
 copy include\ffnvcodec\*.h "${WIN_BUILD_DIR}\include\ffnvcodec\"
-EOF
+NVENC_EOF
     
     cmd.exe /c install_headers.bat
     
@@ -379,7 +379,7 @@ build_ffmpeg() {
     cd ffmpeg
     
     # Create build script for Visual Studio
-    cat > "build_ffmpeg_msvc.bat" << EOF
+    cat > "build_ffmpeg_msvc.bat" << 'FFMPEG_EOF'
 @echo off
 call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
 
@@ -419,7 +419,7 @@ nmake install
 
 rem Copy DLLs to bin directory for easier access
 copy ${WIN_BUILD_DIR}\bin\*.dll ${WIN_BUILD_DIR}\bin\
-EOF
+FFMPEG_EOF
     
     # Run the build script
     cmd.exe /c build_ffmpeg_msvc.bat
