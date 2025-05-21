@@ -520,7 +520,14 @@ build_ffmpeg() {
         "--disable-doc"
         "--disable-ffplay"
         "--disable-debug"
-        "--disable-stripping"  # Important for debugging
+        "--disable-stripping"
+        "--disable-xlib"
+        "--disable-libxcb"
+        "--disable-xcb"
+        "--disable-xcb-shm"
+        "--disable-xcb-xfixes"
+        "--disable-libxcb-shape"
+        "--disable-libxcb-xfixes"
         
         # ARM64 specific options
         "--arch=arm64"
