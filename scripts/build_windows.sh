@@ -24,7 +24,20 @@ print_error() {
 # Install Windows dependencies
 install_dependencies() {
     print_info "Installing FFmpeg build dependencies for Windows..."
+    
+    # Skip Visual Studio installation as it's already included in the runner
     print_info "Visual Studio is pre-installed in GitHub Actions, skipping..."
+    
+    # Install NASM and YASM directly via chocolatey
+    print_info "Installing NASM and YASM..."
+    choco install -y nasm yasm
+    
+    # Add NASM to PATH explicitly
+    export PATH="/c/Program Files/NASM:$PATH"
+    
+    # Verify NASM installation
+    print_info "Verifying NASM installation..."
+    nasm -v || print_error "NASM not properly installed!"
     
     # Add MSYS2 for Unix-like environment
     print_info "Installing MSYS2..."
@@ -58,6 +71,16 @@ install_dependencies() {
     print_info "Installing Rust..."
     rustup default stable || true
     cargo install cargo-c || true
+    
+    # Display PATH for debugging
+    print_info "Current PATH:"
+    echo $PATH
+    
+    # Check for essential tools
+    which nasm || print_error "NASM not in PATH!"
+    which yasm || print_error "YASM not in PATH!"
+    which cmake || print_error "CMake not in PATH!"
+    which ninja || print_error "Ninja not in PATH!"
     
     print_info "Windows dependencies installed successfully."
 }
@@ -137,6 +160,11 @@ build_x264() {
     cd "${SRC_DIR}"
     git_clone "https://code.videolan.org/videolan/x264.git" "x264"
     cd x264
+    
+    # Display NASM version and location for debugging
+    print_info "NASM version:"
+    nasm -v || print_error "NASM not found!"
+    which nasm || print_error "NASM not in PATH!"
     
     # Configure for shared library and Python compatibility
     CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}" ./configure \
