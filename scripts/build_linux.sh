@@ -448,6 +448,19 @@ build_xvid() {
         --enable-shared
     
     make -j${NPROC}
+    
+    # Remove any existing libxvidcore symbolic links before installation
+    if [ -L "${BUILD_DIR}/lib/libxvidcore.so" ]; then
+        rm -f "${BUILD_DIR}/lib/libxvidcore.so"
+    fi
+    if [ -L "${BUILD_DIR}/lib/libxvidcore.so.4" ]; then
+        rm -f "${BUILD_DIR}/lib/libxvidcore.so.4"
+    fi
+    if [ -L "${BUILD_DIR}/lib/libxvidcore.so.4.3" ]; then
+        rm -f "${BUILD_DIR}/lib/libxvidcore.so.4.3"
+    fi
+    
+    # Now it's safe to install
     make install
     
     # Some systems install to lib64 instead of lib
@@ -455,6 +468,16 @@ build_xvid() {
         if [ ! -d "${BUILD_DIR}/lib" ]; then
             mkdir -p "${BUILD_DIR}/lib"
         fi
+        
+        # Remove target files first if they exist
+        for file in "${BUILD_DIR}/lib64/"*; do
+            basename=$(basename "$file")
+            if [ -e "${BUILD_DIR}/lib/$basename" ]; then
+                rm -f "${BUILD_DIR}/lib/$basename"
+            fi
+        done
+        
+        # Now copy files from lib64 to lib
         cp -a "${BUILD_DIR}/lib64/"* "${BUILD_DIR}/lib/"
     fi
     
