@@ -98,26 +98,84 @@ setup_vs_environment() {
     else
         print_info "Found vswhere.exe at: $VSWHERE_EXE"
         
-        # Use vswhere to find VS installation
-        VS_PATH=$("$VSWHERE_EXE" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>/dev/null)
+        # Show what vswhere finds first for debugging
+        print_info "Debugging: All available Visual Studio installations:"
+        "$VSWHERE_EXE" -all -property displayName,installationPath 2>/dev/null || print_warning "vswhere -all failed"
+        
+        # Try different vswhere queries in order of preference
+        print_info "Trying to find Visual Studio with C++ tools..."
+        
+        # Try 1: Latest with C++ tools
+        VS_PATH=$("$VSWHERE_EXE" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
         
         if [ -z "$VS_PATH" ]; then
-            # Try without specific component requirement
-            VS_PATH=$("$VSWHERE_EXE" -latest -products * -property installationPath 2>/dev/null)
+            print_info "Trying without specific C++ component requirement..."
+            # Try 2: Latest with any workload
+            VS_PATH=$("$VSWHERE_EXE" -latest -requires Microsoft.VisualStudio.Workload.NativeDesktop -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
+        fi
+        
+        if [ -z "$VS_PATH" ]; then
+            print_info "Trying to find any Visual Studio 2019 or later..."
+            # Try 3: Any VS 2019 or later
+            VS_PATH=$("$VSWHERE_EXE" -version "[16.0,)" -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
+        fi
+        
+        if [ -z "$VS_PATH" ]; then
+            print_info "Trying to find latest Visual Studio installation..."
+            # Try 4: Just the latest installation
+            VS_PATH=$("$VSWHERE_EXE" -latest -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
+        fi
+        
+        if [ -z "$VS_PATH" ]; then
+            print_info "Trying to find any Visual Studio installation..."
+            # Try 5: Any VS installation
+            VS_PATH=$("$VSWHERE_EXE" -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
         fi
         
         if [ -z "$VS_PATH" ]; then
             print_error "Visual Studio not found via vswhere!"
             
-            # Show what vswhere finds
-            print_info "Available Visual Studio installations:"
-            "$VSWHERE_EXE" -all -property displayName,installationPath 2>/dev/null || true
+            # Show detailed vswhere output for debugging
+            print_info "Detailed vswhere output:"
+            "$VSWHERE_EXE" -all 2>/dev/null || true
             
+            # Fall back to manual detection
+            print_info "Falling back to manual detection..."
+            VS_PATHS=(
+                "/c/Program Files/Microsoft Visual Studio/2022/Enterprise"
+                "/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise"
+                "/c/Program Files/Microsoft Visual Studio/2022/Professional"
+                "/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional"
+                "/c/Program Files/Microsoft Visual Studio/2022/Community"
+                "/c/Program Files (x86)/Microsoft Visual Studio/2019/Community"
+                "/c/Program Files/Microsoft Visual Studio/2022/BuildTools"
+                "/c/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools"
+            )
+            
+            for vs_path in "${VS_PATHS[@]}"; do
+                if [ -d "$vs_path" ] && [ -f "$vs_path/VC/Auxiliary/Build/vcvars64.bat" ]; then
+                    VS_PATH="$vs_path"
+                    print_info "Found Visual Studio via manual detection at: $VS_PATH"
+                    break
+                fi
+            done
+        fi
+        
+        if [ -z "$VS_PATH" ]; then
+            print_error "Visual Studio not found!"
+            print_info "Checked directories:"
+            for vs_path in "${VS_PATHS[@]}"; do
+                if [ -d "$vs_path" ]; then
+                    print_info "  Found: $vs_path"
+                    ls -la "$vs_path/" 2>/dev/null || true
+                else
+                    print_info "  Missing: $vs_path"
+                fi
+            done
             exit 1
         fi
         
-        VS_PATH=$(echo "$VS_PATH" | tr -d '\r' | head -n1)
-        print_info "Found Visual Studio at: $VS_PATH"
+        print_info "Selected Visual Studio at: $VS_PATH"
     fi
     
     # Verify the VS installation has the required files
