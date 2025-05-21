@@ -71,9 +71,7 @@ install_dependencies() {
         x265 \
         dav1d \
         aom \
-        lame \
         theora \
-        fdk-aac \
         speex \
         freetype \
         fontconfig \

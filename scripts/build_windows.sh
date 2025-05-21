@@ -27,174 +27,71 @@ BUILD_DIR="${ROOT_DIR}/ffmpeg_build"
 SRC_DIR="${ROOT_DIR}/ffmpeg_src"
 mkdir -p "${BUILD_DIR}"
 mkdir -p "${SRC_DIR}"
-mkdir -p "${BUILD_DIR}/bin"
-mkdir -p "${BUILD_DIR}/lib"
-mkdir -p "${BUILD_DIR}/include"
-
-# Convert to Windows paths
-WIN_BUILD_DIR=$(cygpath -w "${BUILD_DIR}" 2>/dev/null || echo "${BUILD_DIR}")
-WIN_SRC_DIR=$(cygpath -w "${SRC_DIR}" 2>/dev/null || echo "${SRC_DIR}")
-WIN_ROOT_DIR=$(cygpath -w "${ROOT_DIR}" 2>/dev/null || echo "${ROOT_DIR}")
 
 print_info "Building FFmpeg in ${BUILD_DIR}"
 print_info "Source code will be in ${SRC_DIR}"
 
 # Detect number of CPU cores for parallel builds
-NPROC=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 16)
+NPROC=$(nproc || grep -c ^processor /proc/cpuinfo || echo 4)
 print_info "Using ${NPROC} CPU cores for build"
 
 setup_vs_environment() {
     print_info "Setting up Visual Studio environment..."
     
-    # Try multiple paths for vswhere.exe
-    VSWHERE_PATHS=(
-        "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
-        "/c/Program Files/Microsoft Visual Studio/Installer/vswhere.exe"
-        "$(which vswhere.exe 2>/dev/null)"
-    )
+    local vs_path=""
+    local vswhere_exe="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
     
-    VSWHERE_EXE=""
-    for path in "${VSWHERE_PATHS[@]}"; do
-        if [ -f "$path" ]; then
-            VSWHERE_EXE="$path"
-            break
-        fi
-    done
-    
-    if [ -z "$VSWHERE_EXE" ]; then
-        print_warning "vswhere.exe not found, trying alternative VS detection..."
+    # Try vswhere first
+    if [[ -f "$vswhere_exe" ]]; then
+        print_info "Using vswhere to find Visual Studio..."
         
-        # Try common VS installation paths
-        VS_PATHS=(
+        # Try queries in order of preference
+        vs_path=$("$vswhere_exe" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
+        
+        [[ -z "$vs_path" ]] && vs_path=$("$vswhere_exe" -latest -requires Microsoft.VisualStudio.Workload.NativeDesktop -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
+        
+        [[ -z "$vs_path" ]] && vs_path=$("$vswhere_exe" -version "[16.0,)" -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
+    fi
+    
+    # Fallback to standard locations if vswhere failed
+    if [[ -z "$vs_path" ]]; then
+        print_info "Checking standard Visual Studio locations..."
+        
+        local standard_paths=(
             "/c/Program Files/Microsoft Visual Studio/2022/Enterprise"
-            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise"
-            "/c/Program Files/Microsoft Visual Studio/2022/Professional"
-            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional"
+            "/c/Program Files/Microsoft Visual Studio/2022/Professional" 
             "/c/Program Files/Microsoft Visual Studio/2022/Community"
-            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Community"
+            "/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise"
         )
         
-        for vs_path in "${VS_PATHS[@]}"; do
-            if [ -d "$vs_path" ] && [ -f "$vs_path/VC/Auxiliary/Build/vcvars64.bat" ]; then
-                VS_PATH="$vs_path"
-                print_info "Found Visual Studio at: $VS_PATH"
+        for path in "${standard_paths[@]}"; do
+            if [[ -d "$path" && -f "$path/VC/Auxiliary/Build/vcvars64.bat" ]]; then
+                vs_path="$path"
                 break
             fi
         done
-        
-        if [ -z "$VS_PATH" ]; then
-            print_error "Visual Studio not found! Checked paths:"
-            for vs_path in "${VS_PATHS[@]}"; do
-                print_error "  - $vs_path"
-            done
-            
-            # List what's actually available
-            print_info "Available directories in Program Files:"
-            ls -la "/c/Program Files/" 2>/dev/null || true
-            ls -la "/c/Program Files (x86)/" 2>/dev/null || true
-            
-            exit 1
-        fi
-    else
-        print_info "Found vswhere.exe at: $VSWHERE_EXE"
-        
-        # Show what vswhere finds first for debugging
-        print_info "Debugging: All available Visual Studio installations:"
-        "$VSWHERE_EXE" -all -property displayName,installationPath 2>/dev/null || print_warning "vswhere -all failed"
-        
-        # Try different vswhere queries in order of preference
-        print_info "Trying to find Visual Studio with C++ tools..."
-        
-        # Try 1: Latest with C++ tools
-        VS_PATH=$("$VSWHERE_EXE" -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
-        
-        if [ -z "$VS_PATH" ]; then
-            print_info "Trying without specific C++ component requirement..."
-            # Try 2: Latest with any workload
-            VS_PATH=$("$VSWHERE_EXE" -latest -requires Microsoft.VisualStudio.Workload.NativeDesktop -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
-        fi
-        
-        if [ -z "$VS_PATH" ]; then
-            print_info "Trying to find any Visual Studio 2019 or later..."
-            # Try 3: Any VS 2019 or later
-            VS_PATH=$("$VSWHERE_EXE" -version "[16.0,)" -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
-        fi
-        
-        if [ -z "$VS_PATH" ]; then
-            print_info "Trying to find latest Visual Studio installation..."
-            # Try 4: Just the latest installation
-            VS_PATH=$("$VSWHERE_EXE" -latest -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
-        fi
-        
-        if [ -z "$VS_PATH" ]; then
-            print_info "Trying to find any Visual Studio installation..."
-            # Try 5: Any VS installation
-            VS_PATH=$("$VSWHERE_EXE" -property installationPath 2>/dev/null | head -n1 | tr -d '\r')
-        fi
-        
-        if [ -z "$VS_PATH" ]; then
-            print_error "Visual Studio not found via vswhere!"
-            
-            # Show detailed vswhere output for debugging
-            print_info "Detailed vswhere output:"
-            "$VSWHERE_EXE" -all 2>/dev/null || true
-            
-            # Fall back to manual detection
-            print_info "Falling back to manual detection..."
-            VS_PATHS=(
-                "/c/Program Files/Microsoft Visual Studio/2022/Enterprise"
-                "/c/Program Files (x86)/Microsoft Visual Studio/2019/Enterprise"
-                "/c/Program Files/Microsoft Visual Studio/2022/Professional"
-                "/c/Program Files (x86)/Microsoft Visual Studio/2019/Professional"
-                "/c/Program Files/Microsoft Visual Studio/2022/Community"
-                "/c/Program Files (x86)/Microsoft Visual Studio/2019/Community"
-                "/c/Program Files/Microsoft Visual Studio/2022/BuildTools"
-                "/c/Program Files (x86)/Microsoft Visual Studio/2019/BuildTools"
-            )
-            
-            for vs_path in "${VS_PATHS[@]}"; do
-                if [ -d "$vs_path" ] && [ -f "$vs_path/VC/Auxiliary/Build/vcvars64.bat" ]; then
-                    VS_PATH="$vs_path"
-                    print_info "Found Visual Studio via manual detection at: $VS_PATH"
-                    break
-                fi
-            done
-        fi
-        
-        if [ -z "$VS_PATH" ]; then
-            print_error "Visual Studio not found!"
-            print_info "Checked directories:"
-            for vs_path in "${VS_PATHS[@]}"; do
-                if [ -d "$vs_path" ]; then
-                    print_info "  Found: $vs_path"
-                    ls -la "$vs_path/" 2>/dev/null || true
-                else
-                    print_info "  Missing: $vs_path"
-                fi
-            done
-            exit 1
-        fi
-        
-        print_info "Selected Visual Studio at: $VS_PATH"
     fi
     
-    # Verify the VS installation has the required files
-    if [ ! -f "$VS_PATH/VC/Auxiliary/Build/vcvars64.bat" ]; then
-        print_error "vcvars64.bat not found at: $VS_PATH/VC/Auxiliary/Build/vcvars64.bat"
-        print_info "Contents of VS directory:"
-        ls -la "$VS_PATH/" 2>/dev/null || true
-        ls -la "$VS_PATH/VC/" 2>/dev/null || true
+    # Verify we found a valid installation
+    if [[ -z "$vs_path" || ! -f "$vs_path/VC/Auxiliary/Build/vcvars64.bat" ]]; then
+        print_error "Visual Studio not found or missing vcvars64.bat"
         exit 1
     fi
     
-    # Create a script to set environment variables
-    cat > "${BUILD_DIR}/vsenv.bat" << 'VSENV_EOF'
+    print_info "Found Visual Studio at: $vs_path"
+    
+    # Create environment script
+    cat > "${BUILD_DIR}/vsenv.bat" << VSENV_EOF
 @echo off
-call "${VS_PATH}\\VC\\Auxiliary\\Build\\vcvars64.bat"
+call "${vs_path}\\VC\\Auxiliary\\Build\\vcvars64.bat"
+if errorlevel 1 (
+    echo ERROR: Failed to setup Visual Studio environment
+    exit /b 1
+)
 echo VS_ENV_READY
 VSENV_EOF
     
-    print_info "Visual Studio environment script created: ${BUILD_DIR}/vsenv.bat"
+    print_info "Visual Studio environment ready: ${BUILD_DIR}/vsenv.bat"
 }
 
 install_dependencies() {
@@ -220,12 +117,6 @@ install_dependencies() {
         choco install -y ninja
     fi
     
-    # Install 7zip for extracting archives
-    if ! command -v 7z &> /dev/null; then
-        print_info "Installing 7zip..."
-        choco install -y 7zip
-    fi
-    
     # Set up pkg-config (needed for dependencies)
     if ! command -v pkg-config &> /dev/null; then
         print_info "Setting up pkg-config..."
@@ -239,32 +130,11 @@ install_dependencies() {
     nasm -v || print_error "NASM not properly installed!"
     cmake --version || print_error "CMake not properly installed!"
     ninja --version || print_error "Ninja not properly installed!"
-    7z i || print_error "7zip not properly installed!"
     
     print_info "Dependencies installed successfully."
 }
 
-download_file() {
-    local url=$1
-    local output_file=$2
-    
-    print_info "Downloading: $url"
-    
-    if command -v curl &> /dev/null; then
-        curl -L -o "$output_file" "$url"
-    elif command -v wget &> /dev/null; then
-        wget -q -O "$output_file" "$url"
-    else
-        print_error "Neither curl nor wget is available. Cannot download files."
-        exit 1
-    fi
-    
-    if [ $? -ne 0 ]; then
-        print_error "Failed to download: $url"
-        exit 1
-    fi
-}
-
+# Function to download source using git
 git_clone() {
     local repo_url=$1
     local target_dir=$2
@@ -282,67 +152,176 @@ git_clone() {
     fi
 }
 
-# Download and extract prebuilt dependencies
-download_prebuilt_deps() {
-    print_info "Downloading and setting up prebuilt dependencies..."
+build_x264() {
+    print_info "Building x264 from source..."
     cd "${SRC_DIR}"
     
-    # Create a directory for prebuilt dependencies
-    mkdir -p prebuilt
-    cd prebuilt
+    git_clone "https://code.videolan.org/videolan/x264.git" "x264"
+    cd x264
     
-    # x264
-    print_info "Setting up prebuilt x264..."
-    download_file "https://github.com/ShiftMediaProject/x264/releases/download/latest/libx264_x64.7z" "libx264.7z"
-    7z x -y "libx264.7z" -o"x264"
+    # Create simple build script for MSVC
+    cat > "build_x264.bat" << 'X264_EOF'
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+rem Use configure script that comes with x264
+bash configure --prefix="${WIN_BUILD_DIR}" --enable-shared --enable-pic --disable-cli
+make -j4
+make install
+X264_EOF
     
-    # x265
-    print_info "Setting up prebuilt x265..."
-    download_file "https://github.com/ShiftMediaProject/x265/releases/download/latest/libx265_x64.7z" "libx265.7z"
-    7z x -y "libx265.7z" -o"x265"
+    cmd.exe /c build_x264.bat || print_error "x264 build failed, stopping."
+}
+
+build_x265() {
+    print_info "Building x265 from source..."
+    cd "${SRC_DIR}"
     
-    # libvpx
-    print_info "Setting up prebuilt libvpx..."
-    download_file "https://github.com/ShiftMediaProject/libvpx/releases/download/latest/libvpx_x64.7z" "libvpx.7z"
-    7z x -y "libvpx.7z" -o"libvpx"
+    git_clone "https://bitbucket.org/multicoreware/x265_git.git" "x265"
+    cd x265/build
     
-    # Try to download AV1 codecs if needed
-    print_info "Setting up prebuilt AV1 codecs..."
-    # dav1d (AV1 decoder)
-    download_file "https://github.com/ShiftMediaProject/dav1d/releases/download/latest/libdav1d_x64.7z" "dav1d.7z"
-    7z x -y "dav1d.7z" -o"dav1d"
+    cat > "build_x265.bat" << 'X265_EOF'
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+cmake -G "Visual Studio 17 2022" -A x64 ^
+    -DCMAKE_INSTALL_PREFIX="${WIN_BUILD_DIR}" ^
+    -DBUILD_SHARED_LIBS=ON ^
+    -DENABLE_SHARED=ON ^
+    -DHIGH_BIT_DEPTH=ON ^
+    -DMAIN10=ON ^
+    -DMAIN12=ON ^
+    ../source
+
+cmake --build . --config Release --target install
+X265_EOF
     
-    # libaom (AV1 encoder/decoder)
-    download_file "https://github.com/ShiftMediaProject/libaom/releases/download/latest/libaom_x64.7z" "aom.7z"
-    7z x -y "aom.7z" -o"aom"
+    cmd.exe /c build_x265.bat || print_error "x265 build failed, stopping."
+}
+
+build_libvpx() {
+    print_info "Building libvpx from source..."
+    cd "${SRC_DIR}"
     
-    # Copy files to build directory
-    print_info "Copying prebuilt dependencies to build directory..."
+    git_clone "https://chromium.googlesource.com/webm/libvpx.git" "libvpx"
+    cd libvpx
     
-    # Create directory structure
-    mkdir -p "${BUILD_DIR}/bin" "${BUILD_DIR}/lib" "${BUILD_DIR}/include"
+    cat > "build_libvpx.bat" << 'VPX_EOF'
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+rem Configure for MSVC
+bash configure --target=x86_64-win64-vs17 --prefix="${WIN_BUILD_DIR}" --enable-shared --disable-examples --disable-tools --disable-docs
+make -j4
+make install
+VPX_EOF
     
-    # Copy DLLs, libs and includes
-    for dir in x264 x265 libvpx dav1d aom; do
-        if [ -d "$dir/bin" ]; then
-            cp -r "$dir/bin/"* "${BUILD_DIR}/bin/" 2>/dev/null || true
-        fi
-        if [ -d "$dir/lib" ]; then
-            cp -r "$dir/lib/"* "${BUILD_DIR}/lib/" 2>/dev/null || true
-        fi
-        if [ -d "$dir/include" ]; then
-            cp -r "$dir/include/"* "${BUILD_DIR}/include/" 2>/dev/null || true
-        fi
-    done
+    cmd.exe /c build_libvpx.bat || print_error "libvpx build failed, stopping."
+}
+
+build_dav1d() {
+    print_info "Building dav1d from source..."
+    cd "${SRC_DIR}"
     
-    # Intel oneVPL (QSV support)
-    print_info "Setting up Intel oneVPL for QSV support..."
+    git_clone "https://code.videolan.org/videolan/dav1d.git" "dav1d"
+    cd dav1d
+    mkdir -p build
+    cd build
     
-    # Clone the oneVPL repository
+    cat > "build_dav1d.bat" << 'DAV1D_EOF'
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+meson setup --prefix="${WIN_BUILD_DIR}" --libdir=lib --default-library=shared -Db_pgo=generate -Dc_args=-march=native -Dcpp_args=-march=native ..
+ninja
+ninja install
+DAV1D_EOF
+    
+    cmd.exe /c build_dav1d.bat || print_error "dav1d build failed, stopping."
+}
+
+build_libaom() {
+    print_info "Building libaom from source..."
+    cd "${SRC_DIR}"
+    
+    git_clone "https://aomedia.googlesource.com/aom" "aom"
+    cd aom
+    mkdir -p build
+    cd build
+    
+    cat > "build_aom.bat" << 'AOM_EOF'
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+cmake -G "Visual Studio 17 2022" -A x64 ^
+    -DCMAKE_INSTALL_PREFIX="${WIN_BUILD_DIR}" ^
+    -DBUILD_SHARED_LIBS=ON ^
+    -DENABLE_TESTS=OFF ^
+    -DENABLE_EXAMPLES=OFF ^
+    ..
+
+cmake --build . --config Release --target install
+AOM_EOF
+    
+    cmd.exe /c build_aom.bat || print_error "libaom build failed, stopping."
+}
+
+build_rav1e() {
+    print_info "Building rav1e from source..."
+    cd "${SRC_DIR}"
+    
+    # Install Rust if not available
+    if ! command -v cargo &> /dev/null; then
+        print_info "Installing Rust for rav1e..."
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source ~/.cargo/env
+    fi
+    
+    git_clone "https://github.com/xiph/rav1e.git" "rav1e"
+    cd rav1e
+    
+    # Install cargo-c for C API
+    cargo install cargo-c || print_warning "cargo-c installation failed"
+    
+    print_info "Building rav1e C API..."
+    cargo cinstall --release --prefix="${BUILD_DIR}" --libdir="${BUILD_DIR}/lib" --includedir="${BUILD_DIR}/include" --library-type=cdylib || print_error "rav1e build failed, stopping."
+    
+    print_info "rav1e build completed"
+}
+
+build_svtav1() {
+    print_info "Building SVT-AV1 from source..."
+    cd "${SRC_DIR}"
+    
+    git_clone "https://gitlab.com/AOMediaCodec/SVT-AV1.git" "svtav1"
+    cd svtav1
+    mkdir -p build
+    cd build
+    
+    cat > "build_svtav1.bat" << 'SVTAV1_EOF'
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+cmake -G "Visual Studio 17 2022" -A x64 ^
+    -DCMAKE_INSTALL_PREFIX="${WIN_BUILD_DIR}" ^
+    -DBUILD_SHARED_LIBS=ON ^
+    -DCMAKE_POSITION_INDEPENDENT_CODE=ON ^
+    ..
+
+cmake --build . --config Release --target install
+SVTAV1_EOF
+    
+    cmd.exe /c build_svtav1.bat || print_error "SVT-AV1 build failed, stopping."
+    
+    print_info "SVT-AV1 build completed"
+}
+
+build_onevpl() {
+    print_info "Building Intel oneVPL for QSV support..."
+    
     cd "${SRC_DIR}"
     git_clone "https://github.com/oneapi-src/oneVPL.git" "oneVPL"
     
-    # Create Visual Studio build script for oneVPL
     cd oneVPL
     mkdir -p build
     cd build
@@ -351,7 +330,6 @@ download_prebuilt_deps() {
 @echo off
 call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
 
-rem Configure oneVPL with CMake
 cmake -G "Visual Studio 17 2022" -A x64 ^
     -DCMAKE_INSTALL_PREFIX="${WIN_BUILD_DIR}" ^
     -DBUILD_SHARED_LIBS=ON ^
@@ -360,27 +338,21 @@ cmake -G "Visual Studio 17 2022" -A x64 ^
     -DBUILD_TESTS=OFF ^
     ..
 
-rem Build and install
-cmake --build . --config Release --target install -j ${NPROC}
-
-rem Copy DLLs to bin directory
-copy "${WIN_BUILD_DIR}\bin\*.dll" "${WIN_BUILD_DIR}\bin\" 2>nul
+cmake --build . --config Release --target install
 ONEVPL_EOF
     
-    # Build oneVPL
-    cmd.exe /c build_onevpl.bat
+    cmd.exe /c build_onevpl.bat || print_error "oneVPL build failed, stopping."
     
-    # Create compatibility links from vpl to mfx
+    # Setup compatibility symlinks from vpl to mfx
     if [ -d "${BUILD_DIR}/include/vpl" ]; then
         mkdir -p "${BUILD_DIR}/include/mfx"
-        print_info "Creating compatibility links from vpl to mfx"
-        cp -r "${BUILD_DIR}/include/vpl/"* "${BUILD_DIR}/include/mfx/" 2>/dev/null || true
+        cp -r "${BUILD_DIR}/include/vpl/"* "${BUILD_DIR}/include/mfx/"
     fi
     
     # Create pkg-config file for oneVPL
     mkdir -p "${BUILD_DIR}/lib/pkgconfig"
     cat > "${BUILD_DIR}/lib/pkgconfig/libvpl.pc" << EOF
-prefix=${WIN_BUILD_DIR}
+prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -391,19 +363,88 @@ Version: 2.8.0
 Libs: -L\${libdir} -lvpl
 Cflags: -I\${includedir}
 EOF
-    
-    print_info "Intel oneVPL setup completed."
+
+    print_info "Intel oneVPL build completed."
 }
 
-# Create pkg-config files for the prebuilt libraries
+setup_nvenc_headers() {
+    print_info "Setting up NVIDIA encoder headers and CUDA support..."
+    cd "${SRC_DIR}"
+    
+    # Install NVIDIA codec headers
+    git_clone "https://git.videolan.org/git/ffmpeg/nv-codec-headers.git" "nv-codec-headers"
+    
+    cd nv-codec-headers
+    mkdir -p "${BUILD_DIR}/include/ffnvcodec"
+    cp include/ffnvcodec/*.h "${BUILD_DIR}/include/ffnvcodec"
+    
+    setup_cuda_support || print_warning "CUDA setup failed, NVENC support will be limited."
+    print_info "NVIDIA encoder headers installed successfully."
+}
+
+setup_cuda_support() {
+    print_info "Setting up CUDA for NVENC..."
+
+    # Check if CUDA is already installed
+    if command -v nvcc &> /dev/null; then
+        CUDA_PATH=$(dirname $(dirname $(which nvcc)))
+        print_info "Existing CUDA installation found at: $CUDA_PATH"
+    else
+        # Install the CUDA Toolkit using Chocolatey if not found
+        print_info "CUDA not found. Installing CUDA Toolkit using Chocolatey..."
+        choco install -y cuda
+
+        # Check installation paths again
+        CUDA_PATHS=(
+            "/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.3"
+            "/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.2"
+            "/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v12.1"
+            "/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.8"
+            "/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v11.7"
+        )
+
+        for cuda_path in "${CUDA_PATHS[@]}"; do
+            if [ -d "$cuda_path" ] && [ -f "$cuda_path/bin/nvcc.exe" ]; then
+                CUDA_PATH="$cuda_path"
+                print_info "CUDA installed and found at: $CUDA_PATH"
+                break
+            fi
+        done
+
+        if [ -z "$CUDA_PATH" ]; then
+            print_error "Failed to install/find CUDA Toolkit"
+            return 1
+        fi
+    fi
+
+    # Set CUDA environment variables
+    export CUDA_PATH="$CUDA_PATH"
+    export PATH="$CUDA_PATH/bin:$PATH"
+
+    # Verify CUDA installation
+    if [ -f "$CUDA_PATH/bin/nvcc.exe" ]; then
+        print_info "CUDA compiler found: $("$CUDA_PATH/bin/nvcc.exe" --version | grep "release" || echo "version check failed")"
+
+        # Set up CUDA libraries path
+        export CUDA_LIB_PATH="$CUDA_PATH/lib/x64"
+        export CUDA_INCLUDE_PATH="$CUDA_PATH/include"
+
+        print_info "CUDA NVENC support is ready"
+    else
+        print_warning "CUDA compiler not found, NVENC might be limited"
+        return 1
+    fi
+}
+
+# Create pkg-config files for the built libraries
 generate_pkgconfig_files() {
-    print_info "Generating pkg-config files for prebuilt libraries..."
+    print_info "Generating pkg-config files for libraries..."
     
     mkdir -p "${BUILD_DIR}/lib/pkgconfig"
     
     # x264
     cat > "${BUILD_DIR}/lib/pkgconfig/x264.pc" << EOF
-prefix=${WIN_BUILD_DIR}
+prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -418,7 +459,7 @@ EOF
     
     # x265
     cat > "${BUILD_DIR}/lib/pkgconfig/x265.pc" << EOF
-prefix=${WIN_BUILD_DIR}
+prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -433,7 +474,7 @@ EOF
     
     # libvpx
     cat > "${BUILD_DIR}/lib/pkgconfig/vpx.pc" << EOF
-prefix=${WIN_BUILD_DIR}
+prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -447,7 +488,7 @@ EOF
     
     # dav1d (AV1 decoder)
     cat > "${BUILD_DIR}/lib/pkgconfig/dav1d.pc" << EOF
-prefix=${WIN_BUILD_DIR}
+prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -461,7 +502,7 @@ EOF
 
     # libaom (AV1 codec)
     cat > "${BUILD_DIR}/lib/pkgconfig/aom.pc" << EOF
-prefix=${WIN_BUILD_DIR}
+prefix=${BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -473,26 +514,35 @@ Libs: -L\${libdir} -laom
 Cflags: -I\${includedir}
 EOF
     
-    print_info "pkg-config files generated successfully."
-}
+    # rav1e (AV1 encoder)
+    cat > "${BUILD_DIR}/lib/pkgconfig/rav1e.pc" << EOF
+prefix=${BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
 
-setup_nvenc_headers() {
-    print_info "Setting up NVIDIA encoder headers..."
-    cd "${SRC_DIR}"
+Name: rav1e
+Description: The fastest and safest AV1 encoder
+Version: 0.6.0
+Libs: -L\${libdir} -lrav1e
+Cflags: -I\${includedir}
+EOF
     
-    git_clone "https://git.videolan.org/git/ffmpeg/nv-codec-headers.git" "nv-codec-headers"
-    cd nv-codec-headers
+    # SVT-AV1 (AV1 encoder)
+    cat > "${BUILD_DIR}/lib/pkgconfig/SvtAv1Enc.pc" << EOF
+prefix=${BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: SvtAv1Enc
+Description: SVT-AV1 Encoder
+Version: 1.8.0
+Libs: -L\${libdir} -lSvtAv1Enc
+Cflags: -I\${includedir}
+EOF
     
-    # Create batch file to install headers
-    cat > "install_headers.bat" << 'NVENC_EOF'
-@echo off
-mkdir "${WIN_BUILD_DIR}\include\ffnvcodec"
-copy include\ffnvcodec\*.h "${WIN_BUILD_DIR}\include\ffnvcodec\"
-NVENC_EOF
-    
-    cmd.exe /c install_headers.bat
-    
-    print_info "NVIDIA encoder headers installed successfully."
+    print_info "pkg-config files generated successfully."
 }
 
 build_ffmpeg() {
@@ -509,14 +559,25 @@ build_ffmpeg() {
 call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
 
 rem Set up environment
-set PATH=%PATH%;${WIN_BUILD_DIR}\bin
-set PKG_CONFIG_PATH=${WIN_BUILD_DIR}\lib\pkgconfig
+set PATH=%PATH%;${BUILD_DIR}\bin
+
+rem Add CUDA to path if available
+if exist "${WIN_CUDA_PATH}\bin\nvcc.exe" (
+    echo Found CUDA, enabling CUDA support
+    set PATH=%PATH%;${WIN_CUDA_PATH}\bin
+    set CUDA_NVENC_EXTRA=--enable-cuda-nvcc --enable-cuvid --enable-nvdec
+) else (
+    echo CUDA not found, using basic NVENC support
+    set CUDA_NVENC_EXTRA=
+)
+
+set PKG_CONFIG_PATH=${BUILD_DIR}\lib\pkgconfig
 
 rem Configure FFmpeg
 echo Configuring FFmpeg...
 powershell -Command "& './configure' ^
   --toolchain=msvc ^
-  --prefix=${WIN_BUILD_DIR} ^
+  --prefix=${BUILD_DIR} ^
   --enable-shared ^
   --disable-static ^
   --disable-debug ^
@@ -527,12 +588,15 @@ powershell -Command "& './configure' ^
   --enable-libx264 ^
   --enable-libx265 ^
   --enable-libvpx ^
-  --enable-libaom ^
+  --enable-libaom ^ 
   --enable-libdav1d ^
+  --enable-librav1e ^
+  --enable-libsvtav1 ^
   --enable-nvenc ^
   --enable-libvpl ^
-  --extra-cflags=-I${WIN_BUILD_DIR}\include ^
-  --extra-ldflags=-LIBPATH:${WIN_BUILD_DIR}\lib"
+  %CUDA_NVENC_EXTRA% ^
+  --extra-cflags=-I${BUILD_DIR}\include ^
+  --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
 
 rem Build FFmpeg
 echo Building FFmpeg...
@@ -541,9 +605,6 @@ nmake -j ${NPROC}
 rem Install FFmpeg
 echo Installing FFmpeg...
 nmake install
-
-rem Copy DLLs to bin directory for easier access
-copy ${WIN_BUILD_DIR}\bin\*.dll ${WIN_BUILD_DIR}\bin\
 FFMPEG_EOF
     
     # Run the build script
@@ -584,14 +645,13 @@ verify_build() {
     print_info "FFmpeg headers verified"
     
     # Check for encoders and decoders
-    print_info "Checking for hardware encoding support:"
-    echo "NVENC support:"
+    print_info "Checking for NVENC support..."
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep nvenc || print_warning "No NVENC encoders found"
     
-    echo "QSV support:"
+    print_info "Checking for QSV support..."
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep qsv || print_warning "No QSV encoders found"
     
-    echo "AV1 support:"
+    print_info "Checking for AV1 support..."
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep av1 || print_warning "No AV1 encoders found"
     
     print_info "FFmpeg build verification completed successfully."
@@ -604,12 +664,17 @@ main() {
     setup_vs_environment
     install_dependencies
     
-    # Get prebuilt dependencies
-    download_prebuilt_deps
-    generate_pkgconfig_files
-    
-    # Setup NVIDIA encoder headers
+    # Compile everything from source
+    build_x264
+    build_x265
+    build_libvpx
+    build_dav1d
+    build_libaom
+    build_rav1e
+    build_svtav1
+    build_onevpl
     setup_nvenc_headers
+    generate_pkgconfig_files
     
     # Build FFmpeg
     build_ffmpeg
