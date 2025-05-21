@@ -46,9 +46,9 @@ install_dependencies() {
     # Install all required MSYS2 packages in a single command for better efficiency
     pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-autotools || true
     pacman -S --noconfirm mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-dlfcn || true
-    pacman -S --noconfirm mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-dav1d || true
-    pacman -S --noconfirm mingw-w64-x86_64-aom mingw-w64-x86_64-libpng mingw-w64-x86_64-freetype || true
-    pacman -S --noconfirm mingw-w64-x86_64-fontconfig mingw-w64-x86_64-SDL2 mingw-w64-x86_64-fribidi || true
+    # pacman -S --noconfirm mingw-w64-x86_64-x264 mingw-w64-x86_64-x265 mingw-w64-x86_64-dav1d || true
+    # pacman -S --noconfirm mingw-w64-x86_64-aom mingw-w64-x86_64-libpng mingw-w64-x86_64-freetype || true
+    # pacman -S --noconfirm mingw-w64-x86_64-fontconfig mingw-w64-x86_64-SDL2 mingw-w64-x86_64-fribidi || true
     
     pip install -U setuptools wheel numpy cython || true
 
@@ -162,64 +162,23 @@ build_x265() {
     cd "${SRC_DIR}"
     git_clone "https://bitbucket.org/multicoreware/x265_git.git" "x265"
     
-    mkdir -p x265/build/windows
-    cd x265/build/windows
-    mkdir -p 8bit 10bit 12bit
-    
-    # Build 12-bit
-    cd 12bit
-    cmake -G "MSYS Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
-        -DHIGH_BIT_DEPTH=ON \
-        -DEXPORT_C_API=OFF \
-        -DENABLE_SHARED=OFF \
-        -DENABLE_CLI=OFF \
-        -DMAIN12=ON \
-        ../../../source
-    make -j${NPROC}
-    
-    # Build 10-bit
-    cd ../10bit
-    cmake -G "MSYS Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
-        -DHIGH_BIT_DEPTH=ON \
-        -DEXPORT_C_API=OFF \
-        -DENABLE_SHARED=OFF \
-        -DENABLE_CLI=OFF \
-        ../../../source
-    make -j${NPROC}
-    
-    # Build 8-bit with links to 10 and 12-bit
-    cd ../8bit
-    
-    ln -sf ../10bit/libx265.a libx265_main10.a
-    ln -sf ../12bit/libx265.a libx265_main12.a
+    # Create a simpler single-configuration build that's more reliable
+    mkdir -p x265/build
+    cd x265/build
     
     cmake -G "MSYS Makefiles" \
         -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
-        -DEXTRA_LIB="x265_main10.a;x265_main12.a" \
-        -DEXTRA_LINK_FLAGS=-L. \
-        -DLINKED_10BIT=ON \
-        -DLINKED_12BIT=ON \
+        -DENABLE_SHARED=ON \
         -DENABLE_CLI=OFF \
-        -DENABLE_SHARED=OFF \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        ../../../source
-    make -j${NPROC}
+        -DMAIN10=ON \
+        -DMAIN12=ON \
+        ../source
     
-    # Create combined static library
-    mv libx265.a libx265_main.a
-    ar -M <<EOF
-CREATE libx265.a
-ADDLIB libx265_main.a
-ADDLIB libx265_main10.a
-ADDLIB libx265_main12.a
-SAVE
-END
-EOF
-
+    make -j${NPROC}
     make install
     
+    # Ensure the DLL is in the bin directory
     cp "${BUILD_DIR}/lib/libx265"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
     
     # Create pkg-config file if necessary
@@ -240,7 +199,7 @@ Cflags: -I\${includedir}
 EOF
     fi
     
-    print_info "x265 build with multi-bit-depth support completed."
+    print_info "x265 build completed."
 }
 
 build_dav1d() {
