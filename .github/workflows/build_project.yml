@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 120
     strategy:
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-12]
+        os: [ubuntu-22.04, windows-2022, macos-14]
     steps:
       - uses: actions/checkout@v3
         with:
@@ -28,12 +28,6 @@ jobs:
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
-
-      - name: Install dependencies
-        shell: bash
-        run: |
-          chmod +x scripts/install_dependencies.sh
-          ./scripts/install_dependencies.sh
 
       - name: Cache FFmpeg Dependencies
         uses: actions/cache@v3
@@ -46,12 +40,18 @@ jobs:
       - name: Build FFmpeg
         shell: bash
         run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            chmod +x scripts/build_ffmpeg_win.sh
-            ./scripts/build_ffmpeg_win.sh
-          else
-            chmod +x scripts/build_ffmpeg.sh
-            ./scripts/build_ffmpeg.sh
+          if [ "$RUNNER_OS" == "Linux" ]; then
+            chmod +x scripts/build_linux.sh
+            ./scripts/build_linux.sh
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            chmod +x scripts/build_macos.sh
+            # Set environment variable for arm64 build explicitly
+            export MACOSX_DEPLOYMENT_TARGET=11.0
+            export ARCHFLAGS="-arch arm64"
+            ./scripts/build_macos.sh
+          elif [ "$RUNNER_OS" == "Windows" ]; then
+            chmod +x scripts/build_windows.sh
+            ./scripts/build_windows.sh
           fi
 
       - name: Upload FFmpeg artifacts
@@ -69,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-2022, macos-12]
+        os: [ubuntu-22.04, windows-2022, macos-14]
         python: ['cp39', 'cp310', 'cp311', 'cp312']
 
     steps:
@@ -166,7 +166,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
-            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs x86_64 -w {dest_dir} {wheel}
+            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair -w {dest_dir} {wheel}
           CIBW_ENVIRONMENT_LINUX: >
             FFMPEG_ROOT=/usr/local/ffmpeg 
@@ -181,6 +181,8 @@ jobs:
             PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
             DYLD_LIBRARY_PATH=/usr/local/ffmpeg/lib:$DYLD_LIBRARY_PATH
             PATH=/usr/local/ffmpeg/bin:$PATH
+            MACOSX_DEPLOYMENT_TARGET=11.0
+            ARCHFLAGS="-arch arm64"
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
@@ -194,6 +196,7 @@ jobs:
           CIBW_BUILD_VERBOSITY: 3
           CIBW_TEST_REQUIRES: pytest numpy
           CIBW_TEST_COMMAND: pytest {package}/tests/basic_test.py -v
+          CIBW_ARCHS_MACOS: arm64
 
       - name: Extract shared libraries from wheels
         shell: bash
