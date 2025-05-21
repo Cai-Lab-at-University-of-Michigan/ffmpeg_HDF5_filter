@@ -523,9 +523,6 @@ build_ffmpeg() {
         "--disable-stripping"
         "--disable-xlib"
         "--disable-libxcb"
-        "--disable-xcb"
-        "--disable-xcb-shm"
-        "--disable-xcb-xfixes"
         "--disable-libxcb-shape"
         "--disable-libxcb-xfixes"
         
