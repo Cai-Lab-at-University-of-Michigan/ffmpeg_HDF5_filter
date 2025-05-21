@@ -21,48 +21,6 @@ print_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-install_dependencies() {
-    print_info "Installing FFmpeg build dependencies for Windows..."
-    
-    print_info "Visual Studio is pre-installed in GitHub Actions, skipping..."
-    
-    choco install -y nasm
-    
-    export PATH="/c/Program Files/NASM:$PATH"
-    
-    print_info "Verifying NASM installation..."
-    nasm -v || print_error "NASM not properly installed!"
-    
-    choco install -y msys2
-    
-    MSYS2_PATH="C:/msys64"
-    if [ -d "/c/msys64" ]; then
-        MSYS2_PATH="/c/msys64"
-    fi
-    export PATH="$MSYS2_PATH/usr/bin:$PATH"
-    
-    pacman -Syu --noconfirm || print_warning "MSYS2 update failed, continuing anyway..."
-    
-    # Install all required MSYS2 packages in a single command for better efficiency
-    pacman -S --noconfirm mingw-w64-x86_64-toolchain mingw-w64-x86_64-cmake mingw-w64-x86_64-autotools || true
-    pacman -S --noconfirm mingw-w64-x86_64-ninja mingw-w64-x86_64-meson mingw-w64-x86_64-dlfcn || true
-
-    pip install -U setuptools wheel numpy cython || true
-
-    # Rust needed for rav1e
-    rustup default stable || true
-    cargo install cargo-c || true
-    
-    print_info "Current PATH: $PATH"
-    
-    # Verify essential build tools
-    which nasm || print_error "NASM not in PATH!"
-    which cmake || print_error "CMake not in PATH!"
-    which ninja || print_error "Ninja not in PATH!"
-    
-    print_info "Windows dependencies installed successfully."
-}
-
 # Initialize build directories
 ROOT_DIR="$(pwd)"
 BUILD_DIR="${ROOT_DIR}/ffmpeg_build"
@@ -73,50 +31,102 @@ mkdir -p "${BUILD_DIR}/bin"
 mkdir -p "${BUILD_DIR}/lib"
 mkdir -p "${BUILD_DIR}/include"
 
-# Convert to Windows paths when needed
+# Convert to Windows paths
 WIN_BUILD_DIR=$(cygpath -w "${BUILD_DIR}" 2>/dev/null || echo "${BUILD_DIR}")
 WIN_SRC_DIR=$(cygpath -w "${SRC_DIR}" 2>/dev/null || echo "${SRC_DIR}")
+WIN_ROOT_DIR=$(cygpath -w "${ROOT_DIR}" 2>/dev/null || echo "${ROOT_DIR}")
 
 print_info "Building FFmpeg in ${BUILD_DIR}"
 print_info "Source code will be in ${SRC_DIR}"
 
 # Detect number of CPU cores for parallel builds
-NPROC=$(nproc 2>/dev/null || echo 4)
+NPROC=$(nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || echo 16)
 print_info "Using ${NPROC} CPU cores for build"
 
-# Set up environment variables
-export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig:${PKG_CONFIG_PATH}"
-export PATH="${BUILD_DIR}/bin:${PATH}"
-
-# Compiler flags - Windows-specific
-CFLAGS="-I${BUILD_DIR}/include -O2"
-LDFLAGS="-L${BUILD_DIR}/lib"
-EXTRAFLAGS="-lm -lstdc++"
-
-git_clone() {
-    local repo_url=$1
-    local target_dir=$2
-    local depth=${3:-1}
+setup_vs_environment() {
+    print_info "Setting up Visual Studio environment..."
     
-    if [ ! -d "$target_dir" ]; then
-        print_info "Cloning repository: $repo_url"
-        git clone --depth $depth "$repo_url" "$target_dir"
-    else
-        print_info "Repository already exists: $target_dir. Updating..."
-        cd "$target_dir"
-        git pull
-        cd - > /dev/null
+    # Find Visual Studio installation using vswhere
+    if [ ! -f "/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" ]; then
+        print_error "vswhere.exe not found! Is Visual Studio installed?"
+        exit 1
     fi
+    
+    VS_PATH=$("/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
+    
+    if [ -z "$VS_PATH" ]; then
+        print_error "Visual Studio not found!"
+        exit 1
+    fi
+    
+    VS_PATH=$(echo "$VS_PATH" | tr -d '\r')
+    print_info "Found Visual Studio at: $VS_PATH"
+    
+    # Create a script to set environment variables
+    cat > "${BUILD_DIR}/vsenv.bat" << EOF
+@echo off
+call "${VS_PATH}\\VC\\Auxiliary\\Build\\vcvars64.bat"
+echo VS_ENV_READY
+EOF
+    
+    print_info "Visual Studio environment script created: ${BUILD_DIR}/vsenv.bat"
 }
 
-download_source() {
+install_dependencies() {
+    print_info "Installing build dependencies..."
+    
+    # Install NASM for assembly optimizations
+    if ! command -v nasm &> /dev/null; then
+        print_info "Installing NASM..."
+        choco install -y nasm
+    fi
+    
+    # Add NASM to PATH
+    export PATH="/c/Program Files/NASM:$PATH"
+    
+    # Install CMake and Ninja if not already present
+    if ! command -v cmake &> /dev/null; then
+        print_info "Installing CMake..."
+        choco install -y cmake
+    fi
+    
+    if ! command -v ninja &> /dev/null; then
+        print_info "Installing Ninja..."
+        choco install -y ninja
+    fi
+    
+    # Install 7zip for extracting archives
+    if ! command -v 7z &> /dev/null; then
+        print_info "Installing 7zip..."
+        choco install -y 7zip
+    fi
+    
+    # Set up pkg-config (needed for dependencies)
+    if ! command -v pkg-config &> /dev/null; then
+        print_info "Setting up pkg-config..."
+        curl -L -o "${BUILD_DIR}/pkg-config-lite-0.28-1.zip" "https://sourceforge.net/projects/pkgconfiglite/files/0.28-1/pkg-config-lite-0.28-1_bin-win32.zip/download"
+        unzip -o "${BUILD_DIR}/pkg-config-lite-0.28-1.zip" -d "${BUILD_DIR}"
+        export PATH="${BUILD_DIR}/pkg-config-lite-0.28-1/bin:$PATH"
+    fi
+    
+    # Verify tool installations
+    print_info "Verifying tool installations..."
+    nasm -v || print_error "NASM not properly installed!"
+    cmake --version || print_error "CMake not properly installed!"
+    ninja --version || print_error "Ninja not properly installed!"
+    7z i || print_error "7zip not properly installed!"
+    
+    print_info "Dependencies installed successfully."
+}
+
+download_file() {
     local url=$1
     local output_file=$2
     
     print_info "Downloading: $url"
     
     if command -v curl &> /dev/null; then
-        curl -L -s -o "$output_file" "$url"
+        curl -L -o "$output_file" "$url"
     elif command -v wget &> /dev/null; then
         wget -q -O "$output_file" "$url"
     else
@@ -130,380 +140,110 @@ download_source() {
     fi
 }
 
-build_x264() {
-    print_info "Building x264..."
-    cd "${SRC_DIR}"
-    git_clone "https://code.videolan.org/videolan/x264.git" "x264"
-    cd x264
+git_clone() {
+    local repo_url=$1
+    local target_dir=$2
+    local branch=${3:-master}
+    local depth=${4:-1}
     
-    print_info "NASM version: $(nasm -v || echo 'not found')"
-    which nasm || print_error "NASM not in PATH!"
-    
-    # Configure for shared library to better support Python bindings
-    CFLAGS="${CFLAGS}" LDFLAGS="${LDFLAGS}" ./configure \
-        --prefix="${BUILD_DIR}" \
-        --enable-shared \
-        --enable-pic \
-        --disable-cli
-    
-    make -j${NPROC}
-    make install
-    
-    cp "${BUILD_DIR}/lib/libx264"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    
-    print_info "x264 build completed."
-}
-
-#!/bin/bash
-
-# Replace your build_x265() function with this version that uses prebuilt binaries
-
-build_x265() {
-    print_info "Using prebuilt x265 with multi-bitdepth support..."
-    
-    cd "${SRC_DIR}"
-    mkdir -p x265_prebuilt
-    cd x265_prebuilt
-    
-    # Download the latest prebuilt x265 release
-    # This is from the MulticoreWare official builds with multi-bitdepth support
-    PREBUILT_X265_URL="https://github.com/DJATOM/x265-aMod/releases/download/3.5+10+65/x265-3.5+10+65-gcc12.2.0-x64-msvc.7z"
-    X265_ARCHIVE="x265-prebuilt.7z"
-    
-    # Download the file
-    print_info "Downloading prebuilt x265 from: ${PREBUILT_X265_URL}"
-    curl -L -o "${X265_ARCHIVE}" "${PREBUILT_X265_URL}" || {
-        print_error "Failed to download prebuilt x265!"
-        return 1
-    }
-    
-    # Extract the archive
-    print_info "Extracting x265 binaries..."
-    
-    # Check if 7z is available
-    if command -v 7z &> /dev/null; then
-        7z x "${X265_ARCHIVE}" -y
-    elif command -v 7za &> /dev/null; then
-        7za x "${X265_ARCHIVE}" -y
+    if [ ! -d "$target_dir" ]; then
+        print_info "Cloning repository: $repo_url"
+        git clone --depth $depth --branch $branch "$repo_url" "$target_dir"
     else
-        # Install 7-Zip if not available
-        print_info "Installing 7-Zip..."
-        choco install -y 7zip
-        7z x "${X265_ARCHIVE}" -y
-    fi
-    
-    # Create directory structure in build dir
-    mkdir -p "${BUILD_DIR}/bin"
-    mkdir -p "${BUILD_DIR}/lib"
-    mkdir -p "${BUILD_DIR}/include/x265"
-    
-    # Copy files to the appropriate locations
-    print_info "Installing x265 files to build directory..."
-    
-    # These paths may need adjustment based on the actual archive structure
-    cp -f ./lib/libx265.dll "${BUILD_DIR}/bin/" || print_warning "Could not find x265 DLL"
-    cp -f ./lib/libx265.lib "${BUILD_DIR}/lib/" || print_warning "Could not find x265 import library"
-    cp -f ./include/x265.h "${BUILD_DIR}/include/x265/" || print_warning "Could not find x265.h"
-    cp -f ./include/x265_config.h "${BUILD_DIR}/include/x265/" || print_warning "Could not find x265_config.h"
-    
-    # Create a pkg-config file
-    mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-    cat > "${BUILD_DIR}/lib/pkgconfig/x265.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: x265
-Description: H.265/HEVC video encoder (prebuilt with 8/10/12-bit support)
-Version: 3.5
-Libs: -L\${libdir} -lx265
-Libs.private: -lstdc++ -lm
-Cflags: -I\${includedir}
-EOF
-    
-    # Verify the installation
-    if [ -f "${BUILD_DIR}/bin/libx265.dll" ] && [ -f "${BUILD_DIR}/include/x265/x265.h" ]; then
-        print_info "Prebuilt x265 installed successfully with multi-bitdepth support!"
-    else
-        print_error "Failed to install prebuilt x265 properly."
-        # Alternative download source if the first one failed
-        print_info "Trying alternative download source..."
-        cd "${SRC_DIR}"
-        rm -rf x265_prebuilt
-        mkdir -p x265_prebuilt
-        cd x265_prebuilt
-        
-        # Alternative source - VideoLAN nightlies
-        ALT_X265_URL="https://artifacts.videolan.org/x265/release-mingw/x265-git-20230603-g05a0e3c3fa-win64.7z"
-        curl -L -o "x265-alt.7z" "${ALT_X265_URL}"
-        7z x "x265-alt.7z" -y
-        
-        # Install from alternative structure
-        mkdir -p "${BUILD_DIR}/bin"
-        mkdir -p "${BUILD_DIR}/lib"
-        mkdir -p "${BUILD_DIR}/include/x265"
-        
-        # Copy files (paths may need adjustment)
-        find . -name "libx265.dll" -exec cp {} "${BUILD_DIR}/bin/" \;
-        find . -name "libx265.lib" -exec cp {} "${BUILD_DIR}/lib/" \;
-        find . -name "libx265.a" -exec cp {} "${BUILD_DIR}/lib/" \;
-        find . -name "x265.h" -exec cp {} "${BUILD_DIR}/include/x265/" \;
-        find . -name "x265_config.h" -exec cp {} "${BUILD_DIR}/include/x265/" \;
+        print_info "Repository already exists: $target_dir. Updating..."
+        cd "$target_dir"
+        git pull
+        cd - > /dev/null
     fi
 }
 
-build_dav1d() {
-    print_info "Building dav1d (AV1 decoder)..."
-    cd "${SRC_DIR}"
-    git_clone "https://code.videolan.org/videolan/dav1d.git" "dav1d"
-    
-    mkdir -p dav1d/build
-    cd dav1d/build
-    
-    meson setup \
-        --prefix="${BUILD_DIR}" \
-        --libdir=lib \
-        --default-library=shared \
-        -Db_pgo=generate \
-        -Dc_args="-march=native" \
-        -Dcpp_args="-march=native" \
-        ..
-    
-    ninja
-    ninja install
-    
-    cp "${BUILD_DIR}/lib/libdav1d"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    
-    print_info "dav1d build completed."
-}
-
-build_svtav1() {
-    print_info "Building SVT-AV1..."
-    cd "${SRC_DIR}"
-    git_clone "https://gitlab.com/AOMediaCodec/SVT-AV1.git" "SVT-AV1"
-    cd SVT-AV1
-    
-    mkdir -p build
-    cd build
-    
-    cmake -G "MSYS Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="${BUILD_DIR}" \
-        -DBUILD_SHARED_LIBS=ON \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        ..
-    
-    make -j${NPROC}
-    make install
-    
-    cp "${BUILD_DIR}/lib/libSvtAv1"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    cp "${BUILD_DIR}/bin/SvtAv1"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    
-    print_info "SVT-AV1 build completed."
-}
-
-build_rav1e() {
-    print_info "Building rav1e (Rust AV1 encoder)..."
+# Download and extract prebuilt dependencies
+download_prebuilt_deps() {
+    print_info "Downloading and setting up prebuilt dependencies..."
     cd "${SRC_DIR}"
     
-    if ! command -v cargo &> /dev/null; then
-        print_info "Installing Rust..."
-        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source $HOME/.cargo/env
-    fi
+    # Create a directory for prebuilt dependencies
+    mkdir -p prebuilt
+    cd prebuilt
     
-    git_clone "https://github.com/xiph/rav1e.git" "rav1e"
-    cd rav1e
+    # x264
+    print_info "Setting up prebuilt x264..."
+    download_file "https://github.com/ShiftMediaProject/x264/releases/download/latest/libx264_x64.7z" "libx264.7z"
+    7z x -y "libx264.7z" -o"x264"
     
-    if ! rustup target list | grep -q 'x86_64-pc-windows-msvc'; then
-        print_info "Adding Windows target to Rust..."
-        rustup target add x86_64-pc-windows-msvc
-    fi
+    # x265
+    print_info "Setting up prebuilt x265..."
+    download_file "https://github.com/ShiftMediaProject/x265/releases/download/latest/libx265_x64.7z" "libx265.7z"
+    7z x -y "libx265.7z" -o"x265"
     
-    if ! command -v cargo-cinstall &> /dev/null; then
-        print_info "Installing cargo-c..."
-        cargo install cargo-c
-    fi
+    # libvpx
+    print_info "Setting up prebuilt libvpx..."
+    download_file "https://github.com/ShiftMediaProject/libvpx/releases/download/latest/libvpx_x64.7z" "libvpx.7z"
+    7z x -y "libvpx.7z" -o"libvpx"
     
-    print_info "Building rav1e C API with cargo-c..."
-    cargo cinstall --release --prefix="${BUILD_DIR}" --libdir="${BUILD_DIR}/lib" --includedir="${BUILD_DIR}/include" --library-type=cdylib
+    # Try to download AV1 codecs if needed
+    print_info "Setting up prebuilt AV1 codecs..."
+    # dav1d (AV1 decoder)
+    download_file "https://github.com/ShiftMediaProject/dav1d/releases/download/latest/libdav1d_x64.7z" "dav1d.7z"
+    7z x -y "dav1d.7z" -o"dav1d"
     
-    if [ $? -ne 0 ]; then
-        print_warning "cargo-c installation failed, trying alternative method..."
-        
-        cargo build --release
-        
-        mkdir -p "${BUILD_DIR}/lib"
-        mkdir -p "${BUILD_DIR}/include/rav1e"
-        
-        cp target/release/rav1e.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-        cp target/release/rav1e.lib "${BUILD_DIR}/lib/" 2>/dev/null || true
-        
-        if ! command -v cbindgen &> /dev/null; then
-            cargo install cbindgen
+    # libaom (AV1 encoder/decoder)
+    download_file "https://github.com/ShiftMediaProject/libaom/releases/download/latest/libaom_x64.7z" "aom.7z"
+    7z x -y "aom.7z" -o"aom"
+    
+    # Copy files to build directory
+    print_info "Copying prebuilt dependencies to build directory..."
+    
+    # Create directory structure
+    mkdir -p "${BUILD_DIR}/bin" "${BUILD_DIR}/lib" "${BUILD_DIR}/include"
+    
+    # Copy DLLs, libs and includes
+    for dir in x264 x265 libvpx dav1d aom; do
+        if [ -d "$dir/bin" ]; then
+            cp -r "$dir/bin/"* "${BUILD_DIR}/bin/" 2>/dev/null || true
         fi
-        
-        cbindgen --crate rav1e --output "${BUILD_DIR}/include/rav1e/rav1e.h"
-        
-        mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-        cat > "${BUILD_DIR}/lib/pkgconfig/rav1e.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: rav1e
-Description: The fastest and safest AV1 encoder
-Version: 0.6.0
-Libs: -L\${libdir} -lrav1e
-Cflags: -I\${includedir}
-EOF
-    fi
+        if [ -d "$dir/lib" ]; then
+            cp -r "$dir/lib/"* "${BUILD_DIR}/lib/" 2>/dev/null || true
+        fi
+        if [ -d "$dir/include" ]; then
+            cp -r "$dir/include/"* "${BUILD_DIR}/include/" 2>/dev/null || true
+        fi
+    done
     
-    print_info "rav1e build completed."
-}
-
-build_libaom() {
-    print_info "Building libaom (AV1 reference implementation)..."
+    # Intel oneVPL (QSV support)
+    print_info "Setting up Intel oneVPL for QSV support..."
+    
+    # Clone the oneVPL repository
     cd "${SRC_DIR}"
-    
-    git_clone "https://aomedia.googlesource.com/aom" "aom"
-    
-    mkdir -p aom_build
-    cd aom_build
-    
-    CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
-        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
-        "-DBUILD_SHARED_LIBS=ON"
-        "-DENABLE_TESTS=OFF"
-        "-DENABLE_EXAMPLES=OFF"
-        "-DENABLE_TOOLS=OFF"
-        "-DCONFIG_AV1_ENCODER=1"
-        "-DCONFIG_AV1_DECODER=1"
-        "-DCONFIG_MULTITHREAD=1"
-    )
-    
-    cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ../aom
-    
-    make -j${NPROC}
-    make install
-    
-    cp "${BUILD_DIR}/bin/aom"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    
-    print_info "libaom build completed."
-}
-
-build_xvid() {
-    print_info "Building Xvid..."
-    cd "${SRC_DIR}"
-    
-    if [ -d "xvidcore" ]; then
-        rm -rf xvidcore
-    fi
-    
-    mkdir -p xvidcore
-    cd xvidcore
-    
-    download_source "https://downloads.xvid.com/downloads/xvidcore-1.3.7.tar.gz" "xvidcore-1.3.7.tar.gz"
-    
-    tar -xf xvidcore-1.3.7.tar.gz
-    
-    cd xvidcore/build/win32
-    
-    if [ -f "./configure.exe" ]; then
-        print_info "Using Windows build method for Xvid..."
-        ./configure.exe --prefix="${BUILD_DIR}" --enable-shared
-        make -j${NPROC}
-        make install
-    else
-        print_info "Falling back to generic build for Xvid..."
-        cd ../generic
-        ./configure --prefix="${BUILD_DIR}" --enable-shared --host=x86_64-w64-mingw32
-        make -j${NPROC}
-        make install
-    fi
-    
-    cp "${BUILD_DIR}/lib/xvidcore"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    
-    # Create pkg-config file
-    mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-    cat > "${BUILD_DIR}/lib/pkgconfig/xvid.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: xvid
-Description: Xvid MPEG-4 video codec
-Version: 1.3.7
-Libs: -L\${libdir} -lxvidcore
-Cflags: -I\${includedir}
-EOF
-    
-    print_info "Xvid build completed."
-}
-
-build_nvenc() {
-    print_info "Setting up NVIDIA encoder/decoder headers..."
-    cd "${SRC_DIR}"
-    
-    git_clone "https://github.com/FFmpeg/nv-codec-headers.git" "nv-codec-headers"
-    cd nv-codec-headers
-    
-    make install PREFIX="${BUILD_DIR}"
-    print_info "NVIDIA headers installed."
-}
-
-verify_pkg_config() {
-    local package=$1
-    local description=$2
-    local lib_name=$3
-    
-    print_info "Verifying pkg-config for ${package}..."
-    
-    if [ ! -f "${BUILD_DIR}/lib/pkgconfig/${package}.pc" ]; then
-        print_warning "pkg-config file for ${package} not found. Creating..."
-        
-        mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-        cat > "${BUILD_DIR}/lib/pkgconfig/${package}.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: ${package}
-Description: ${description}
-Version: 1.0
-Libs: -L\${libdir} -l${lib_name}
-Libs.private: -lm -pthread
-Cflags: -I\${includedir}
-EOF
-    fi
-}
-
-build_qsv() {
-    print_info "Building Intel oneVPL (Video Processing Library) for QSV support on Windows..."
-    cd "${SRC_DIR}"
-    
     git_clone "https://github.com/oneapi-src/oneVPL.git" "oneVPL"
+    
+    # Create Visual Studio build script for oneVPL
     cd oneVPL
     mkdir -p build
     cd build
     
-    CMAKE_ARGS=(
-        "-DCMAKE_INSTALL_PREFIX=${BUILD_DIR}"
-        "-DBUILD_SHARED_LIBS=ON"
-        "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
-        "-DBUILD_TOOLS=OFF"
-        "-DBUILD_EXAMPLES=OFF"
-        "-DBUILD_TESTS=OFF"
-    )
+    cat > "build_onevpl.bat" << EOF
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+rem Configure oneVPL with CMake
+cmake -G "Visual Studio 17 2022" -A x64 ^
+    -DCMAKE_INSTALL_PREFIX="${WIN_BUILD_DIR}" ^
+    -DBUILD_SHARED_LIBS=ON ^
+    -DBUILD_TOOLS=OFF ^
+    -DBUILD_EXAMPLES=OFF ^
+    -DBUILD_TESTS=OFF ^
+    ..
+
+rem Build and install
+cmake --build . --config Release --target install -j ${NPROC}
+
+rem Copy DLLs to bin directory
+copy "${WIN_BUILD_DIR}\bin\*.dll" "${WIN_BUILD_DIR}\bin\" 2>nul
+EOF
     
-    cmake -G "MSYS Makefiles" "${CMAKE_ARGS[@]}" ..
-    
-    make -j${NPROC}
-    make install
+    # Build oneVPL
+    cmd.exe /c build_onevpl.bat
     
     # Create compatibility links from vpl to mfx
     if [ -d "${BUILD_DIR}/include/vpl" ]; then
@@ -512,17 +252,10 @@ build_qsv() {
         cp -r "${BUILD_DIR}/include/vpl/"* "${BUILD_DIR}/include/mfx/" 2>/dev/null || true
     fi
     
-    cp "${BUILD_DIR}/lib/"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
-    
-    print_info "Intel oneVPL build completed."
-    
-    # Create pkg-config file if needed
-    if [ -d "${BUILD_DIR}/include/vpl" ]; then
-        print_info "Intel oneVPL headers found."
-        if [ ! -f "${BUILD_DIR}/lib/pkgconfig/libvpl.pc" ]; then
-            mkdir -p "${BUILD_DIR}/lib/pkgconfig"
-            cat > "${BUILD_DIR}/lib/pkgconfig/libvpl.pc" << EOF
-prefix=${BUILD_DIR}
+    # Create pkg-config file for oneVPL
+    mkdir -p "${BUILD_DIR}/lib/pkgconfig"
+    cat > "${BUILD_DIR}/lib/pkgconfig/libvpl.pc" << EOF
+prefix=${WIN_BUILD_DIR}
 exec_prefix=\${prefix}
 libdir=\${prefix}/lib
 includedir=\${prefix}/include
@@ -533,80 +266,163 @@ Version: 2.8.0
 Libs: -L\${libdir} -lvpl
 Cflags: -I\${includedir}
 EOF
-            print_info "Created pkg-config file for libvpl"
-        fi
-    else
-        print_warning "Intel oneVPL headers not found, QSV support may be limited"
-    fi
+    
+    print_info "Intel oneVPL setup completed."
+}
+
+# Create pkg-config files for the prebuilt libraries
+generate_pkgconfig_files() {
+    print_info "Generating pkg-config files for prebuilt libraries..."
+    
+    mkdir -p "${BUILD_DIR}/lib/pkgconfig"
+    
+    # x264
+    cat > "${BUILD_DIR}/lib/pkgconfig/x264.pc" << EOF
+prefix=${WIN_BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: x264
+Description: x264 library
+Version: 0.164.3094
+Libs: -L\${libdir} -lx264
+Libs.private: 
+Cflags: -I\${includedir}
+EOF
+    
+    # x265
+    cat > "${BUILD_DIR}/lib/pkgconfig/x265.pc" << EOF
+prefix=${WIN_BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: x265
+Description: x265 library
+Version: 3.5
+Libs: -L\${libdir} -lx265
+Libs.private: 
+Cflags: -I\${includedir}
+EOF
+    
+    # libvpx
+    cat > "${BUILD_DIR}/lib/pkgconfig/vpx.pc" << EOF
+prefix=${WIN_BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: vpx
+Description: WebM Project VPX codec
+Version: 1.11.0
+Libs: -L\${libdir} -lvpx
+Cflags: -I\${includedir}
+EOF
+    
+    # dav1d (AV1 decoder)
+    cat > "${BUILD_DIR}/lib/pkgconfig/dav1d.pc" << EOF
+prefix=${WIN_BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: dav1d
+Description: AV1 decoder
+Version: 1.0.0
+Libs: -L\${libdir} -ldav1d
+Cflags: -I\${includedir}
+EOF
+
+    # libaom (AV1 codec)
+    cat > "${BUILD_DIR}/lib/pkgconfig/aom.pc" << EOF
+prefix=${WIN_BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: aom
+Description: AOM AV1 codec library
+Version: 3.5.0
+Libs: -L\${libdir} -laom
+Cflags: -I\${includedir}
+EOF
+    
+    print_info "pkg-config files generated successfully."
+}
+
+setup_nvenc_headers() {
+    print_info "Setting up NVIDIA encoder headers..."
+    cd "${SRC_DIR}"
+    
+    git_clone "https://git.videolan.org/git/ffmpeg/nv-codec-headers.git" "nv-codec-headers"
+    cd nv-codec-headers
+    
+    # Create batch file to install headers
+    cat > "install_headers.bat" << EOF
+@echo off
+mkdir "${WIN_BUILD_DIR}\include\ffnvcodec"
+copy include\ffnvcodec\*.h "${WIN_BUILD_DIR}\include\ffnvcodec\"
+EOF
+    
+    cmd.exe /c install_headers.bat
+    
+    print_info "NVIDIA encoder headers installed successfully."
 }
 
 build_ffmpeg() {
-    print_info "Building FFmpeg for Windows..."
+    print_info "Building FFmpeg with Visual Studio..."
     cd "${SRC_DIR}"
-    git_clone "https://github.com/FFmpeg/FFmpeg.git" "ffmpeg"
     
+    # Clone FFmpeg repository
+    git_clone "https://github.com/FFmpeg/FFmpeg.git" "ffmpeg"
     cd ffmpeg
     
-    # Check hardware acceleration support
-    if [ -d "${BUILD_DIR}/include/vpl" ]; then
-        INTEL_MEDIA_OPTION="--enable-libvpl"
-        print_info "Enabling Intel QSV support via oneVPL"
-    else
-        INTEL_MEDIA_OPTION=""
-        print_warning "Intel QSV support not available"
-    fi
+    # Create build script for Visual Studio
+    cat > "build_ffmpeg_msvc.bat" << EOF
+@echo off
+call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
+
+rem Set up environment
+set PATH=%PATH%;${WIN_BUILD_DIR}\bin
+set PKG_CONFIG_PATH=${WIN_BUILD_DIR}\lib\pkgconfig
+
+rem Configure FFmpeg
+echo Configuring FFmpeg...
+powershell -Command "& './configure' ^
+  --toolchain=msvc ^
+  --prefix=${WIN_BUILD_DIR} ^
+  --enable-shared ^
+  --disable-static ^
+  --disable-debug ^
+  --enable-gpl ^
+  --enable-version3 ^
+  --enable-nonfree ^
+  --enable-asm ^
+  --enable-libx264 ^
+  --enable-libx265 ^
+  --enable-libvpx ^
+  --enable-libaom ^
+  --enable-libdav1d ^
+  --enable-nvenc ^
+  --enable-libvpl ^
+  --extra-cflags=-I${WIN_BUILD_DIR}\include ^
+  --extra-ldflags=-LIBPATH:${WIN_BUILD_DIR}\lib"
+
+rem Build FFmpeg
+echo Building FFmpeg...
+nmake -j ${NPROC}
+
+rem Install FFmpeg
+echo Installing FFmpeg...
+nmake install
+
+rem Copy DLLs to bin directory for easier access
+copy ${WIN_BUILD_DIR}\bin\*.dll ${WIN_BUILD_DIR}\bin\
+EOF
     
-    if command -v nvcc &> /dev/null; then
-        NVIDIA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
-        print_info "Enabling full NVIDIA CUDA support"
-    else
-        print_warning "CUDA compiler not available..."
-        NVIDIA_FLAGS=""
-    fi
-    
-    # Configure FFmpeg with all necessary options
-    CONFIG_OPTIONS=(
-        "--prefix=${BUILD_DIR}"
-        "--extra-cflags=${CFLAGS}"
-        "--extra-ldflags=${LDFLAGS}"
-        "--extra-libs=${EXTRAFLAGS}"
-        "--enable-shared"
-        "--disable-static"
-        "--enable-pic"
-        "--enable-gpl"
-        "--enable-nonfree"
-        "--enable-version3"
-        
-        # Standard codecs
-        "--enable-libxvid"
-        "--enable-libx264"
-        "--enable-libx265"
-        
-        # AV1 codecs
-        "--enable-libaom"
-        "--enable-librav1e"
-        "--enable-libsvtav1"
-        "--enable-libdav1d"
-        
-        # Hardware acceleration
-        ${NVIDIA_FLAGS}
-        ${INTEL_MEDIA_OPTION}
-        
-        # Additional options
-        "--enable-avfilter"
-        "--enable-runtime-cpudetect"
-        "--disable-doc"
-        "--disable-ffplay"
-        "--disable-debug"
-        "--disable-stripping"  # Important for debugging
-    )
-    
-    ./configure "${CONFIG_OPTIONS[@]}"
-    
-    make -j${NPROC}
-    make install
-    
-    cp "${BUILD_DIR}/bin/"*.dll "${BUILD_DIR}/bin/" 2>/dev/null || true
+    # Run the build script
+    cmd.exe /c build_ffmpeg_msvc.bat
     
     print_info "FFmpeg build completed."
 }
@@ -614,76 +430,61 @@ build_ffmpeg() {
 verify_build() {
     print_info "Verifying FFmpeg build..."
     
-    export PATH="${BUILD_DIR}/bin:$PATH"
-    
+    # Check if FFmpeg executable exists
     if [ ! -f "${BUILD_DIR}/bin/ffmpeg.exe" ]; then
         print_error "FFmpeg executable not found!"
         exit 1
     fi
     
-    "${BUILD_DIR}/bin/ffmpeg.exe" -version
+    # Check FFmpeg version
+    "${BUILD_DIR}/bin/ffmpeg.exe" -version || {
+        print_error "Failed to run FFmpeg executable!"
+        exit 1
+    }
     
-    if [ -z "$(ls -A ${BUILD_DIR}/bin/*.dll 2>/dev/null)" ]; then
+    # Check if FFmpeg libraries exist
+    if [ -z "$(ls -A ${BUILD_DIR}/bin/av*.dll 2>/dev/null)" ]; then
         print_error "FFmpeg DLLs not found!"
         exit 1
     fi
+    
     print_info "Found $(ls -1 ${BUILD_DIR}/bin/*.dll | wc -l) DLL files"
     
+    # Check for headers
     if [ ! -d "${BUILD_DIR}/include/libavcodec" ] || [ ! -d "${BUILD_DIR}/include/libavutil" ]; then
         print_error "FFmpeg headers not found!"
         exit 1
     fi
+    
     print_info "FFmpeg headers verified"
     
-    if [ ! -d "${BUILD_DIR}/lib/pkgconfig" ] || [ -z "$(ls -A ${BUILD_DIR}/lib/pkgconfig/lib*.pc 2>/dev/null)" ]; then
-        print_error "FFmpeg pkg-config files not found!"
-        exit 1
-    fi
-    print_info "pkg-config files verified"
-    
-    # Check for hardware encoding/decoding support
-    print_info "Checking for QSV support:"
-    if "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep -q qsv; then
-        print_info "QSV encoders found"
-        "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep qsv | head -n 5
-    else
-        print_warning "No QSV encoders found"
-    fi
-    
-    print_info "Checking for NVIDIA support:"
+    # Check for encoders and decoders
+    print_info "Checking for hardware encoding support:"
+    echo "NVENC support:"
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep nvenc || print_warning "No NVENC encoders found"
     
-    print_info "Checking for AV1 support:"
+    echo "QSV support:"
+    "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep qsv || print_warning "No QSV encoders found"
+    
+    echo "AV1 support:"
     "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep av1 || print_warning "No AV1 encoders found"
     
     print_info "FFmpeg build verification completed successfully."
 }
 
 main() {
-    print_info "Starting FFmpeg build process for Windows..."
-
+    print_info "Starting FFmpeg build for Windows using Visual Studio..."
+    
+    # Setup environment
+    setup_vs_environment
     install_dependencies
     
-    # Build dependencies in sequence
-    build_x264
-    build_x265
-    build_dav1d
-    build_svtav1
-    build_rav1e
-    build_libaom
-    build_xvid
+    # Get prebuilt dependencies
+    download_prebuilt_deps
+    generate_pkgconfig_files
     
-    # Build hardware acceleration support
-    build_qsv
-    build_nvenc
-    
-    # Verify pkg-config files before FFmpeg build
-    verify_pkg_config "x264" "H.264/AVC video encoder" "x264" 
-    verify_pkg_config "x265" "H.265/HEVC video encoder" "x265"
-    verify_pkg_config "dav1d" "AV1 decoder" "dav1d"
-    verify_pkg_config "rav1e" "AV1 encoder" "rav1e"
-    verify_pkg_config "aom" "AV1 codec library" "aom"
-    verify_pkg_config "xvid" "Xvid MPEG-4 video codec" "xvidcore"
+    # Setup NVIDIA encoder headers
+    setup_nvenc_headers
     
     # Build FFmpeg
     build_ffmpeg
@@ -702,5 +503,5 @@ main() {
     touch "${BUILD_DIR}/.build_completed"
 }
 
-# Execute main
+# Run the main function
 main "$@"
