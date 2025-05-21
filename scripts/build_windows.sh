@@ -199,26 +199,6 @@ X265_EOF
     cmd.exe /c build_x265.bat || print_error "x265 build failed, stopping."
 }
 
-build_libvpx() {
-    print_info "Building libvpx from source..."
-    cd "${SRC_DIR}"
-    
-    git_clone "https://chromium.googlesource.com/webm/libvpx.git" "libvpx"
-    cd libvpx
-    
-    cat > "build_libvpx.bat" << 'VPX_EOF'
-@echo off
-call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
-
-rem Configure for MSVC
-bash configure --target=x86_64-win64-vs17 --prefix="${WIN_BUILD_DIR}" --enable-shared --disable-examples --disable-tools --disable-docs
-make -j4
-make install
-VPX_EOF
-    
-    cmd.exe /c build_libvpx.bat || print_error "libvpx build failed, stopping."
-}
-
 build_dav1d() {
     print_info "Building dav1d from source..."
     cd "${SRC_DIR}"
@@ -472,20 +452,6 @@ Libs.private:
 Cflags: -I\${includedir}
 EOF
     
-    # libvpx
-    cat > "${BUILD_DIR}/lib/pkgconfig/vpx.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: vpx
-Description: WebM Project VPX codec
-Version: 1.11.0
-Libs: -L\${libdir} -lvpx
-Cflags: -I\${includedir}
-EOF
-    
     # dav1d (AV1 decoder)
     cat > "${BUILD_DIR}/lib/pkgconfig/dav1d.pc" << EOF
 prefix=${BUILD_DIR}
@@ -587,7 +553,6 @@ powershell -Command "& './configure' ^
   --enable-asm ^
   --enable-libx264 ^
   --enable-libx265 ^
-  --enable-libvpx ^
   --enable-libaom ^ 
   --enable-libdav1d ^
   --enable-librav1e ^
@@ -667,7 +632,6 @@ main() {
     # Compile everything from source
     build_x264
     build_x265
-    build_libvpx
     build_dav1d
     build_libaom
     build_rav1e
