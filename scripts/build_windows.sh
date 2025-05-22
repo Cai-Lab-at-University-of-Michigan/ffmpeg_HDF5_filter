@@ -84,6 +84,12 @@ install_dependencies() {
         g++-mingw-w64 \
         zstd
     
+    # Install CUDA if not already installed
+    if ! command -v nvcc &> /dev/null; then
+        print_info "Installing NVIDIA CUDA toolkit..."
+        sudo apt-get install -y nvidia-cuda-toolkit
+    fi
+    
     print_info "Cross-compilation dependencies installed successfully."
 }
 
@@ -244,7 +250,7 @@ build_ffmpeg() {
         "--target-os=${TARGET_OS}"
         "--arch=${TARGET_ARCH}"
         "--cross-prefix=${CROSS_PREFIX}"
-        "--extra-cflags=${CFLAGS} -std=c11"
+        "--extra-cflags=${CFLAGS}"
         "--extra-ldflags=${LDFLAGS}"
         "--extra-libs=${EXTRAFLAGS}"
         "--enable-shared"
@@ -253,7 +259,6 @@ build_ffmpeg() {
         "--enable-gpl"
         "--enable-nonfree"
         "--enable-version3"
-        "--disable-stdbit"
         
         # Standard codecs
         "--enable-libxvid"
