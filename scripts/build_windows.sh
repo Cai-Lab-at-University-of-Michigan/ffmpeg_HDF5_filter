@@ -553,7 +553,8 @@ build_ffmpeg() {
     cd ffmpeg
     
     # Create build script for Visual Studio
-    @echo off
+    cat > "build_ffmpeg_msvc.bat" << 'FFMPEG_EOF'
+@echo off
 rem Call Visual Studio environment setup
 call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
 
@@ -583,7 +584,7 @@ rem Configure FFmpeg
 echo Configuring FFmpeg...
 powershell -Command "& './configure' ^
   --toolchain=msvc ^
-  --prefix=%BUILD_DIR% ^
+  --prefix=${BUILD_DIR} ^
   --enable-shared ^
   --disable-static ^
   --disable-debug ^
@@ -593,8 +594,9 @@ powershell -Command "& './configure' ^
   --enable-asm ^
   --enable-libx264 ^
   --enable-libx265 ^
-  --extra-cflags=-I%BUILD_DIR%\include ^
-  --extra-ldflags=-LIBPATH:%BUILD_DIR%\lib"
+  %CUDA_NVENC_EXTRA% ^
+  --extra-cflags=-I${BUILD_DIR}\include ^
+  --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
 
 rem Build FFmpeg
 echo Building FFmpeg...
@@ -603,6 +605,7 @@ nmake -j %NPROC%
 rem Install FFmpeg
 echo Installing FFmpeg...
 nmake install
+FFMPEG_EOF
     
     # Run the build script
     cmd.exe /c build_ffmpeg_msvc.bat
