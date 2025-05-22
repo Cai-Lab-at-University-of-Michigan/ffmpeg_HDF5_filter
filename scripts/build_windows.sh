@@ -143,12 +143,11 @@ install_dependencies() {
 git_clone() {
     local repo_url=$1
     local target_dir=$2
-    local branch=${3:-master}
-    local depth=${4:-1}
+    local depth=${3:-1}
     
     if [ ! -d "$target_dir" ]; then
         print_info "Cloning repository: $repo_url"
-        git clone --depth $depth --branch $branch "$repo_url" "$target_dir"
+        git clone --depth $depth "$repo_url" "$target_dir"
     else
         print_info "Repository already exists: $target_dir. Updating..."
         cd "$target_dir"
@@ -734,14 +733,14 @@ main() {
     install_dependencies
     
     # Compile everything from source
+    build_onevpl
     build_x264
     build_x265
     build_dav1d
     build_libaom
-    build_rav1e
-    build_svtav1
-    build_onevpl
     build_xvid
+    build_svtav1
+    build_rav1e
     setup_nvenc_headers
     generate_pkgconfig_files
     

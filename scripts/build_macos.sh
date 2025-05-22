@@ -666,11 +666,11 @@ main() {
     # Build dependencies
     build_x264
     build_x265
+    build_xvid
+    build_libaom
     build_dav1d
     build_svtav1
     build_rav1e
-    build_libaom
-    build_xvid
     
     # Verify pkg-config files before FFmpeg build
     verify_pkg_config "x264" "H.264/AVC video encoder" "x264" 

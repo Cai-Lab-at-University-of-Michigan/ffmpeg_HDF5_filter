@@ -719,11 +719,11 @@ main() {
     # Build dependencies
     build_x264
     build_x265
+    build_xvid
+    build_libaom
     build_dav1d
     build_svtav1
     build_rav1e
-    build_libaom
-    build_xvid
     
     # Build QSV support
     build_qsv
