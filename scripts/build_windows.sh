@@ -554,51 +554,28 @@ build_ffmpeg() {
     
     # Create build script for Visual Studio
     cat > "build_ffmpeg_msvc.bat" << 'FFMPEG_EOF'
-@echo on
+@echo off
 rem Call Visual Studio environment setup
 call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
 
-rem Remove conflicting link.exe from common locations
-if exist "%MSYS2_ROOT%\usr\bin\link.exe" del "%MSYS2_ROOT%\usr\bin\link.exe"
-if exist "%ProgramFiles%\Git\usr\bin\link.exe" del "%ProgramFiles%\Git\usr\bin\link.exe"
-if exist "C:\msys64\usr\bin\link.exe" del "C:\msys64\usr\bin\link.exe"
+rem Remove link.exe
+rm /bin/link.exe
 
-rem Backup and clear PATH to remove all other link.exe
-set ORIGINAL_PATH=%PATH%
-
-rem Build clean PATH starting with Visual Studio tools FIRST
-set PATH=%VS_PATH%\VC\Tools\MSVC\14.39.33519\bin\Hostx64\x64
-set PATH=%PATH%;%VS_PATH%\Common7\IDE
-set PATH=%PATH%;%WindowsSdkDir%bin\%WindowsSDKVersion%\x64
+rem Prioritize Visual Studio's MSVC toolchain
+set PATH=%VS_PATH%\VC\BIN;%PATH%
 set PATH=%PATH%;%BUILD_DIR%\bin
 
-rem Add essential Windows tools
-set PATH=%PATH%;C:\Windows\System32
-set PATH=%PATH%;C:\Windows
-
-rem Add CUDA if available
+rem Add CUDA to path if available
 if exist "%WIN_CUDA_PATH%\bin\nvcc.exe" (
-    echo Found CUDA, enabling CUDA support
     set PATH=%PATH%;%WIN_CUDA_PATH%\bin
     set CUDA_NVENC_EXTRA=--enable-cuda-nvcc --enable-libnpp
 ) else (
-    echo CUDA not found, using basic NVENC support
     set CUDA_NVENC_EXTRA=
-)
-
-rem Verify we're using the correct link.exe
-echo Verifying link.exe location:
-where link.exe
-link.exe 2>&1 | findstr "Microsoft"
-if errorlevel 1 (
-    echo ERROR: Not using Microsoft Visual Studio link.exe!
-    exit /b 1
 )
 
 set PKG_CONFIG_PATH=%BUILD_DIR%\lib\pkgconfig
 
 rem Configure FFmpeg
-echo Configuring FFmpeg...
 powershell -Command "& './configure' ^
   --toolchain=msvc ^
   --prefix=${BUILD_DIR} ^
@@ -616,15 +593,9 @@ powershell -Command "& './configure' ^
   --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
 
 rem Build FFmpeg
-echo Building FFmpeg...
-nmake -j %NPROC%
-
+make -j %NPROC%
 rem Install FFmpeg
-echo Installing FFmpeg...
-nmake install
-
-rem Restore original PATH
-set PATH=%ORIGINAL_PATH%
+make install
 FFMPEG_EOF
     
     # Run the build script
