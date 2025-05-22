@@ -619,8 +619,12 @@ verify_build() {
     export PATH="${BUILD_DIR}/bin:$PATH"
     
     # Check if FFmpeg executable exists
-    if [ ! -f "${BUILD_DIR}/bin/ffmpeg.exe" ]; then
-        print_error "FFmpeg executable not found!"
+    if [ -f "${BUILD_DIR}/bin/ffmpeg.exe" ]; then
+        print_info "FFmpeg executable found successfully."
+    else
+        print_error "FFmpeg executable not found in ${BUILD_DIR}/bin!"
+        echo "Directory contents:"
+        ls -la "${BUILD_DIR}/bin"
         exit 1
     fi
     
