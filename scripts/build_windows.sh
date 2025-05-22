@@ -324,33 +324,6 @@ EOF
         print_warning "System HDF5 not found - HDF5 support may be limited"
     fi
 }
-    print_step "Cross-compiling zlib for Windows..."
-    cd "${SRC_DIR}"
-    
-    if [ ! -f "zlib-1.3.tar.gz" ]; then
-        download_source "https://www.zlib.net/zlib-1.3.tar.gz" "zlib-1.3.tar.gz"
-    fi
-    
-    if [ ! -d "zlib-1.3" ]; then
-        tar -xf zlib-1.3.tar.gz
-    fi
-    
-    cd zlib-1.3
-    
-    # Clean previous build
-    make clean 2>/dev/null || true
-    
-    CC="${TARGET_TRIPLET}-gcc" \
-    AR="${TARGET_TRIPLET}-ar" \
-    RANLIB="${TARGET_TRIPLET}-ranlib" \
-    CFLAGS="$CFLAGS" \
-    ./configure --prefix="${BUILD_DIR}" --static
-    
-    log_command "make -j${NPROC}" "${LOGS_DIR}/zlib_build.log"
-    log_command "make install" "${LOGS_DIR}/zlib_install.log"
-    
-    print_info "zlib cross-compilation completed."
-}
 
 # Build x264
 build_x264() {
@@ -1048,7 +1021,6 @@ Build Configuration:
 - EXTRAFLAGS: ${EXTRAFLAGS}
 
 Components Built:
-- zlib: System compression library
 - HDF5: Hierarchical Data Format library (for Python integration)
 - x264: H.264/AVC video encoder
 - x265: H.265/HEVC video encoder (8/10/12-bit)
@@ -1184,9 +1156,6 @@ main() {
 
     # Install dependencies
     install_dependencies
-    
-    # Build basic dependencies first
-    build_zlib
     
     # Build HDF5 if needed for Python integration
     if [ "${BUILD_HDF5:-yes}" = "yes" ]; then
