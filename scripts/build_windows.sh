@@ -554,7 +554,7 @@ build_ffmpeg() {
     
     # Create build script for Visual Studio
     cat > "build_ffmpeg_msvc.bat" << 'FFMPEG_EOF'
-@echo off
+@echo on
 rem Call Visual Studio environment setup
 call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
 
