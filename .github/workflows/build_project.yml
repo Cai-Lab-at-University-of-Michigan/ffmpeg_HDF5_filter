@@ -14,13 +14,25 @@ on:
 jobs:
   build_ffmpeg:
     name: Build FFmpeg libraries
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 180
     strategy:
       matrix:
-        os: [ubuntu-24.04, windows-2022, macos-14]
+        include:
+          - os: linux
+            runner: ubuntu-24.04
+            script: build_linux_updated.sh
+            artifact_name: ffmpeg-Linux
+          - os: windows
+            runner: ubuntu-24.04  # Cross-compile on Ubuntu
+            script: build_windows_cross.sh
+            artifact_name: ffmpeg-Windows
+          - os: macos
+            runner: macos-14
+            script: build_macos.sh
+            artifact_name: ffmpeg-macOS
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -32,50 +44,89 @@ jobs:
       - name: Clean build directories
         shell: bash
         run: |
-          rm -rf ffmpeg_build ffmpeg_src
-          mkdir -p ffmpeg_build
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            rm -rf ffmpeg_build_windows ffmpeg_src_windows
+            mkdir -p ffmpeg_build_windows
+          else
+            rm -rf ffmpeg_build ffmpeg_src
+            mkdir -p ffmpeg_build
+          fi
 
       - name: Cache FFmpeg Dependencies
         uses: actions/cache@v3
         with:
-          path: ffmpeg_build
-          key: ${{ runner.os }}-ffmpeg-${{ hashFiles('scripts/build_linux.sh', 'scripts/build_windows.sh', 'scripts/build_macos.sh') }}
+          path: |
+            ffmpeg_build
+            ffmpeg_build_windows
+          key: ${{ matrix.os }}-ffmpeg-${{ hashFiles('scripts/${{ matrix.script }}') }}
           restore-keys: |
-            ${{ runner.os }}-ffmpeg-
+            ${{ matrix.os }}-ffmpeg-
 
       - name: Build FFmpeg
-        shell: powershell
+        shell: bash
         run: |
-          if ($env:RUNNER_OS -eq "Linux") {
-            chmod +x scripts/build_linux.sh
-            ./scripts/build_linux.sh
-          } elseif ($env:RUNNER_OS -eq "macOS") {
-            chmod +x scripts/build_macos.sh
-            ./scripts/build_macos.sh
-          } elseif ($env:RUNNER_OS -eq "Windows") {
-            pwsh -ExecutionPolicy Bypass -File scripts/build_windows.ps1
-          }
+          chmod +x scripts/${{ matrix.script }}
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            # Set target architecture for Windows cross-compilation
+            export TARGET_ARCH=x86_64
+            ./scripts/${{ matrix.script }}
+          else
+            ./scripts/${{ matrix.script }}
+          fi
+
+      - name: Package build artifacts
+        shell: bash
+        run: |
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            BUILD_DIR="ffmpeg_build_windows"
+          else
+            BUILD_DIR="ffmpeg_build"
+          fi
+          
+          # Create a clean artifact directory
+          mkdir -p upload_artifacts
+          
+          # Copy all built files
+          cp -r "${BUILD_DIR}"/* upload_artifacts/
+          
+          # For Windows, ensure all DLLs are in the bin directory
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            # Move any DLLs from lib to bin for easier distribution
+            find upload_artifacts/lib -name "*.dll" -exec mv {} upload_artifacts/bin/ \; 2>/dev/null || true
+          fi
 
       - name: Upload FFmpeg artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ffmpeg-${{ runner.os }}
-          path: ffmpeg_build/
+          name: ${{ matrix.artifact_name }}
+          path: upload_artifacts/
           retention-days: 7
 
   build_wheels:
-    name: Build wheels on ${{ matrix.os }} for ${{ matrix.python }}
+    name: Build wheels on ${{ matrix.config.runner }} for ${{ matrix.python }}
     needs: build_ffmpeg
-    runs-on: ${{ matrix.os }}
+    runs-on: ${{ matrix.config.runner }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-2022, macos-14]
+        config:
+          - os: linux
+            runner: ubuntu-24.04
+            artifact_name: ffmpeg-Linux
+            cibw_archs: "x86_64"
+          - os: windows
+            runner: windows-2022
+            artifact_name: ffmpeg-Windows
+            cibw_archs: "AMD64"
+          - os: macos
+            runner: macos-14
+            artifact_name: ffmpeg-macOS
+            cibw_archs: "arm64"
         python: ['cp39', 'cp310', 'cp311', 'cp312']
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -92,39 +143,42 @@ jobs:
       - name: Download FFmpeg artifacts
         uses: actions/download-artifact@v4
         with:
-          name: ffmpeg-${{ runner.os }}
+          name: ${{ matrix.config.artifact_name }}
           path: ffmpeg_build
 
       - name: Setup environment
         run: |
-          echo "FFMPEG_ROOT=${{ github.workspace }}/ffmpeg_build" >> $GITHUB_ENV
-          if [ "$RUNNER_OS" != "Windows" ]; then
-            chmod -R +x ${{ github.workspace }}/ffmpeg_build/bin
+          if [ "${{ matrix.config.os }}" = "windows" ]; then
+            echo "FFMPEG_ROOT=${{ github.workspace }}/ffmpeg_build" >> $GITHUB_ENV
+            # For Windows, ensure DLLs are accessible
+            echo "${{ github.workspace }}/ffmpeg_build/bin" >> $GITHUB_PATH
+          else
+            echo "FFMPEG_ROOT=${{ github.workspace }}/ffmpeg_build" >> $GITHUB_ENV
+            chmod -R +x ${{ github.workspace }}/ffmpeg_build/bin 2>/dev/null || true
           fi
         shell: bash
 
       - name: List FFmpeg artifacts
         shell: bash
         run: |
-          if [ "$RUNNER_OS" == "Windows" ]; then
-            ls -la ffmpeg_build/bin
-            ls -la ffmpeg_build/lib || echo "No lib directory"
-            ls -la ffmpeg_build/include || echo "No include directory"
-          else
-            find ffmpeg_build -type f -name "*.so*" -o -name "*.dylib" -o -name "*.dll" | sort
-            find ffmpeg_build/include -type f -name "*.h" | head -5
-          fi
+          echo "=== FFmpeg Build Contents ==="
+          find ffmpeg_build -type f \( -name "*.so*" -o -name "*.dylib" -o -name "*.dll" -o -name "*.exe" \) | sort
+          echo "=== Headers ==="
+          find ffmpeg_build/include -type f -name "*.h" | head -10
+          echo "=== pkg-config files ==="
+          find ffmpeg_build -name "*.pc" | sort
 
       - name: Install system dependencies
         shell: bash
         run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
+          if [ "${{ matrix.config.os }}" = "linux" ]; then
             sudo apt-get update
             sudo apt-get install -y libhdf5-dev patchelf
-          elif [ "$RUNNER_OS" == "macOS" ]; then
+          elif [ "${{ matrix.config.os }}" = "macos" ]; then
             brew install hdf5 pkg-config
-          elif [ "$RUNNER_OS" == "Windows" ]; then
+          elif [ "${{ matrix.config.os }}" = "windows" ]; then
             python -m pip install delvewheel
+            # Note: HDF5 and other Windows dependencies handled by cross-compilation
           fi
 
       - name: Cache Rust dependencies
@@ -134,42 +188,38 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: ${{ runner.os }}-cargo-${{ matrix.python }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
+          key: ${{ matrix.config.os }}-cargo-${{ matrix.python }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-${{ matrix.python }}-
-            ${{ runner.os }}-cargo-
+            ${{ matrix.config.os }}-cargo-${{ matrix.python }}-
+            ${{ matrix.config.os }}-cargo-
 
       - name: Build wheels with progress reporting
         run: |
           # Add a background task to output something every minute to prevent timeout
-          while true; do echo "Still building wheel... $(date)"; sleep 60; done &
-          PROGRESS_PID=$!
+          if [ "${{ matrix.config.os }}" != "windows" ]; then
+            while true; do echo "Still building wheel... $(date)"; sleep 60; done &
+            PROGRESS_PID=$!
+          fi
           
           # Run the actual build
           python -m cibuildwheel --output-dir wheelhouse
           
-          # Kill the progress reporter
-          kill $PROGRESS_PID || true
+          # Kill the progress reporter (Unix only)
+          if [ "${{ matrix.config.os }}" != "windows" ]; then
+            kill $PROGRESS_PID || true
+          fi
+        shell: bash
         env:
           CIBW_BUILD: "${{ matrix.python }}-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
+          CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
+          
+          # Linux specific environment
           CIBW_BEFORE_ALL_LINUX: >
             yum install -y epel-release && 
             yum install -y hdf5-devel patchelf && 
             mkdir -p /usr/local/ffmpeg && 
             cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
-          CIBW_BEFORE_ALL_MACOS: >
-            brew install hdf5 pkg-config && 
-            mkdir -p /usr/local/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
-          CIBW_BEFORE_ALL_WINDOWS: >
-            mkdir -p C:/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* C:/ffmpeg/
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
-          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
-            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
-            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair -w {dest_dir} {wheel}
           CIBW_ENVIRONMENT_LINUX: >
             FFMPEG_ROOT=/usr/local/ffmpeg 
             PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
@@ -178,6 +228,13 @@ jobs:
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
+          
+          # macOS specific environment
+          CIBW_BEFORE_ALL_MACOS: >
+            brew install hdf5 pkg-config && 
+            mkdir -p /usr/local/ffmpeg && 
+            cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
           CIBW_ENVIRONMENT_MACOS: >
             FFMPEG_ROOT=/usr/local/ffmpeg 
             PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
@@ -188,6 +245,15 @@ jobs:
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
+          CIBW_REPAIR_WHEEL_COMMAND_MACOS: >
+            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
+            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
+          
+          # Windows specific environment
+          CIBW_BEFORE_ALL_WINDOWS: >
+            mkdir -p C:/ffmpeg && 
+            cp -r ${FFMPEG_ROOT}/* C:/ffmpeg/ &&
+            echo "C:/ffmpeg/bin" >> $GITHUB_PATH
           CIBW_ENVIRONMENT_WINDOWS: >
             FFMPEG_ROOT=C:/ffmpeg 
             PKG_CONFIG_PATH=C:/ffmpeg/lib/pkgconfig 
@@ -195,17 +261,20 @@ jobs:
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: >
+            delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg/bin
+          
+          # Common settings
           CIBW_BUILD_VERBOSITY: 3
           CIBW_TEST_REQUIRES: pytest numpy
           CIBW_TEST_COMMAND: pytest {package}/tests/basic_test.py -v
-          CIBW_ARCHS_MACOS: arm64
 
       - name: Extract shared libraries from wheels
         shell: bash
         run: |
-          mkdir -p native_libs/${{ runner.os }}
+          mkdir -p native_libs/${{ matrix.config.os }}
           
-          if [ "$RUNNER_OS" == "Linux" ]; then
+          if [ "${{ matrix.config.os }}" = "linux" ]; then
             python -c "
             import zipfile, os, glob, shutil
             wheels = glob.glob('wheelhouse/*.whl')
@@ -214,10 +283,10 @@ jobs:
                     so_files = [f for f in wheel.namelist() if f.endswith('.so')]
                     for so_file in so_files:
                         wheel.extract(so_file, 'extracted_wheel')
-                        os.makedirs('native_libs/Linux', exist_ok=True)
-                        shutil.copy(f'extracted_wheel/{so_file}', 'native_libs/Linux/')
+                        os.makedirs('native_libs/linux', exist_ok=True)
+                        shutil.copy(f'extracted_wheel/{so_file}', 'native_libs/linux/')
             "
-          elif [ "$RUNNER_OS" == "macOS" ]; then
+          elif [ "${{ matrix.config.os }}" = "macos" ]; then
             python -c "
             import zipfile, os, glob, shutil
             wheels = glob.glob('wheelhouse/*.whl')
@@ -226,10 +295,10 @@ jobs:
                     dylib_files = [f for f in wheel.namelist() if f.endswith('.dylib')]
                     for dylib_file in dylib_files:
                         wheel.extract(dylib_file, 'extracted_wheel')
-                        os.makedirs('native_libs/macOS', exist_ok=True)
-                        shutil.copy(f'extracted_wheel/{dylib_file}', 'native_libs/macOS/')
+                        os.makedirs('native_libs/macos', exist_ok=True)
+                        shutil.copy(f'extracted_wheel/{dylib_file}', 'native_libs/macos/')
             "
-          elif [ "$RUNNER_OS" == "Windows" ]; then
+          elif [ "${{ matrix.config.os }}" = "windows" ]; then
             python -c "
             import zipfile, os, glob, shutil
             wheels = glob.glob('wheelhouse/*.whl')
@@ -238,8 +307,8 @@ jobs:
                     dll_files = [f for f in wheel.namelist() if f.endswith('.dll')]
                     for dll_file in dll_files:
                         wheel.extract(dll_file, 'extracted_wheel')
-                        os.makedirs('native_libs/Windows', exist_ok=True)
-                        shutil.copy(f'extracted_wheel/{dll_file}', 'native_libs/Windows/')
+                        os.makedirs('native_libs/windows', exist_ok=True)
+                        shutil.copy(f'extracted_wheel/{dll_file}', 'native_libs/windows/')
             "
           fi
           
@@ -248,7 +317,7 @@ jobs:
       - name: Upload native libraries
         uses: actions/upload-artifact@v4
         with:
-          name: native-libs-${{ runner.os }}-${{ matrix.python }}
+          name: native-libs-${{ matrix.config.os }}-${{ matrix.python }}
           path: native_libs/
           retention-days: 7
 
@@ -256,7 +325,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
-          name: wheels-${{ runner.os }}-${{ matrix.python }}
+          name: wheels-${{ matrix.config.os }}-${{ matrix.python }}
           retention-days: 7
 
   build_sdist:
@@ -264,7 +333,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
@@ -298,7 +367,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up JDK 8
         uses: actions/setup-java@v3
@@ -322,10 +391,11 @@ jobs:
           echo "Libraries extracted from Python wheels:"
           find native_libs -type f | sort
           
-          cp scripts/prepare_native_libs.sh ./prepare_native_libs.sh
-          chmod +x ./prepare_native_libs.sh
-          
-          ./prepare_native_libs.sh
+          if [ -f scripts/prepare_native_libs.sh ]; then
+            cp scripts/prepare_native_libs.sh ./prepare_native_libs.sh
+            chmod +x ./prepare_native_libs.sh
+            ./prepare_native_libs.sh
+          fi
       
       - name: Setup Gradle and build JAR
         uses: gradle/gradle-build-action@v2
@@ -346,7 +416,7 @@ jobs:
     if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
     
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       
       - name: Set up Python
         uses: actions/setup-python@v4
