@@ -21,7 +21,7 @@ jobs:
         include:
           - os: linux
             runner: ubuntu-24.04
-            script: build_linux_updated.sh
+            script: build_linux.sh
             artifact_name: ffmpeg-Linux
           - os: windows
             runner: ubuntu-24.04
