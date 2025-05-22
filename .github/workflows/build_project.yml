@@ -44,21 +44,17 @@ jobs:
             ${{ runner.os }}-ffmpeg-
 
       - name: Build FFmpeg
-        shell: bash
+        shell: powershell
         run: |
-          if [ "$RUNNER_OS" == "Linux" ]; then
+          if ($env:RUNNER_OS -eq "Linux") {
             chmod +x scripts/build_linux.sh
             ./scripts/build_linux.sh
-          elif [ "$RUNNER_OS" == "macOS" ]; then
+          } elseif ($env:RUNNER_OS -eq "macOS") {
             chmod +x scripts/build_macos.sh
-            # Set environment variable for arm64 build explicitly
-            export MACOSX_DEPLOYMENT_TARGET=11.0
-            export ARCHFLAGS="-arch arm64"
             ./scripts/build_macos.sh
-          elif [ "$RUNNER_OS" == "Windows" ]; then
-            chmod +x scripts/build_windows.sh
-            ./scripts/build_windows.sh
-          fi
+          } elseif ($env:RUNNER_OS -eq "Windows") {
+            ./scripts/build_windows.ps1
+          }
 
       - name: Upload FFmpeg artifacts
         uses: actions/upload-artifact@v4
