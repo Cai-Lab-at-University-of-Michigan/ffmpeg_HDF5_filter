@@ -27,9 +27,6 @@ BUILD_DIR="${ROOT_DIR}/ffmpeg_build"
 SRC_DIR="${ROOT_DIR}/ffmpeg_src"
 mkdir -p "${BUILD_DIR}"
 mkdir -p "${SRC_DIR}"
-mkdir -p "${BUILD_DIR}/bin"
-mkdir -p "${BUILD_DIR}/lib"
-mkdir -p "${BUILD_DIR}/include"
 
 print_info "Building FFmpeg in ${BUILD_DIR}"
 print_info "Source code will be in ${SRC_DIR}"
@@ -561,15 +558,12 @@ build_ffmpeg() {
 rem Call Visual Studio environment setup
 call "%VS_PATH%\VC\Auxiliary\Build\vcvars64.bat" || exit /b 1
 
-rem Prioritize Visual Studio's MSVC toolchain
-set PATH=%VS_PATH%\VC\Tools\MSVC\<version>\bin\Hostx64\x64;%PATH%
-set PATH=%PATH%;%BUILD_DIR%\bin
+rem Remove link.exe
+rm /bin/link.exe
 
-rem Check and remove conflicting link.exe from PATH
-if exist C:\msys64\usr\bin\link.exe (
-    ren C:\msys64\usr\bin\link.exe link_backup.exe
-    echo Renamed conflicting MSYS link.exe to link_backup.exe
-)
+rem Prioritize Visual Studio's MSVC toolchain
+set PATH=%VS_PATH%\VC\BIN;%PATH%
+set PATH=%PATH%;%BUILD_DIR%\bin
 
 rem Add CUDA to path if available
 if exist "%WIN_CUDA_PATH%\bin\nvcc.exe" (
