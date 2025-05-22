@@ -683,6 +683,8 @@ FFMPEG_EOF
 
 verify_build() {
     print_info "Verifying FFmpeg build..."
+
+    export PATH="${BUILD_DIR}/bin:$PATH"
     
     # Check if FFmpeg executable exists
     if [ ! -f "${BUILD_DIR}/bin/ffmpeg.exe" ]; then
