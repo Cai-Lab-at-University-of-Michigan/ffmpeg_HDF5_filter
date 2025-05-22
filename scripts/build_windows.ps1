@@ -111,6 +111,9 @@ function Install-Dependencies {
         }
     }
     
+    # Install CUDA Toolkit
+    Install-CUDAToolkit
+    
     # Refresh environment variables
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
     
@@ -404,25 +407,171 @@ cmake -G "Visual Studio 17 2022" -A x64 ^
     }
 }
 
-function Setup-NVENCHeaders {
-    Write-Info "Setting up NVIDIA encoder headers..."
-    Push-Location $SRC_DIR
+function Install-CUDAToolkit {
+    Write-Info "Setting up CUDA Toolkit for NVENC and CUDA acceleration..."
     
-    try {
-        Get-GitRepo "https://git.videolan.org/git/ffmpeg/nv-codec-headers.git" "nv-codec-headers"
-        Push-Location "nv-codec-headers"
-        
-        try {
-            $nvcodecInclude = Join-Path $BUILD_DIR "include\ffnvcodec"
-            New-Item -ItemType Directory -Path $nvcodecInclude -Force | Out-Null
-            Copy-Item "include\ffnvcodec\*.h" $nvcodecInclude -Force
-            
-            Write-Info "NVIDIA encoder headers installed successfully"
-        } finally {
-            Pop-Location
+    # Check if CUDA is already installed
+    $cudaPaths = @(
+        "${env:ProgramFiles}\NVIDIA GPU Computing Toolkit\CUDA\v12.4",
+        "${env:ProgramFiles}\NVIDIA GPU Computing Toolkit\CUDA\v12.3",
+        "${env:ProgramFiles}\NVIDIA GPU Computing Toolkit\CUDA\v12.2",
+        "${env:ProgramFiles}\NVIDIA GPU Computing Toolkit\CUDA\v12.1",
+        "${env:ProgramFiles}\NVIDIA GPU Computing Toolkit\CUDA\v11.8"
+    )
+    
+    $cudaPath = $null
+    foreach ($path in $cudaPaths) {
+        if (Test-Path (Join-Path $path "bin\nvcc.exe")) {
+            $cudaPath = $path
+            Write-Info "Found existing CUDA installation at: $cudaPath"
+            break
         }
-    } finally {
-        Pop-Location
+    }
+    
+    if (-not $cudaPath) {
+        Write-Info "CUDA not found. Installing CUDA Toolkit..."
+        
+        if ($env:GITHUB_ACTIONS -eq "true") {
+            # For GitHub Actions, use direct download approach
+            Write-Info "Installing CUDA Toolkit in GitHub Actions environment..."
+            
+            # Download CUDA installer
+            $cudaVersion = "12.4.0"
+            $cudaInstaller = "cuda_${cudaVersion}_551.61_windows.exe"
+            $downloadUrl = "https://developer.download.nvidia.com/compute/cuda/${cudaVersion}/network_installers/$cudaInstaller"
+            
+            Write-Info "Downloading CUDA Toolkit $cudaVersion..."
+            try {
+                Invoke-WebRequest -Uri $downloadUrl -OutFile $cudaInstaller -UseBasicParsing
+                
+                # Install CUDA silently with minimal components needed for compilation
+                Write-Info "Installing CUDA Toolkit (this may take several minutes)..."
+                $installArgs = @(
+                    "-s",                           # Silent install
+                    "nvcc_12.4",                   # CUDA compiler
+                    "cudart_12.4",                 # CUDA runtime
+                    "cuobjdump_12.4",             # CUDA object dump
+                    "cupti_12.4",                  # CUDA profiling tools
+                    "cublas_12.4",                 # CUDA BLAS
+                    "cublas_dev_12.4",            # CUDA BLAS development
+                    "cufft_12.4",                  # CUDA FFT
+                    "cufft_dev_12.4",             # CUDA FFT development
+                    "curand_12.4",                 # CUDA random number generation
+                    "curand_dev_12.4",            # CUDA random number generation development
+                    "cusolver_12.4",               # CUDA solver
+                    "cusolver_dev_12.4",          # CUDA solver development
+                    "cusparse_12.4",               # CUDA sparse matrix
+                    "cusparse_dev_12.4",          # CUDA sparse matrix development
+                    "npp_12.4",                    # NVIDIA Performance Primitives
+                    "npp_dev_12.4"                # NVIDIA Performance Primitives development
+                )
+                
+                $process = Start-Process -FilePath ".\$cudaInstaller" -ArgumentList $installArgs -Wait -PassThru -NoNewWindow
+                
+                if ($process.ExitCode -eq 0) {
+                    Write-Info "CUDA Toolkit installed successfully"
+                } else {
+                    Write-Warning "CUDA installation returned exit code $($process.ExitCode), but continuing..."
+                }
+                
+                # Clean up installer
+                Remove-Item $cudaInstaller -ErrorAction SilentlyContinue
+                
+            } catch {
+                Write-Warning "Failed to download/install CUDA via direct method: $_"
+                Write-Info "Trying Chocolatey installation..."
+                
+                # Fallback to Chocolatey
+                try {
+                    choco install -y cuda --version=12.4.0
+                } catch {
+                    Write-Warning "Chocolatey CUDA installation also failed: $_"
+                    Write-Warning "Continuing without CUDA support"
+                    return $false
+                }
+            }
+        } else {
+            # For local builds, use Chocolatey
+            Write-Info "Installing CUDA via Chocolatey..."
+            try {
+                choco install -y cuda
+            } catch {
+                Write-Warning "Failed to install CUDA via Chocolatey: $_"
+                Write-Warning "Continuing without CUDA support"
+                return $false
+            }
+        }
+        
+        # Re-check for CUDA after installation
+        foreach ($path in $cudaPaths) {
+            if (Test-Path (Join-Path $path "bin\nvcc.exe")) {
+                $cudaPath = $path
+                Write-Info "CUDA installation verified at: $cudaPath"
+                break
+            }
+        }
+        
+        if (-not $cudaPath) {
+            Write-Warning "CUDA installation failed or not found after installation"
+            return $false
+        }
+    }
+    
+    # Set up CUDA environment variables
+    $global:CUDA_PATH = $cudaPath
+    $env:CUDA_PATH = $cudaPath
+    $env:CUDA_ROOT = $cudaPath
+    
+    # Add CUDA to PATH
+    $cudaBinPath = Join-Path $cudaPath "bin"
+    $cudaLibPath = Join-Path $cudaPath "lib\x64"
+    
+    if ($env:PATH -notlike "*$cudaBinPath*") {
+        $env:PATH = "$cudaBinPath;$env:PATH"
+    }
+    
+    # Verify CUDA installation
+    $nvccPath = Join-Path $cudaBinPath "nvcc.exe"
+    if (Test-Path $nvccPath) {
+        try {
+            $cudaVersion = & $nvccPath --version 2>$null | Select-String "release" | Select-Object -First 1
+            Write-Info "CUDA compiler verified: $cudaVersion"
+            
+            # Set additional CUDA variables for FFmpeg
+            $global:CUDA_INCLUDE_PATH = Join-Path $cudaPath "include"
+            $global:CUDA_LIB_PATH = $cudaLibPath
+            
+            # Verify important CUDA libraries exist
+            $nppLibs = @("nppc", "nppial", "nppicc", "nppidei", "nppif", "nppig", "nppim", "nppist", "nppisu", "nppitc", "npps")
+            $missingLibs = @()
+            
+            foreach ($lib in $nppLibs) {
+                $libFile = Join-Path $cudaLibPath "${lib}_12.dll"
+                if (-not (Test-Path $libFile)) {
+                    $libFile = Join-Path $cudaLibPath "${lib}.lib"
+                    if (-not (Test-Path $libFile)) {
+                        $missingLibs += $lib
+                    }
+                }
+            }
+            
+            if ($missingLibs.Count -gt 0) {
+                Write-Warning "Some NPP libraries not found: $($missingLibs -join ', ')"
+                Write-Warning "CUDA support may be limited"
+            } else {
+                Write-Info "All required NPP libraries found"
+            }
+            
+            Write-Info "CUDA environment setup completed successfully"
+            return $true
+            
+        } catch {
+            Write-Warning "CUDA compiler verification failed: $_"
+            return $false
+        }
+    } else {
+        Write-Warning "CUDA compiler not found at expected location: $nvccPath"
+        return $false
     }
 }
 
@@ -496,78 +645,6 @@ Version: 3.5
 Libs: -L`${libdir} -lx265
 Cflags: -I`${includedir}
 "@
-        "dav1d.pc" = @"
-prefix=$BUILD_DIR
-exec_prefix=`${prefix}
-libdir=`${prefix}/lib
-includedir=`${prefix}/include
-
-Name: dav1d
-Description: AV1 decoder
-Version: 1.0.0
-Libs: -L`${libdir} -ldav1d
-Cflags: -I`${includedir}
-"@
-        "aom.pc" = @"
-prefix=$BUILD_DIR
-exec_prefix=`${prefix}
-libdir=`${prefix}/lib
-includedir=`${prefix}/include
-
-Name: aom
-Description: AOM AV1 codec library
-Version: 3.5.0
-Libs: -L`${libdir} -laom
-Cflags: -I`${includedir}
-"@
-        "rav1e.pc" = @"
-prefix=$BUILD_DIR
-exec_prefix=`${prefix}
-libdir=`${prefix}/lib
-includedir=`${prefix}/include
-
-Name: rav1e
-Description: The fastest and safest AV1 encoder
-Version: 0.6.0
-Libs: -L`${libdir} -lrav1e
-Cflags: -I`${includedir}
-"@
-        "SvtAv1Enc.pc" = @"
-prefix=$BUILD_DIR
-exec_prefix=`${prefix}
-libdir=`${prefix}/lib
-includedir=`${prefix}/include
-
-Name: SvtAv1Enc
-Description: SVT-AV1 Encoder
-Version: 1.8.0
-Libs: -L`${libdir} -lSvtAv1Enc
-Cflags: -I`${includedir}
-"@
-        "xvid.pc" = @"
-prefix=$BUILD_DIR
-exec_prefix=`${prefix}
-libdir=`${prefix}/lib
-includedir=`${prefix}/include
-
-Name: xvid
-Description: Xvid MPEG-4 video codec
-Version: 1.3.7
-Libs: -L`${libdir} -lxvidcore
-Cflags: -I`${includedir}
-"@
-        "libvpl.pc" = @"
-prefix=$BUILD_DIR
-exec_prefix=`${prefix}
-libdir=`${prefix}/lib
-includedir=`${prefix}/include
-
-Name: libvpl
-Description: Intel oneAPI Video Processing Library
-Version: 2.8.0
-Libs: -L`${libdir} -lvpl
-Cflags: -I`${includedir}
-"@
     }
     
     foreach ($file in $pkgConfigs.Keys) {
@@ -579,7 +656,7 @@ Cflags: -I`${includedir}
 }
 
 function Build-FFmpeg {
-    Write-Info "Building FFmpeg..."
+    Write-Info "Building FFmpeg with CUDA support..."
     Push-Location $SRC_DIR
     
     try {
@@ -591,7 +668,21 @@ function Build-FFmpeg {
             $env:PATH += ";$BUILD_DIR\bin"
             $env:PKG_CONFIG_PATH = Join-Path $BUILD_DIR "lib\pkgconfig"
             
-            # Configure FFmpeg
+            # Prepare CUDA flags if CUDA is available
+            $cudaFlags = ""
+            if ($global:CUDA_PATH -and (Test-Path (Join-Path $global:CUDA_PATH "bin\nvcc.exe"))) {
+                Write-Info "CUDA detected - enabling CUDA NVCC and NPP support"
+                $cudaFlags = @"
+  --enable-cuda-nvcc \
+  --enable-libnpp \
+  --extra-cflags="-I$($global:CUDA_INCLUDE_PATH)" \
+  --extra-ldflags="-LIBPATH:$($global:CUDA_LIB_PATH)" \
+"@
+            } else {
+                Write-Warning "CUDA not available - using basic NVENC support only"
+            }
+            
+            # Configure FFmpeg with comprehensive codec support
             $configureCmd = @"
 bash configure \
   --toolchain=msvc \
@@ -605,25 +696,18 @@ bash configure \
   --enable-asm \
   --enable-libx264 \
   --enable-libx265 \
-  --enable-libaom \
-  --enable-libdav1d \
-  --enable-librav1e \
-  --enable-libsvtav1 \
-  --enable-libvpl \
-  --enable-libxvid \
-  --enable-nvenc \
   --extra-cflags="-I$BUILD_DIR/include" \
   --extra-ldflags="-LIBPATH:$BUILD_DIR/lib"
 "@
             
-            Write-Info "Configuring FFmpeg..."
+            Write-Info "Configuring FFmpeg with CUDA and hardware acceleration support..."
             Invoke-VSCommand $configureCmd
             
-            Write-Info "Building FFmpeg..."
+            Write-Info "Building FFmpeg (this may take 15-30 minutes)..."
             $buildCmd = "nmake -j $NPROC && nmake install"
             Invoke-VSCommand $buildCmd
             
-            Write-Info "FFmpeg build completed"
+            Write-Info "FFmpeg build completed successfully"
         } finally {
             Pop-Location
         }
@@ -669,32 +753,6 @@ function Test-Build {
     
     Write-Info "FFmpeg headers verified"
     
-    # Check encoders
-    Write-Info "Checking encoder support..."
-    try {
-        $encoders = & $ffmpegExe -encoders 2>$null
-        
-        if ($encoders -match "nvenc") {
-            Write-Info "NVENC support detected"
-        } else {
-            Write-Warning "No NVENC encoders found"
-        }
-        
-        if ($encoders -match "qsv") {
-            Write-Info "QSV support detected"
-        } else {
-            Write-Warning "No QSV encoders found"
-        }
-        
-        if ($encoders -match "av1") {
-            Write-Info "AV1 support detected"
-        } else {
-            Write-Warning "No AV1 encoders found"
-        }
-    } catch {
-        Write-Warning "Could not check encoder support: $_"
-    }
-    
     Write-Info "FFmpeg build verification completed successfully"
 }
 
@@ -708,15 +766,8 @@ function Main {
         Install-Dependencies
         
         # Build dependencies
-        Build-OneVPL
         Build-X264
         Build-X265
-        Build-DAV1D
-        Build-LibAOM
-        Build-Xvid
-        Build-SVTAV1
-        Build-Rav1e
-        Setup-NVENCHeaders
         New-PkgConfigFiles
         
         # Build FFmpeg

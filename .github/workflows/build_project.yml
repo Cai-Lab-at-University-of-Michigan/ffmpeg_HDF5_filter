@@ -53,7 +53,7 @@ jobs:
             chmod +x scripts/build_macos.sh
             ./scripts/build_macos.sh
           } elseif ($env:RUNNER_OS -eq "Windows") {
-            ./scripts/build_windows.ps1
+            pwsh -ExecutionPolicy Bypass -File scripts/build_windows.ps1
           }
 
       - name: Upload FFmpeg artifacts
