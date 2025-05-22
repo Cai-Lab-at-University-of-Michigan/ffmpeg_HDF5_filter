@@ -24,8 +24,8 @@ jobs:
             script: build_linux_updated.sh
             artifact_name: ffmpeg-Linux
           - os: windows
-            runner: ubuntu-24.04  # Cross-compile on Ubuntu
-            script: build_windows_cross.sh
+            runner: ubuntu-24.04
+            script: build_windows.sh
             artifact_name: ffmpeg-Windows
           - os: macos
             runner: macos-14
