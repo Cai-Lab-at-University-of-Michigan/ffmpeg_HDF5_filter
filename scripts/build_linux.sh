@@ -84,7 +84,6 @@ install_dependencies() {
         libx264-dev \
         libx265-dev \
         libnuma-dev \
-        libvpx-dev \
         libdav1d-dev \
         libaom-dev \
         libtheora-dev \
@@ -626,11 +625,6 @@ build_ffmpeg() {
         "--enable-librav1e"
         "--enable-libsvtav1"
         "--enable-libdav1d"
-        
-        # Additional formats
-        "--enable-libvorbis"
-        "--enable-libopus"
-        "--enable-libvpx"
         
         # Hardware acceleration
         ${NVIDIA_FLAGS}

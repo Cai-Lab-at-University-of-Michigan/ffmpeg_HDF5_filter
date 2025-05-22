@@ -633,7 +633,7 @@ rem Add CUDA to path if available
 if exist "${WIN_CUDA_PATH}\bin\nvcc.exe" (
     echo Found CUDA, enabling CUDA support
     set PATH=%PATH%;${WIN_CUDA_PATH}\bin
-    set CUDA_NVENC_EXTRA=--enable-cuda-nvcc --enable-cuvid --enable-nvdec
+    set CUDA_NVENC_EXTRA=--enable-cuda-nvcc --enable-libnpp
 ) else (
     echo CUDA not found, using basic NVENC support
     set CUDA_NVENC_EXTRA=
