@@ -578,7 +578,7 @@ set PKG_CONFIG_PATH=%BUILD_DIR%\lib\pkgconfig
 rem Configure FFmpeg
 powershell -Command "& './configure' ^
   --toolchain=msvc ^
-  --prefix=${BUILD_DIR} ^
+  --prefix=%BUILD_DIR% ^
   --enable-shared ^
   --disable-static ^
   --disable-debug ^
@@ -589,13 +589,13 @@ powershell -Command "& './configure' ^
   --enable-libx264 ^
   --enable-libx265 ^
   %CUDA_NVENC_EXTRA% ^
-  --extra-cflags=-I${BUILD_DIR}\include ^
-  --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
+  --extra-cflags=-I%BUILD_DIR%\include ^
+  --extra-ldflags=-LIBPATH:%BUILD_DIR%\lib"
 
 rem Build FFmpeg
-make -j %NPROC%
+nmake -f Makefile
 rem Install FFmpeg
-make install
+nmake install
 FFMPEG_EOF
     
     # Run the build script
