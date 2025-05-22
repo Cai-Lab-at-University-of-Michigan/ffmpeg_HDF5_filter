@@ -53,17 +53,12 @@ install_dependencies() {
     # Install basic build tools
     brew install \
         cmake \
-        pkg-config \
         automake \
         autoconf \
         libtool \
         nasm \
         yasm \
-        ninja \
-        meson \
-        git \
-        wget \
-        curl
+        meson
     
     # Install Python-specific dependencies
     brew install \

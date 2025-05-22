@@ -541,75 +541,6 @@ Libs.private:
 Cflags: -I\${includedir}
 EOF
     
-    # dav1d (AV1 decoder)
-    cat > "${BUILD_DIR}/lib/pkgconfig/dav1d.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: dav1d
-Description: AV1 decoder
-Version: 1.0.0
-Libs: -L\${libdir} -ldav1d
-Cflags: -I\${includedir}
-EOF
-
-    # libaom (AV1 codec)
-    cat > "${BUILD_DIR}/lib/pkgconfig/aom.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: aom
-Description: AOM AV1 codec library
-Version: 3.5.0
-Libs: -L\${libdir} -laom
-Cflags: -I\${includedir}
-EOF
-    
-    # rav1e (AV1 encoder)
-    cat > "${BUILD_DIR}/lib/pkgconfig/rav1e.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: rav1e
-Description: The fastest and safest AV1 encoder
-Version: 0.6.0
-Libs: -L\${libdir} -lrav1e
-Cflags: -I\${includedir}
-EOF
-    
-    # SVT-AV1 (AV1 encoder)
-    cat > "${BUILD_DIR}/lib/pkgconfig/SvtAv1Enc.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: SvtAv1Enc
-Description: SVT-AV1 Encoder
-Version: 1.8.0
-Libs: -L\${libdir} -lSvtAv1Enc
-Cflags: -I\${includedir}
-EOF
-
-    cat > "${BUILD_DIR}/lib/pkgconfig/xvid.pc" << EOF
-prefix=${BUILD_DIR}
-exec_prefix=\${prefix}
-libdir=\${prefix}/lib
-includedir=\${prefix}/include
-
-Name: xvid
-Description: Xvid MPEG-4 video codec
-Version: 1.3.7
-Libs: -L\${libdir} -lxvidcore
-Cflags: -I\${includedir}
-EOF
-    
     print_info "pkg-config files generated successfully."
 }
 
@@ -626,8 +557,19 @@ build_ffmpeg() {
 @echo off
 call "${VS_PATH}\VC\Auxiliary\Build\vcvars64.bat"
 
-rem Set up environment
-set PATH=%PATH%;${BUILD_DIR}\bin
+rem Ensure build paths are set correctly
+set BUILD_DIR=^
+D:\a\ffmpeg_HDF5_filter\ffmpeg_HDF5_filter\ffmpeg_build^
+
+set SRC_DIR=^
+D:\a\ffmpeg_HDF5_filter\ffmpeg_HDF5_filter\ffmpeg_src^
+
+set PATH=%BUILD_DIR%\bin;%PATH%
+echo PATH set to: %PATH%
+
+rem Specify pkg-config path
+set PKG_CONFIG_PATH=%BUILD_DIR%\lib\pkgconfig
+echo PKG_CONFIG_PATH set to: %PKG_CONFIG_PATH%
 
 rem Add CUDA to path if available
 if exist "${WIN_CUDA_PATH}\bin\nvcc.exe" (
@@ -638,8 +580,6 @@ if exist "${WIN_CUDA_PATH}\bin\nvcc.exe" (
     echo CUDA not found, using basic NVENC support
     set CUDA_NVENC_EXTRA=
 )
-
-set PKG_CONFIG_PATH=${BUILD_DIR}\lib\pkgconfig
 
 rem Configure FFmpeg
 echo Configuring FFmpeg...
@@ -655,24 +595,24 @@ powershell -Command "& './configure' ^
   --enable-asm ^
   --enable-libx264 ^
   --enable-libx265 ^
-  --enable-libaom ^ 
-  --enable-libdav1d ^
-  --enable-librav1e ^
-  --enable-libsvtav1 ^
-  --enable-nvenc ^
-  --enable-libvpl ^
-  --enable-libxvid ^
-  %CUDA_NVENC_EXTRA% ^
   --extra-cflags=-I${BUILD_DIR}\include ^
   --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
 
-rem Build FFmpeg
+rem Build and Install FFmpeg
 echo Building FFmpeg...
-nmake -j ${NPROC}
-
-rem Install FFmpeg
+nmake -j %NPROC%
 echo Installing FFmpeg...
 nmake install
+
+rem Verify the ffmpeg executable is where it should be
+if exist "%BUILD_DIR%\bin\ffmpeg.exe" (
+    echo FFmpeg build and installation successful. Found ffmpeg.exe in %BUILD_DIR%\bin
+) else (
+    echo ERROR: ffmpeg.exe not found in %BUILD_DIR%\bin. Checking other possible locations...
+    echo Current directory: %cd%
+    dir %BUILD_DIR%\*
+    exit /b 1
+)
 FFMPEG_EOF
     
     # Run the build script
@@ -715,14 +655,8 @@ verify_build() {
     print_info "FFmpeg headers verified"
     
     # Check for encoders and decoders
-    print_info "Checking for NVENC support..."
-    "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep nvenc || print_warning "No NVENC encoders found"
-    
-    print_info "Checking for QSV support..."
-    "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep qsv || print_warning "No QSV encoders found"
-    
-    print_info "Checking for AV1 support..."
-    "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep av1 || print_warning "No AV1 encoders found"
+    print_info "Checking for x264 support..."
+    "${BUILD_DIR}/bin/ffmpeg.exe" -encoders | grep x264 || print_warning "No x264 encoders found"
     
     print_info "FFmpeg build verification completed successfully."
 }
@@ -735,15 +669,8 @@ main() {
     install_dependencies
     
     # Compile everything from source
-    build_onevpl
     build_x264
     build_x265
-    build_dav1d
-    build_libaom
-    build_xvid
-    build_svtav1
-    build_rav1e
-    setup_nvenc_headers
     generate_pkgconfig_files
     
     # Build FFmpeg
