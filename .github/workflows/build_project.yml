@@ -15,7 +15,7 @@ jobs:
   build_ffmpeg:
     name: Build FFmpeg libraries
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 180
+    timeout-minutes: 240
     strategy:
       matrix:
         include:
@@ -23,14 +23,17 @@ jobs:
             runner: ubuntu-24.04
             script: build_linux.sh
             artifact_name: ffmpeg-Linux
+            target_arch: x86_64
           - os: windows
             runner: ubuntu-24.04
             script: build_windows.sh
             artifact_name: ffmpeg-Windows
+            target_arch: AMD64
           - os: macos
             runner: macos-14
             script: build_macos.sh
             artifact_name: ffmpeg-macOS
+            target_arch: arm64
     steps:
       - uses: actions/checkout@v4
         with:
@@ -41,14 +44,24 @@ jobs:
         with:
           python-version: '3.10'
 
+      - name: Free up disk space (Ubuntu only)
+        if: matrix.os == 'linux' || matrix.os == 'windows'
+        run: |
+          # Remove unnecessary packages to free up space for CUDA
+          sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' '^mongodb-.*' '^mysql-.*' '^postgresql-.*'
+          sudo apt-get autoremove -y
+          sudo apt-get autoclean
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          df -h
+
       - name: Clean build directories
         shell: bash
         run: |
           if [ "${{ matrix.os }}" = "windows" ]; then
-            rm -rf ffmpeg_build_windows ffmpeg_src_windows
+            rm -rf ffmpeg_build_windows ffmpeg_src_windows build_logs
             mkdir -p ffmpeg_build_windows
           else
-            rm -rf ffmpeg_build ffmpeg_src
+            rm -rf ffmpeg_build ffmpeg_src build_logs
             mkdir -p ffmpeg_build
           fi
 
@@ -58,20 +71,54 @@ jobs:
           path: |
             ffmpeg_build
             ffmpeg_build_windows
-          key: ${{ matrix.os }}-ffmpeg-${{ hashFiles('scripts/${{ matrix.script }}') }}
+            ffmpeg_src
+            ffmpeg_src_windows
+          key: ${{ matrix.os }}-ffmpeg-v2-${{ hashFiles('scripts/${{ matrix.script }}') }}
           restore-keys: |
+            ${{ matrix.os }}-ffmpeg-v2-
             ${{ matrix.os }}-ffmpeg-
 
       - name: Build FFmpeg
         shell: bash
         run: |
           chmod +x scripts/${{ matrix.script }}
+          
+          # Set architecture environment variable
+          export TARGET_ARCH="${{ matrix.target_arch }}"
+          
+          # Additional environment for CUDA builds
+          if [ "${{ matrix.os }}" = "windows" ] || [ "${{ matrix.os }}" = "linux" ]; then
+            export DEBIAN_FRONTEND=noninteractive
+            # Allow CUDA installation in CI
+            export CI_BUILD=1
+          fi
+          
+          echo "Building for architecture: ${TARGET_ARCH}"
+          ./scripts/${{ matrix.script }}
+
+      - name: Verify build output
+        shell: bash
+        run: |
           if [ "${{ matrix.os }}" = "windows" ]; then
-            # Set target architecture for Windows cross-compilation
-            export TARGET_ARCH=x86_64
-            ./scripts/${{ matrix.script }}
+            BUILD_DIR="ffmpeg_build_windows"
           else
-            ./scripts/${{ matrix.script }}
+            BUILD_DIR="ffmpeg_build"
+          fi
+          
+          echo "=== Build Verification ==="
+          echo "Build directory contents:"
+          find "${BUILD_DIR}" -type f \( -name "ffmpeg*" -o -name "*.exe" -o -name "*.dll" -o -name "*.so*" -o -name "*.dylib" \) | head -20
+          
+          echo "=== Hardware Acceleration Check ==="
+          if [ "${{ matrix.os }}" = "windows" ]; then
+            # Test Windows executable with Wine if available
+            if command -v wine &> /dev/null; then
+              wine "${BUILD_DIR}/bin/ffmpeg.exe" -hwaccels 2>/dev/null || echo "Wine test skipped"
+            fi
+          else
+            # Test native executable
+            export LD_LIBRARY_PATH="${BUILD_DIR}/lib:$LD_LIBRARY_PATH"
+            "${BUILD_DIR}/bin/ffmpeg" -hwaccels 2>/dev/null || true
           fi
 
       - name: Package build artifacts
@@ -93,6 +140,10 @@ jobs:
           if [ "${{ matrix.os }}" = "windows" ]; then
             # Move any DLLs from lib to bin for easier distribution
             find upload_artifacts/lib -name "*.dll" -exec mv {} upload_artifacts/bin/ \; 2>/dev/null || true
+            
+            # Verify Windows-specific files
+            echo "Windows build verification:"
+            find upload_artifacts/bin -name "*.exe" -o -name "*.dll" | head -10
           fi
 
       - name: Upload FFmpeg artifacts
@@ -101,6 +152,14 @@ jobs:
           name: ${{ matrix.artifact_name }}
           path: upload_artifacts/
           retention-days: 7
+
+      - name: Upload build logs (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.os }}
+          path: build_logs/
+          retention-days: 3
 
   build_wheels:
     name: Build wheels on ${{ matrix.config.runner }} for ${{ matrix.python }}
@@ -115,14 +174,17 @@ jobs:
             runner: ubuntu-24.04
             artifact_name: ffmpeg-Linux
             cibw_archs: "x86_64"
+            wheel_arch: "x86_64"
           - os: windows
             runner: windows-2022
             artifact_name: ffmpeg-Windows
             cibw_archs: "AMD64"
+            wheel_arch: "amd64"
           - os: macos
             runner: macos-14
             artifact_name: ffmpeg-macOS
             cibw_archs: "arm64"
+            wheel_arch: "arm64"
         python: ['cp39', 'cp310', 'cp311', 'cp312']
 
     steps:
@@ -167,6 +229,10 @@ jobs:
           find ffmpeg_build/include -type f -name "*.h" | head -10
           echo "=== pkg-config files ==="
           find ffmpeg_build -name "*.pc" | sort
+          
+          # Check for hardware acceleration support
+          echo "=== Hardware Acceleration Libraries ==="
+          find ffmpeg_build -name "*cuda*" -o -name "*nvenc*" -o -name "*qsv*" -o -name "*vpl*" | sort
 
       - name: Install system dependencies
         shell: bash
@@ -272,7 +338,7 @@ jobs:
       - name: Extract shared libraries from wheels
         shell: bash
         run: |
-          mkdir -p native_libs/${{ matrix.config.os }}
+          mkdir -p native_libs/${{ matrix.config.wheel_arch }}
           
           if [ "${{ matrix.config.os }}" = "linux" ]; then
             python -c "
@@ -283,8 +349,8 @@ jobs:
                     so_files = [f for f in wheel.namelist() if f.endswith('.so')]
                     for so_file in so_files:
                         wheel.extract(so_file, 'extracted_wheel')
-                        os.makedirs('native_libs/linux', exist_ok=True)
-                        shutil.copy(f'extracted_wheel/{so_file}', 'native_libs/linux/')
+                        os.makedirs('native_libs/${{ matrix.config.wheel_arch }}', exist_ok=True)
+                        shutil.copy(f'extracted_wheel/{so_file}', 'native_libs/${{ matrix.config.wheel_arch }}/')
             "
           elif [ "${{ matrix.config.os }}" = "macos" ]; then
             python -c "
@@ -295,8 +361,8 @@ jobs:
                     dylib_files = [f for f in wheel.namelist() if f.endswith('.dylib')]
                     for dylib_file in dylib_files:
                         wheel.extract(dylib_file, 'extracted_wheel')
-                        os.makedirs('native_libs/macos', exist_ok=True)
-                        shutil.copy(f'extracted_wheel/{dylib_file}', 'native_libs/macos/')
+                        os.makedirs('native_libs/${{ matrix.config.wheel_arch }}', exist_ok=True)
+                        shutil.copy(f'extracted_wheel/{dylib_file}', 'native_libs/${{ matrix.config.wheel_arch }}/')
             "
           elif [ "${{ matrix.config.os }}" = "windows" ]; then
             python -c "
@@ -307,8 +373,8 @@ jobs:
                     dll_files = [f for f in wheel.namelist() if f.endswith('.dll')]
                     for dll_file in dll_files:
                         wheel.extract(dll_file, 'extracted_wheel')
-                        os.makedirs('native_libs/windows', exist_ok=True)
-                        shutil.copy(f'extracted_wheel/{dll_file}', 'native_libs/windows/')
+                        os.makedirs('native_libs/${{ matrix.config.wheel_arch }}', exist_ok=True)
+                        shutil.copy(f'extracted_wheel/{dll_file}', 'native_libs/${{ matrix.config.wheel_arch }}/')
             "
           fi
           
@@ -317,7 +383,7 @@ jobs:
       - name: Upload native libraries
         uses: actions/upload-artifact@v4
         with:
-          name: native-libs-${{ matrix.config.os }}-${{ matrix.python }}
+          name: native-libs-${{ matrix.config.wheel_arch }}-${{ matrix.python }}
           path: native_libs/
           retention-days: 7
 
@@ -325,7 +391,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           path: ./wheelhouse/*.whl
-          name: wheels-${{ matrix.config.os }}-${{ matrix.python }}
+          name: wheels-${{ matrix.config.wheel_arch }}-${{ matrix.python }}
           retention-days: 7
 
   build_sdist:
@@ -384,6 +450,7 @@ jobs:
         run: |
           mkdir -p native_libs/linux native_libs/windows native_libs/macos
           
+          # Map architecture names correctly
           find downloads/native-libs-* -type f -name "*.so" -exec cp {} native_libs/linux/ \;
           find downloads/native-libs-* -type f -name "*.dll" -exec cp {} native_libs/windows/ \;
           find downloads/native-libs-* -type f -name "*.dylib" -exec cp {} native_libs/macos/ \;
