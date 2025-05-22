@@ -440,8 +440,7 @@ build_xvid() {
     
     # Configure for shared library
     ./configure \
-        --prefix="${BUILD_DIR}" \
-        --enable-shared
+        --prefix="${BUILD_DIR}"
     
     make -j${NPROC}
     

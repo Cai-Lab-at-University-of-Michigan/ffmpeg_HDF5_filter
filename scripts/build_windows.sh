@@ -116,6 +116,11 @@ install_dependencies() {
         print_info "Installing Ninja..."
         choco install -y ninja
     fi
+
+    if ! command -v unzip &> /dev/null; then
+        print_info "Installing Unzip..."
+        choco install -y unzip
+    fi
     
     # Set up pkg-config (needed for dependencies)
     if ! command -v pkg-config &> /dev/null; then
@@ -370,6 +375,40 @@ setup_nvenc_headers() {
     print_info "NVIDIA encoder headers installed successfully."
 }
 
+download_source() {
+    local url=$1
+    local output_file=$2
+    local retries=3
+    local retry_delay=2
+    local attempt=0
+
+    print_info "Downloading: $url"
+
+    while [ $attempt -lt $retries ]; do
+        if command -v curl &> /dev/null; then
+            curl -L -o "$output_file" "$url"
+        elif command -v wget &> /dev/null; then
+            wget -O "$output_file" "$url"
+        else
+            print_error "Neither curl nor wget is available. Cannot download files."
+            exit 1
+        fi
+
+        # Check if the download was successful
+        if [ -f "$output_file" ] && [ -s "$output_file" ]; then
+            print_info "Downloaded $output_file successfully."
+            return 0
+        fi
+
+        attempt=$((attempt + 1))
+        print_warning "Download failed for $url. Attempt $attempt/$retries..."
+        sleep $retry_delay
+    done
+    
+    print_error "Failed to download: $url after $retries attempts."
+    exit 1
+}
+
 setup_cuda_support() {
     print_info "Setting up CUDA for NVENC..."
 
@@ -422,6 +461,49 @@ setup_cuda_support() {
         print_warning "CUDA compiler not found, NVENC might be limited"
         return 1
     fi
+}
+
+build_xvid() {
+    print_info "Building Xvid for Windows..."
+    cd "${SRC_DIR}"
+
+    # Remove any existing directory to avoid issues
+    if [ -d "xvidcore" ]; then
+        rm -rf xvidcore
+    fi
+    
+    # Create a fresh directory
+    mkdir -p xvidcore
+    cd xvidcore
+
+    # Download the archive
+    print_info "Downloading Xvid..."
+    download_source "https://downloads.xvid.com/downloads/xvidcore-1.3.7.zip" "xvidcore-1.3.7.zip"
+
+    # Extract the ZIP file
+    unzip -q xvidcore-1.3.7.zip
+
+    # Navigate to the build directory
+    cd xvidcore/build/generic
+
+    # Create the build batch script for MSVC
+    cat > "build_xvid.bat" << XVID_EOF
+@echo off
+call "${VS_PATH}\\VC\\Auxiliary\\Build\\vcvars64.bat"
+
+rem Build with MSVC
+nmake /f makefile.vc CFG=Win32-General-Release
+
+rem Install the outputs
+xcopy "..\\..\\..\\bin\\release" "${BUILD_DIR}\\bin\\" /Y /E
+xcopy "..\\..\\..\\lib" "${BUILD_DIR}\\lib\\" /Y /E
+xcopy "..\\..\\..\\include" "${BUILD_DIR}\\include\\" /Y /E
+XVID_EOF
+
+    # Run the build script
+    cmd.exe /c build_xvid.bat || print_error "Xvid build failed, stopping."
+
+    print_info "Xvid build completed for Windows."
 }
 
 # Create pkg-config files for the built libraries
@@ -515,6 +597,19 @@ Version: 1.8.0
 Libs: -L\${libdir} -lSvtAv1Enc
 Cflags: -I\${includedir}
 EOF
+
+    cat > "${BUILD_DIR}/lib/pkgconfig/xvid.pc" << EOF
+prefix=${BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${prefix}/lib
+includedir=\${prefix}/include
+
+Name: xvid
+Description: Xvid MPEG-4 video codec
+Version: 1.3.7
+Libs: -L\${libdir} -lxvidcore
+Cflags: -I\${includedir}
+EOF
     
     print_info "pkg-config files generated successfully."
 }
@@ -567,6 +662,7 @@ powershell -Command "& './configure' ^
   --enable-libsvtav1 ^
   --enable-nvenc ^
   --enable-libvpl ^
+  --enable-libxvid ^
   %CUDA_NVENC_EXTRA% ^
   --extra-cflags=-I${BUILD_DIR}\include ^
   --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
@@ -645,6 +741,7 @@ main() {
     build_rav1e
     build_svtav1
     build_onevpl
+    build_xvid
     setup_nvenc_headers
     generate_pkgconfig_files
     

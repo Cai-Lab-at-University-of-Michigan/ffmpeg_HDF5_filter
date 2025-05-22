@@ -65,19 +65,6 @@ install_dependencies() {
         wget \
         curl
     
-    # Install codec-specific dependencies
-    brew install \
-        x264 \
-        x265 \
-        dav1d \
-        aom \
-        theora \
-        speex \
-        freetype \
-        fontconfig \
-        frei0r \
-        sdl2
-    
     # Install Python-specific dependencies
     brew install \
         python \
@@ -424,7 +411,6 @@ build_xvid() {
     # Configure for shared library with arm64 flags
     CFLAGS="-arch arm64" LDFLAGS="-arch arm64" ./configure \
         --prefix="${BUILD_DIR}" \
-        --enable-shared \
         --host=aarch64-apple-darwin
     
     make -j${NPROC}
