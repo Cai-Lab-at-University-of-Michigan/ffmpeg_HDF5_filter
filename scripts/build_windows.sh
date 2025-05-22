@@ -583,7 +583,7 @@ rem Configure FFmpeg
 echo Configuring FFmpeg...
 powershell -Command "& './configure' ^
   --toolchain=msvc ^
-  --prefix=${BUILD_DIR} ^
+  --prefix=%BUILD_DIR% ^
   --enable-shared ^
   --disable-static ^
   --disable-debug ^
@@ -593,8 +593,8 @@ powershell -Command "& './configure' ^
   --enable-asm ^
   --enable-libx264 ^
   --enable-libx265 ^
-  --extra-cflags=-I${BUILD_DIR}\include ^
-  --extra-ldflags=-LIBPATH:${BUILD_DIR}\lib"
+  --extra-cflags=-I%BUILD_DIR%\include ^
+  --extra-ldflags=-LIBPATH:%BUILD_DIR%\lib"
 
 rem Build FFmpeg
 echo Building FFmpeg...
