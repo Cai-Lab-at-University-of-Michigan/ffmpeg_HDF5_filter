@@ -285,6 +285,7 @@ build_ffmpeg() {
     )
     
     # Configure FFmpeg
+    export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig"
     ./configure "${CONFIG_OPTIONS[@]}"
     
     # Build and install
@@ -346,6 +347,49 @@ setup_logging() {
     fi
 }
 
+# Function to verify or create pkg-config file
+verify_pkg_config() {
+    local package=$1
+    local description=$2
+    local lib_name=$3
+
+    print_info "Verifying pkg-config for ${package}..."
+
+    local pc_file="${BUILD_DIR}/lib/pkgconfig/${package}.pc"
+
+    if [ ! -f "$pc_file" ]; then
+        print_warning "pkg-config file for ${package} not found. Creating..."
+
+        mkdir -p "$(dirname "$pc_file")"
+
+        cat > "$pc_file" <<EOF
+prefix=${BUILD_DIR}
+exec_prefix=\${prefix}
+libdir=\${exec_prefix}/lib
+includedir=\${prefix}/include
+
+Name: ${package}
+Description: ${description}
+Version: 1.0
+Libs: -L\${libdir} -l${lib_name}
+Libs.private: -lm -lpthread -lstdc++
+Cflags: -I\${includedir}
+EOF
+
+        print_info "Created fallback ${package}.pc"
+    else
+        print_info "Found existing pkg-config for ${package}"
+    fi
+
+    # Optionally test with pkg-config
+    if ! PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig" pkg-config --exists "$package"; then
+        print_warning "pkg-config still does not recognize ${package}"
+    else
+        print_info "pkg-config recognizes ${package}: version $(PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig" pkg-config --modversion $package)"
+    fi
+}
+
+
 # Main build process
 main() {
     setup_logging
@@ -361,6 +405,13 @@ main() {
     
     # Build additional components
     build_nvenc
+
+    verify_pkg_config "x264" "H.264/AVC video encoder" "x264" 
+    verify_pkg_config "x265" "H.265/HEVC video encoder" "x265"
+    verify_pkg_config "dav1d" "AV1 decoder" "dav1d"
+    verify_pkg_config "rav1e" "AV1 encoder" "rav1e"
+    verify_pkg_config "aom" "AV1 codec library" "aom"
+    verify_pkg_config "xvid" "Xvid MPEG-4 video codec" "xvidcore"
     
     # Build FFmpeg
     build_ffmpeg
