@@ -227,6 +227,20 @@ build_nvenc() {
     print_info "NVIDIA headers installed."
 }
 
+# Function to show FFmpeg configure errors
+show_ffmpeg_config_errors() {
+    local config_log="ffbuild/config.log"
+    
+    if [ -f "$config_log" ]; then
+        print_error "FFmpeg configure failed. Last 100 lines of config.log:"
+        echo "=========================================="
+        tail -n 100 "$config_log"
+        echo "=========================================="
+    else
+        print_error "FFmpeg configure failed and config.log not found"
+    fi
+}
+
 # Build FFmpeg for Windows
 build_ffmpeg() {
     print_info "Building FFmpeg for Windows..."
@@ -286,8 +300,12 @@ build_ffmpeg() {
     
     # Configure FFmpeg
     export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig"
-    ./configure "${CONFIG_OPTIONS[@]}"
-    
+    if ! ./configure "${CONFIG_OPTIONS[@]}"; then
+        print_error "FFmpeg configure failed"
+        show_ffmpeg_config_errors
+        exit 1
+    fi
+
     # Build and install
     make -j${NPROC}
     make install
