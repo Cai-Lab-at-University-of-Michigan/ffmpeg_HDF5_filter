@@ -287,6 +287,7 @@ build_ffmpeg() {
         "--target-os=${TARGET_OS}"
         "--arch=${TARGET_ARCH}"
         "--cross-prefix=${CROSS_PREFIX}"
+        "--pkg-config=/usr/bin/pkg-config"
         "--extra-cflags=${CFLAGS}"
         "--extra-ldflags=${LDFLAGS}"
         "--extra-libs=${EXTRAFLAGS}"
@@ -303,7 +304,7 @@ build_ffmpeg() {
         "--enable-libx265"
         
         # AV1 codecs
-        # "--enable-libaom"
+        "--enable-libaom"
         "--enable-librav1e"
         "--enable-libsvtav1"
         "--enable-libdav1d"
