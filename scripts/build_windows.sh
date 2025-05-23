@@ -303,7 +303,7 @@ build_ffmpeg() {
         "--enable-libx265"
         
         # AV1 codecs
-        "--enable-libaom"
+        # "--enable-libaom"
         "--enable-librav1e"
         "--enable-libsvtav1"
         "--enable-libdav1d"
@@ -322,7 +322,7 @@ build_ffmpeg() {
     )
     
     setup_ffmpeg_pkg_config
-    
+
     # Configure FFmpeg
     export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig"
     if ! ./configure "${CONFIG_OPTIONS[@]}"; then
