@@ -241,6 +241,29 @@ show_ffmpeg_config_errors() {
     fi
 }
 
+# Ensure pkg-config is properly available for FFmpeg configure
+setup_ffmpeg_pkg_config() {
+    print_info "Setting up pkg-config for FFmpeg configure..."
+    
+    # Make sure pkg-config is in PATH and working
+    which pkg-config || { print_error "pkg-config not found in PATH"; exit 1; }
+    
+    # Test pkg-config with our AOM package
+    export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig"
+    if ! pkg-config --exists aom; then
+        print_error "pkg-config cannot find aom package"
+        print_info "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+        ls -la "${BUILD_DIR}/lib/pkgconfig/"
+        exit 1
+    fi
+    
+    print_info "pkg-config test successful: aom version $(pkg-config --modversion aom)"
+    
+    # Export for FFmpeg's configure script
+    export PKG_CONFIG_PATH
+    export PKG_CONFIG="pkg-config"
+}
+
 # Build FFmpeg for Windows
 build_ffmpeg() {
     print_info "Building FFmpeg for Windows..."
@@ -297,6 +320,8 @@ build_ffmpeg() {
         "--disable-debug"
         "--disable-stripping"
     )
+    
+    setup_ffmpeg_pkg_config
     
     # Configure FFmpeg
     export PKG_CONFIG_PATH="${BUILD_DIR}/lib/pkgconfig"
