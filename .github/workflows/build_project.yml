@@ -226,13 +226,13 @@ jobs:
           echo "=== FFmpeg Build Contents ==="
           find ffmpeg_build -type f \( -name "*.so*" -o -name "*.dylib" -o -name "*.dll" -o -name "*.exe" \) | sort
           echo "=== Headers ==="
-          find ffmpeg_build/include -type f -name "*.h" | head -10
+          find ffmpeg_build/include -type f -name "*.h" 2>/dev/null | head -10 || true
           echo "=== pkg-config files ==="
           find ffmpeg_build -name "*.pc" | sort
           
           # Check for hardware acceleration support
           echo "=== Hardware Acceleration Libraries ==="
-          find ffmpeg_build -name "*cuda*" -o -name "*nvenc*" -o -name "*qsv*" -o -name "*vpl*" | sort
+          find ffmpeg_build -name "*cuda*" -o -name "*nvenc*" -o -name "*qsv*" -o -name "*vpl*" 2>/dev/null | sort || true
 
       - name: Install system dependencies
         shell: bash
@@ -378,7 +378,7 @@ jobs:
             "
           fi
           
-          find native_libs -type f | sort
+          find native_libs -type f 2>/dev/null | sort || echo "No native libraries found"
 
       - name: Upload native libraries
         uses: actions/upload-artifact@v4
