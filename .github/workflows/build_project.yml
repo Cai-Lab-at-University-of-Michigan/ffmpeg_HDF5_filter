@@ -339,7 +339,7 @@ jobs:
           PROGRESS_PID=$!
           
           echo "=== Starting cibuildwheel ==="
-          echo "CIBW_BUILD: ${{ matrix.python }}-*"
+          echo "CIBW_BUILD: cp${{ matrix.python | replace('.', '') }}-*"
           echo "CIBW_ARCHS: ${{ matrix.config.cibw_archs }}"
           echo "FFMPEG_ROOT: $FFMPEG_ROOT"
           
@@ -348,7 +348,7 @@ jobs:
           # Stop progress indicator
           kill $PROGRESS_PID || true
         env:
-          CIBW_BUILD: "${{ matrix.python }}-*"
+          CIBW_BUILD: "cp${{ matrix.python | replace('.', '') }}-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
           CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
           CIBW_BUILD_VERBOSITY: 3
@@ -413,13 +413,13 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "=== Starting cibuildwheel ==="
-          Write-Host "CIBW_BUILD: ${{ matrix.python }}-*"
+          Write-Host "CIBW_BUILD: cp${{ matrix.python | replace('.', '') }}-*"
           Write-Host "CIBW_ARCHS: ${{ matrix.config.cibw_archs }}"
           Write-Host "FFMPEG_ROOT: $env:FFMPEG_ROOT"
           
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: "${{ matrix.python }}-*"
+          CIBW_BUILD: "cp${{ matrix.python | replace('.', '') }}-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
           CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
           CIBW_BUILD_VERBOSITY: 3
@@ -446,7 +446,8 @@ jobs:
             echo "=== CIBW Windows: Starting build ==="
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
             delvewheel repair -w {dest_dir} {wheel} --add-path C:\ffmpeg\bin
-            
+
+      # === DEBUGGING: Check build results ===
       - name: Debug - Check build results
         if: always()
         run: |
