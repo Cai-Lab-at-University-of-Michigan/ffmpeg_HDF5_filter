@@ -178,7 +178,14 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
         env:
-          CIBW_BUILD: "cp${{ matrix.python | replace('.', '') }}-*"
+          CIBW_BUILD: >-
+            ${{
+              matrix.python == '3.9' && 'cp39-*' ||
+              matrix.python == '3.10' && 'cp310-*' ||
+              matrix.python == '3.11' && 'cp311-*' ||
+              matrix.python == '3.12' && 'cp312-*' ||
+              'cp39-*'
+            }}
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
           CIBW_BUILD_VERBOSITY: 3
           CIBW_TEST_REQUIRES: pytest numpy
