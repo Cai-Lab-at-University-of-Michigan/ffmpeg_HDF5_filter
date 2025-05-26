@@ -173,7 +173,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          python-version: ${{ matrix.python }}
 
       - name: Install Python dependencies
         run: |
@@ -190,63 +190,22 @@ jobs:
           FFMPEG_ROOT="${{ github.workspace }}/ffmpeg_build"
           echo "FFMPEG_ROOT=$FFMPEG_ROOT" >> $GITHUB_ENV
           
-          if [[ "${{ matrix.config.os }}" == "windows" ]]; then
+          if [ "${{ matrix.config.os }}" == "windows" ]; then
             echo "$FFMPEG_ROOT/bin" >> $GITHUB_PATH
           else
             chmod -R +x "$FFMPEG_ROOT/bin" 2>/dev/null || true
           fi
 
-      - name: List FFmpeg artifacts
-        run: |
-          echo "=== FFmpeg Build Contents ==="
-          find ffmpeg_build -type f \( -name "*.so*" -o -name "*.dylib" -o -name "*.dll" -o -name "*.exe" \) 2>/dev/null | head -10 || true
-          
-          echo "=== Headers ==="
-          find ffmpeg_build/include -type f -name "*.h" 2>/dev/null | head -10 || true
-          
-          echo "=== pkg-config files ==="
-          find ffmpeg_build -name "*.pc" 2>/dev/null | head -10 || true
-          
-          echo "=== Hardware Acceleration Libraries ==="
-          find ffmpeg_build -name "*cuda*" -o -name "*nvenc*" -o -name "*qsv*" -o -name "*vpl*" 2>/dev/null | sort || true
-
-      - name: Install system dependencies
-        run: |
-          case "${{ matrix.config.os }}" in
-            linux)
-              sudo apt-get update
-              sudo apt-get install -y libhdf5-dev patchelf
-              ;;
-            macos)
-              brew install hdf5 pkg-config
-              ;;
-            windows)
-              python -m pip install delvewheel
-              ;;
-          esac
-
-      - name: Cache Rust dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ matrix.config.os }}-cargo-${{ matrix.python }}-${{ hashFiles('**/Cargo.lock', '**/Cargo.toml') }}
-          restore-keys: |
-            ${{ matrix.config.os }}-cargo-${{ matrix.python }}-
-            ${{ matrix.config.os }}-cargo-
-
       - name: Build wheels
         run: |
-          if [[ "${{ matrix.config.os }}" != "windows" ]]; then
+          if [ "${{ matrix.config.os }}" != "windows" ]; then
             while true; do echo "Building wheel... $(date)"; sleep 60; done &
             PROGRESS_PID=$!
           fi
           
           python -m cibuildwheel --output-dir wheelhouse
           
-          if [[ "${{ matrix.config.os }}" != "windows" ]]; then
+          if [ "${{ matrix.config.os }}" != "windows" ]; then
             kill $PROGRESS_PID || true
           fi
         env:
@@ -255,33 +214,32 @@ jobs:
           CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
           CIBW_BUILD_VERBOSITY: 3
           CIBW_TEST_REQUIRES: pytest numpy
-          
+
           # Linux environment
           CIBW_BEFORE_ALL_LINUX: |
-            apt-get update && 
-            apt-get install -y libhdf5-dev patchelf && 
-            mkdir -p /usr/local/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
+            yum install -y hdf5-devel patchelf && 
+            mkdir -p /opt/ffmpeg && 
+            cp -r ${FFMPEG_ROOT}/* /opt/ffmpeg/
           CIBW_ENVIRONMENT_LINUX: |
-            FFMPEG_ROOT=/usr/local/ffmpeg 
-            PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
-            LD_LIBRARY_PATH=/usr/local/ffmpeg/lib:$LD_LIBRARY_PATH
-            PATH=/usr/local/ffmpeg/bin:$PATH
+            FFMPEG_ROOT=/opt/ffmpeg 
+            PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
+            LD_LIBRARY_PATH=/opt/ffmpeg/lib:$LD_LIBRARY_PATH
+            PATH=/opt/ffmpeg/bin:$PATH
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
-          
+
           # macOS environment
           CIBW_BEFORE_ALL_MACOS: |
             brew install hdf5 pkg-config && 
-            mkdir -p /usr/local/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* /usr/local/ffmpeg/
+            mkdir -p $HOME/ffmpeg && 
+            cp -r ${FFMPEG_ROOT}/* $HOME/ffmpeg/
           CIBW_ENVIRONMENT_MACOS: |
-            FFMPEG_ROOT=/usr/local/ffmpeg 
-            PKG_CONFIG_PATH=/usr/local/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
-            DYLD_LIBRARY_PATH=/usr/local/ffmpeg/lib:$DYLD_LIBRARY_PATH
-            PATH=/usr/local/ffmpeg/bin:$PATH
+            FFMPEG_ROOT=$HOME/ffmpeg 
+            PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
+            DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH
+            PATH=$HOME/ffmpeg/bin:$PATH
             MACOSX_DEPLOYMENT_TARGET=11.0
             ARCHFLAGS="-arch arm64"
             CARGO_BUILD_FLAGS="--release --jobs 2"
@@ -290,7 +248,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
-          
+
           # Windows environment
           CIBW_BEFORE_ALL_WINDOWS: |
             mkdir -p C:/ffmpeg && 
@@ -305,31 +263,6 @@ jobs:
             RUST_LOG=info
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
             delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg/bin
-
-      - name: Create dylib copies for macOS wheels
-        if: matrix.config.os == 'macos'
-        run: |
-          echo "Creating .dylib copies of .so files in macOS wheels..."
-          for wheel in wheelhouse/*.whl; do
-            [[ -f "$wheel" ]] || continue
-            
-            echo "Processing wheel: $wheel"
-            temp_dir=$(mktemp -d)
-            
-            python -m zipfile -e "$wheel" "$temp_dir"
-            
-            find "$temp_dir" -name "*.so" | while read -r so_file; do
-              dylib_file="${so_file%.so}.dylib"
-              cp "$so_file" "$dylib_file"
-              echo "Created copy: $(basename "$so_file") -> $(basename "$dylib_file")"
-            done
-            
-            (cd "$temp_dir" && python -m zipfile -c "../$(basename "$wheel")" *)
-            mv "$temp_dir/../$(basename "$wheel")" "$wheel"
-            rm -rf "$temp_dir"
-            
-            echo "Updated wheel: $wheel"
-          done
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
