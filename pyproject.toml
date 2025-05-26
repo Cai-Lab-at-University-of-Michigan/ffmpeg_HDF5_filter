@@ -14,7 +14,6 @@ test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
 before-all = [
-    # Install miniconda and HDF5 via conda-forge
     """
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
@@ -35,9 +34,7 @@ before-all = [
     else
         echo "HDF5 libraries not found"
     fi
-    """,
-    # Run your FFmpeg build script
-    """
+    
     cp scripts/build_linux.sh /tmp/
     chmod +x /tmp/build_linux.sh
     export CI_BUILD=1
@@ -97,6 +94,7 @@ DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH"
 PATH = "$HOME/ffmpeg/bin:$PATH"
 MACOSX_DEPLOYMENT_TARGET = "14.0"
 ARCHFLAGS = "-arch arm64"
+LDFLAGS = "-Wl,-headerpad_max_install_names"
 
 repair-wheel-command = [
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib delocate-listdeps {wheel}",
@@ -110,75 +108,209 @@ before-all = [
     start /wait "" miniforge.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:\\Miniforge3
     C:\\Miniforge3\\Scripts\\conda.exe install -y hdf5 hdf5-external-filter-plugins -c conda-forge
     """,
+    
     """
     mkdir C:\\ffmpeg_build\\bin 2>nul
     mkdir C:\\ffmpeg_build\\lib 2>nul  
     mkdir C:\\ffmpeg_build\\include 2>nul
     mkdir C:\\temp_msys2 2>nul
     
+    echo Installing zstd via scoop (more reliable than chocolatey)...
     powershell -Command "& {
-      $packages = @{
-        'ffmpeg' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-ffmpeg-7.1-3-any.pkg.tar.zst'
-        'x264' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3-any.pkg.tar.zst'
-        'x265' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-x265-4.1-2-any.pkg.tar.zst'
-        'xvidcore' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-xvidcore-1.3.7-4-any.pkg.tar.zst'
-        'aom' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-aom-3.12.1-1-any.pkg.tar.zst'
-        'dav1d' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-dav1d-1.5.0-1-any.pkg.tar.zst'
-        'svt-av1' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-svt-av1-3.0.2-2-any.pkg.tar.zst'
-        'rav1e' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-rav1e-0.7.1-7-any.pkg.tar.zst'
-        'libvpl' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst'
-        'libvpx' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpx-1.15.0-1-any.pkg.tar.zst'
-        }
-      
-      choco install zstandard -y --no-progress --force
-      
-      foreach ($pkg in $packages.GetEnumerator()) {
-        $filename = Split-Path $pkg.Value -Leaf
-        $downloadPath = \"C:\\temp_msys2\\$filename\"
-        
-        Write-Host \"Downloading $($pkg.Key)...\"
-        Invoke-WebRequest -Uri $pkg.Value -OutFile $downloadPath -UserAgent 'Mozilla/5.0' -TimeoutSec 300
-        
-        Write-Host \"Extracting $($pkg.Key)...\"
-        Set-Location 'C:\\temp_msys2'
-        tar --use-compress-program=zstd -xf $filename
-        
-        if (Test-Path 'mingw64\\bin') {
-          Copy-Item 'mingw64\\bin\\*' 'C:\\ffmpeg_build\\bin\\' -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        if (Test-Path 'mingw64\\lib') {
-          Copy-Item 'mingw64\\lib\\*' 'C:\\ffmpeg_build\\lib\\' -Recurse -Force -ErrorAction SilentlyContinue
-        }
-        if (Test-Path 'mingw64\\include') {
-          Copy-Item 'mingw64\\include\\*' 'C:\\ffmpeg_build\\include\\' -Recurse -Force -ErrorAction SilentlyContinue
+        # Install scoop if not present
+        if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+            Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
         }
         
-        Remove-Item 'mingw64' -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item $filename -Force -ErrorAction SilentlyContinue
-      }
+        # Install zstd
+        scoop install zstd
+        scoop install 7zip
+        
+        # Verify installation
+        if (-not (Get-Command zstd -ErrorAction SilentlyContinue)) {
+            Write-Error 'zstd installation failed'
+            exit 1
+        }
+        if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) {
+            Write-Error '7zip installation failed' 
+            exit 1
+        }
+        
+        Write-Host 'Tools installed successfully'
     }"
-    
-    rmdir /S /Q C:\\temp_msys2 2>nul
     """,
+    
     """
+    powershell -Command "& {
+        $ErrorActionPreference = 'Stop'
+        
+        # All required packages including dependencies
+        $packages = @{
+            'ffmpeg' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-ffmpeg-7.1-3-any.pkg.tar.zst'
+            'x264' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3-any.pkg.tar.zst'
+            'x265' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-x265-4.1-2-any.pkg.tar.zst'
+            'xvidcore' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-xvidcore-1.3.7-4-any.pkg.tar.zst'
+            'aom' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-aom-3.12.1-1-any.pkg.tar.zst'
+            'dav1d' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-dav1d-1.5.0-1-any.pkg.tar.zst'
+            'svt-av1' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-svt-av1-3.0.2-2-any.pkg.tar.zst'
+            'rav1e' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-rav1e-0.7.1-7-any.pkg.tar.zst'
+            'libvpl' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst'
+            'libvpx' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpx-1.15.0-1-any.pkg.tar.zst'
+            'zlib' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-zlib-1.3.1-1-any.pkg.tar.zst'
+            'bzip2' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-bzip2-1.0.8-4-any.pkg.tar.zst'
+            'xz' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-xz-5.6.3-2-any.pkg.tar.zst'
+            'lame' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-lame-3.100-4-any.pkg.tar.zst'
+            'opus' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-opus-1.5.2-1-any.pkg.tar.zst'
+        }
+        
+        Set-Location 'C:\\temp_msys2'
+        
+        foreach ($pkg in $packages.GetEnumerator()) {
+            $filename = Split-Path $pkg.Value -Leaf
+            $downloadPath = \"C:\\temp_msys2\\$filename\"
+            $extractDir = \"C:\\temp_msys2\\extract_$($pkg.Key)\"
+            
+            Write-Host \"Processing $($pkg.Key)...\"
+            
+            try {
+                Write-Host \"  Downloading...\"
+                Invoke-WebRequest -Uri $pkg.Value -OutFile $downloadPath -UserAgent 'Mozilla/5.0' -TimeoutSec 300
+                
+                if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -eq 0) {
+                    throw \"Download failed or file is empty\"
+                }
+                
+                # Create extraction directory
+                New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+                
+                # Extract using zstd + tar (two-step process)
+                Write-Host \"  Extracting zst...\"
+                $tarPath = $downloadPath -replace '\\.zst$', ''
+                & zstd -d $downloadPath -o $tarPath --force
+                
+                if (-not (Test-Path $tarPath)) {
+                    throw \"zstd extraction failed\"
+                }
+                
+                Write-Host \"  Extracting tar...\"
+                & 7z x $tarPath -o\"$extractDir\" -y | Out-Null
+                
+                # Check if mingw64 directory was created
+                $mingwDir = \"$extractDir\\mingw64\"
+                if (-not (Test-Path $mingwDir)) {
+                    Write-Warning \"No mingw64 directory found in $($pkg.Key), skipping...\"
+                    continue
+                }
+                
+                # Copy files to destination with verbose output
+                $copied = $false
+                
+                if (Test-Path \"$mingwDir\\bin\") {
+                    Write-Host \"  Copying bin files...\"
+                    $binFiles = Get-ChildItem \"$mingwDir\\bin\" -File
+                    foreach ($file in $binFiles) {
+                        Copy-Item $file.FullName 'C:\\ffmpeg_build\\bin\\' -Force
+                    }
+                    $copied = $true
+                }
+                
+                if (Test-Path \"$mingwDir\\lib\") {
+                    Write-Host \"  Copying lib files...\"
+                    $libFiles = Get-ChildItem \"$mingwDir\\lib\" -Recurse
+                    foreach ($file in $libFiles) {
+                        $destPath = $file.FullName.Replace($mingwDir, 'C:\\ffmpeg_build')
+                        $destDir = Split-Path $destPath -Parent
+                        if (-not (Test-Path $destDir)) {
+                            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                        }
+                        if ($file.PSIsContainer -eq $false) {
+                            Copy-Item $file.FullName $destPath -Force
+                        }
+                    }
+                    $copied = $true
+                }
+                
+                if (Test-Path \"$mingwDir\\include\") {
+                    Write-Host \"  Copying include files...\"
+                    $includeFiles = Get-ChildItem \"$mingwDir\\include\" -Recurse
+                    foreach ($file in $includeFiles) {
+                        $destPath = $file.FullName.Replace($mingwDir, 'C:\\ffmpeg_build')
+                        $destDir = Split-Path $destPath -Parent
+                        if (-not (Test-Path $destDir)) {
+                            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+                        }
+                        if ($file.PSIsContainer -eq $false) {
+                            Copy-Item $file.FullName $destPath -Force
+                        }
+                    }
+                    $copied = $true
+                }
+                
+                if ($copied) {
+                    Write-Host \"  $($pkg.Key) processed successfully\"
+                } else {
+                    Write-Warning \"  No files copied for $($pkg.Key)\"
+                }
+                
+                # Cleanup
+                Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
+                Remove-Item $tarPath -Force -ErrorAction SilentlyContinue
+                Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+                
+            } catch {
+                Write-Error \"Failed to process $($pkg.Key): $($_.Exception.Message)\"
+                # Continue with next package instead of failing completely
+                continue
+            }
+        }
+        
+        Write-Host 'Package extraction completed'
+    }"
+    """,
+    
+    # Final verification
+    """
+    rmdir /S /Q C:\\temp_msys2 2>nul
+    
+    echo Verifying FFmpeg installation...
+    
     if exist "C:\\ffmpeg_build\\bin\\ffmpeg.exe" (
-        echo FFmpeg found
-        C:\\ffmpeg_build\\bin\\ffmpeg.exe -version
+        echo SUCCESS: FFmpeg executable found
+        C:\\ffmpeg_build\\bin\\ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
     ) else (
-        echo ERROR: FFmpeg not found
-        exit 1
+        echo ERROR: FFmpeg executable not found
+        echo Contents of C:\\ffmpeg_build\\bin:
+        dir "C:\\ffmpeg_build\\bin" 2>nul
+        exit /b 1
     )
+    
+    if exist "C:\\ffmpeg_build\\include\\libavcodec\\avcodec.h" (
+        echo SUCCESS: FFmpeg headers found
+    ) else (
+        echo ERROR: FFmpeg headers not found
+        echo Contents of C:\\ffmpeg_build\\include:
+        dir "C:\\ffmpeg_build\\include" 2>nul
+        exit /b 1
+    )
+    
+    if exist "C:\\ffmpeg_build\\lib\\libavcodec.dll.a" (
+        echo SUCCESS: FFmpeg libraries found
+    ) else (
+        echo ERROR: FFmpeg import libraries not found
+        echo Contents of C:\\ffmpeg_build\\lib:
+        dir "C:\\ffmpeg_build\\lib" 2>nul
+        exit /b 1
+    )
+    
     if exist "C:\\Miniforge3\\Library\\include\\hdf5.h" (
-        echo HDF5 found
+        echo SUCCESS: HDF5 headers found
     ) else (
-        echo ERROR: HDF5 not found
-        exit 1
+        echo ERROR: HDF5 headers not found
+        exit /b 1
     )
-    echo Final verification complete
-    echo FFMPEG_ROOT will be: C:\\ffmpeg_build
-    echo HDF5_ROOT will be: C:\\Miniforge3\\Library
-    dir "C:\\ffmpeg_build" 2>nul
-    dir "C:\\Miniforge3\\Library" 2>nul
+    
+    echo All dependencies verified successfully!
     """
 ]
 
