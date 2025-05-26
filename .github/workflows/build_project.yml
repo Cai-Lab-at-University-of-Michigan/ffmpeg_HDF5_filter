@@ -185,29 +185,32 @@ jobs:
           name: ${{ matrix.config.artifact_name }}
           path: ffmpeg_build
 
-      - name: Setup environment
+      - name: Setup environment (Linux/macOS)
+        if: matrix.config.os != 'windows'
         run: |
           FFMPEG_ROOT="${{ github.workspace }}/ffmpeg_build"
           echo "FFMPEG_ROOT=$FFMPEG_ROOT" >> $GITHUB_ENV
-          
-          if [ "${{ matrix.config.os }}" == "windows" ]; then
-            echo "$FFMPEG_ROOT/bin" >> $GITHUB_PATH
-          else
-            chmod -R +x "$FFMPEG_ROOT/bin" 2>/dev/null || true
-          fi
+          chmod -R +x "$FFMPEG_ROOT/bin" 2>/dev/null || true
 
-      - name: Build wheels
+      - name: Setup environment (Windows)
+        if: matrix.config.os == 'windows'
+        shell: pwsh
         run: |
-          if [ "${{ matrix.config.os }}" != "windows" ]; then
-            while true; do echo "Building wheel... $(date)"; sleep 60; done &
-            PROGRESS_PID=$!
-          fi
+          $FFMPEG_ROOT = "${{ github.workspace }}\ffmpeg_build"
+          echo "FFMPEG_ROOT=$FFMPEG_ROOT" >> $env:GITHUB_ENV
+          echo "$FFMPEG_ROOT\bin" >> $env:GITHUB_PATH
+
+      - name: Build wheels (Linux/macOS)
+        if: matrix.config.os != 'windows'
+        run: |
+          # Start progress indicator for non-Windows
+          while true; do echo "Building wheel... $(date)"; sleep 60; done &
+          PROGRESS_PID=$!
           
           python -m cibuildwheel --output-dir wheelhouse
           
-          if [ "${{ matrix.config.os }}" != "windows" ]; then
-            kill $PROGRESS_PID || true
-          fi
+          # Stop progress indicator
+          kill $PROGRESS_PID || true
         env:
           CIBW_BUILD: "${{ matrix.python }}-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
@@ -249,20 +252,31 @@ jobs:
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
 
+      - name: Build wheels (Windows)
+        if: matrix.config.os == 'windows'
+        shell: pwsh
+        run: |
+          python -m cibuildwheel --output-dir wheelhouse
+        env:
+          CIBW_BUILD: "${{ matrix.python }}-*"
+          CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
+          CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
+          CIBW_BUILD_VERBOSITY: 3
+          CIBW_TEST_REQUIRES: pytest numpy
+
           # Windows environment
           CIBW_BEFORE_ALL_WINDOWS: |
-            mkdir -p C:/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* C:/ffmpeg/ &&
-            echo "C:/ffmpeg/bin" >> $GITHUB_PATH
+            if not exist C:\ffmpeg mkdir C:\ffmpeg
+            xcopy /E /I /Y %FFMPEG_ROOT% C:\ffmpeg
           CIBW_ENVIRONMENT_WINDOWS: |
-            FFMPEG_ROOT=C:/ffmpeg 
-            PKG_CONFIG_PATH=C:/ffmpeg/lib/pkgconfig 
-            PATH=C:/ffmpeg/bin;$PATH
-            CARGO_BUILD_FLAGS="--release --jobs 2"
+            FFMPEG_ROOT=C:\ffmpeg 
+            PKG_CONFIG_PATH=C:\ffmpeg\lib\pkgconfig 
+            PATH=C:\ffmpeg\bin;%PATH%
+            CARGO_BUILD_FLAGS=--release --jobs 2
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
-            delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg/bin
+            delvewheel repair -w {dest_dir} {wheel} --add-path C:\ffmpeg\bin
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
