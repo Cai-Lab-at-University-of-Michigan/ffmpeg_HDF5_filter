@@ -14,20 +14,40 @@ test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
 before-all = [
-    # Install HDF5 development libraries (CentOS/RHEL packages)
+    # Install miniconda and HDF5 via conda-forge
     """
-    yum update -y
-    yum install -y hdf5-devel pkg-config
-    echo "HDF5 installed via yum"
-    pkg-config --cflags --libs hdf5 || echo "pkg-config test failed"
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
+    bash miniconda.sh -b -p /opt/miniconda
+    /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config gcc_linux-64 gxx_linux-64 -c conda-forge
+    echo "HDF5 and build tools installed via conda-forge"
+    
+    # Verify installation
+    /opt/miniconda/bin/pkg-config --cflags --libs hdf5 || echo "HDF5 pkg-config test failed"
+    
+    if [ -f "/opt/miniconda/include/hdf5.h" ]; then
+        echo "HDF5 headers found in conda environment"
+    else
+        echo "HDF5 headers not found"
+    fi
+    
+    if [ -f "/opt/miniconda/lib/libhdf5.so" ]; then
+        echo "HDF5 libraries found in conda environment"
+    else
+        echo "HDF5 libraries not found"
+    fi
     """,
     # Run your FFmpeg build script
     """
     cp scripts/build_linux.sh /tmp/
     chmod +x /tmp/build_linux.sh
     export CI_BUILD=1
-    export DEBIAN_FRONTEND=noninteractive
     export TARGET_ARCH=x86_64
+    
+    # Make conda environment available to build script
+    export PATH="/opt/miniconda/bin:$PATH"
+    export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig:$PKG_CONFIG_PATH"
+    export LD_LIBRARY_PATH="/opt/miniconda/lib:$LD_LIBRARY_PATH"
+    
     cd /tmp
     ./build_linux.sh
     if [ -d "/tmp/ffmpeg_build" ]; then
@@ -41,9 +61,12 @@ before-all = [
 
 [tool.cibuildwheel.linux.environment]
 FFMPEG_ROOT = "/opt/ffmpeg"
-PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/usr/lib64/pkgconfig:/usr/lib/pkgconfig"
-LD_LIBRARY_PATH = "/opt/ffmpeg/lib:$LD_LIBRARY_PATH"
-PATH = "/opt/ffmpeg/bin:$PATH"
+HDF5_ROOT = "/opt/miniconda"
+PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig"
+LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib:$LD_LIBRARY_PATH"
+PATH = "/opt/ffmpeg/bin:/opt/miniconda/bin:$PATH"
+CPPFLAGS = "-I/opt/miniconda/include"
+LDFLAGS = "-L/opt/miniconda/lib"
 
 repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
@@ -54,7 +77,7 @@ before-all = [
     cp scripts/build_macos.sh /tmp/
     chmod +x /tmp/build_macos.sh
     export TARGET_ARCH="arm64"
-    export MACOSX_DEPLOYMENT_TARGET="11.0"
+    export MACOSX_DEPLOYMENT_TARGET="14.0"
     export ARCHFLAGS="-arch arm64"
     cd /tmp
     ./build_macos.sh
@@ -72,7 +95,7 @@ FFMPEG_ROOT = "$HOME/ffmpeg"
 PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
 DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH"
 PATH = "$HOME/ffmpeg/bin:$PATH"
-MACOSX_DEPLOYMENT_TARGET = "11.0"
+MACOSX_DEPLOYMENT_TARGET = "14.0"
 ARCHFLAGS = "-arch arm64"
 
 repair-wheel-command = [
@@ -151,15 +174,20 @@ before-all = [
         echo ERROR: HDF5 not found
         exit 1
     )
+    echo Final verification complete
+    echo FFMPEG_ROOT will be: C:\\ffmpeg_build
+    echo HDF5_ROOT will be: C:\\Miniforge3\\Library
+    dir "C:\\ffmpeg_build" 2>nul
+    dir "C:\\Miniforge3\\Library" 2>nul
     """
 ]
 
 [tool.cibuildwheel.windows.environment]
-FFMPEG_ROOT = "C:\\ffmpeg_build"
-HDF5_ROOT = "C:\\Miniforge3\\Library"
-PKG_CONFIG_PATH = "C:\\ffmpeg_build\\lib\\pkgconfig"
-PATH = "C:\\ffmpeg_build\\bin;C:\\Miniforge3\\Library\\bin;$PATH"
-INCLUDE = "C:\\ffmpeg_build\\include;C:\\Miniforge3\\Library\\include;$INCLUDE"
-LIB = "C:\\ffmpeg_build\\lib;C:\\Miniforge3\\Library\\lib;$LIB"
+FFMPEG_ROOT = "C:/ffmpeg_build"
+HDF5_ROOT = "C:/Miniforge3/Library"
+PKG_CONFIG_PATH = "C:/ffmpeg_build/lib/pkgconfig"
+PATH = "C:/ffmpeg_build/bin;C:/Miniforge3/Library/bin;$PATH"
+INCLUDE = "C:/ffmpeg_build/include;C:/Miniforge3/Library/include;$INCLUDE"
+LIB = "C:/ffmpeg_build/lib;C:/Miniforge3/Library/lib;$LIB"
 
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:\\ffmpeg_build\\bin;C:\\Miniforge3\\Library\\bin"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg_build/bin;C:/Miniforge3/Library/bin"
