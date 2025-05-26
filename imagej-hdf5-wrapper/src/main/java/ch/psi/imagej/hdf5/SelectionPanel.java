@@ -17,10 +17,7 @@ import javax.swing.JTextField;
 import javax.swing.ScrollPaneConstants;
 
 import hdf.object.Dataset;
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
 import ij.IJ;
-
-import com.cailab.hdf5.NativeLibraryLoader;
 
 public class SelectionPanel extends JPanel {
 
@@ -32,14 +29,6 @@ public class SelectionPanel extends JPanel {
 	private JLabel lblSlice;
 	private JPanel panel;
 	private JTextField textField;
-
-	static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 	
 	public SelectionPanel(){
 		this(new ArrayList<Dataset>());
@@ -62,13 +51,12 @@ public class SelectionPanel extends JPanel {
 				JLabel label = (JLabel) super.getListCellRendererComponent(list, value, index, isSelected, cellHasFocus);
 				final Dataset d = ((Dataset) value);
 				long[] dimensions = d.getDims();
-				try {
-					if (!d.isInited()) d.init();
-					// d.getMetadata();
-				} // get chunking and compression info
-				catch (Exception ex) {
-					IJ.log("get chunking and compression info:" + ex);
-				}
+				// try {
+				// 	d.getMetadata();
+				// } // get chunking and compression info
+				// catch (Exception ex) {
+				// 	IJ.log("get chunking and compression info:" + ex);
+				// }
 				String sizeStr = "";
 				if (dimensions != null) {
 					sizeStr += " Size:" + String.valueOf(dimensions[0]);
@@ -126,7 +114,7 @@ public class SelectionPanel extends JPanel {
 	public Integer getSlice(){
 		String text = textField.getText();
 		if(text.matches("^[0-9]+$")){
-			return new Integer(text);
+			return Integer.valueOf(text);
 		}
 		return null;
 	}
@@ -134,7 +122,7 @@ public class SelectionPanel extends JPanel {
 	public Integer getModulo(){
 		String text = textField.getText();
 		if(text.matches("^%[0-9]+$")){
-			return new Integer(text.replace("%", ""));
+			return Integer.valueOf(text.replace("%", ""));
 		}
 		return null;
 	}

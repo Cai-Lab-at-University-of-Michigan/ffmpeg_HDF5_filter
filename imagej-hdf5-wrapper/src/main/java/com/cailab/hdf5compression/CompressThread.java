@@ -7,12 +7,9 @@ import org.apache.commons.io.output.ByteArrayOutputStream;
 import hdf.hdf5lib.H5;
 import hdf.hdf5lib.HDF5Constants;
 import hdf.hdf5lib.exceptions.HDF5DataspaceInterfaceException;
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
 import ij.ImagePlus;
 import ij.WindowManager;
 import ij.process.ImageProcessor;
-
-import com.cailab.hdf5.NativeLibraryLoader;
 
 public class CompressThread implements Runnable {
 	private MainWindow mw;
@@ -24,14 +21,6 @@ public class CompressThread implements Runnable {
 	private int crf;
 	private int filmGrain;
 	private ImagePlus imp;
-
-	static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 
 	public CompressThread(MainWindow mw, String filename, int encoderId, int decoderId, int presetId, int tuneType,
 			int crf, int filmGrain) {
@@ -403,13 +392,19 @@ public class CompressThread implements Runnable {
 			// System.out.println("Setting plugin with path: " + pluginPath);
 			// H5.H5PLappend(pluginPath);
 
+			if (H5.H5Zfilter_avail(Constants.FILTER_ID) <= 0) {
+				System.out.println("Error: filter not available");
+				return;
+			}
+
 			this.imp = WindowManager.getCurrentImage();
 			imp.lock(); // lock image
 
 			int nRows = imp.getHeight();
 			int nCols = imp.getWidth();
+			int nSlices = imp.getNSlices();
 			long space;
-			final int[] CHUNK_SIZES = { nCols, nRows, 100 };
+			final int[] CHUNK_SIZES = { nCols, nRows, nSlices };
 			int stackType = getImageStackType(imp);
 			int zChunk = CHUNK_SIZES[2];
 
@@ -434,10 +429,10 @@ public class CompressThread implements Runnable {
 			cd_values[9] = filmGrain;
 			cd_values[10] = 0;
 
-			if (H5.H5Zfilter_avail(Constants.FILTER_ID) <= 0) {
-				System.out.println("Error: filter not available");
-				return;
+			for (int d : cd_values) { 
+				System.out.print(d + ", ");
 			}
+			System.out.println();
 
 			int r = H5.H5Pset_filter(plist, Constants.FILTER_ID, HDF5Constants.H5Z_FLAG_OPTIONAL, 11, cd_values);
 			if (r < 0) {

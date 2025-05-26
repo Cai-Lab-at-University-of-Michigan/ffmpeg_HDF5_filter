@@ -9,7 +9,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <error.h>
+#include <errno.h> 
 
 #include <libavcodec/avcodec.h>
 #include <libswscale/swscale.h>

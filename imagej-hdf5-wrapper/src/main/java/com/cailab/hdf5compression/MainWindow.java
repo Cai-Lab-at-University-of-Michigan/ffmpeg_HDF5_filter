@@ -12,8 +12,7 @@ import ij.io.SaveDialog;
 import ij.plugin.filter.PlugInFilter;
 import ij.process.ImageProcessor;
 
-import com.cailab.hdf5.NativeLibraryLoader;
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
+
 
 /**
  *
@@ -24,14 +23,6 @@ public class MainWindow extends javax.swing.JFrame implements PlugInFilter {
     private String selectedFilename = null;
     private Thread currThread = null;
     private long startTime = 0;
-
-    static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 
     /**
      * Creates new form MainWindow

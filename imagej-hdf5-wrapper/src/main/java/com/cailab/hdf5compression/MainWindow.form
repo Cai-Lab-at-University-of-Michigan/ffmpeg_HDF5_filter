@@ -110,16 +110,16 @@
       <Properties>
         <Property name="model" type="javax.swing.ComboBoxModel" editor="org.netbeans.modules.form.editors2.ComboBoxModelEditor">
           <StringArray count="11">
-            <StringItem index="0" value="mpeg4"/>
-            <StringItem index="1" value="libxvid"/>
+            <!-- <StringItem index="0" value="mpeg4"/> -->
+            <!-- <StringItem index="1" value="libxvid"/> -->
             <StringItem index="2" value="libx264"/>
-            <StringItem index="3" value="h264_nvenc"/>
+            <!-- <StringItem index="3" value="h264_nvenc"/> -->
             <StringItem index="4" value="libx265"/>
-            <StringItem index="5" value="hevc_nvenc"/>
+            <!-- <StringItem index="5" value="hevc_nvenc"/> -->
             <StringItem index="6" value="libsvtav1"/>
-            <StringItem index="7" value="librav1e"/>
-            <StringItem index="8" value="av1_nvenc"/>
-            <StringItem index="9" value="av1_qsv"/>
+            <!-- <StringItem index="7" value="librav1e"/> -->
+            <!-- <StringItem index="8" value="av1_nvenc"/> -->
+            <!-- <StringItem index="9" value="av1_qsv"/> -->
             <StringItem index="10" value=" "/>
           </StringArray>
         </Property>

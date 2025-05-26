@@ -65,3 +65,7 @@ ffmpeg_src/*
 *.egg-info
 __pycache__
 h5ffmpeg/*.so
+
+# gradle
+imagej-hdf5-wrapper/gradle*
+bak

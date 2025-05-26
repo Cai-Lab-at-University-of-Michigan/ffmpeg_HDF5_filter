@@ -135,3 +135,50 @@ def compress_and_decompress(data, compression_options, dataset_name="data"):
     finally:
         # Clean up temporary file
         cleanup_temp_file(temp_file)
+
+def generate_3d_sample_vol(width=512, height=512, depth=100, dtype=np.uint8, pattern="stripes", seed=None):
+    """
+    Generate 3D volume test data.
+    """
+    if dtype not in [np.uint8, np.uint16]:
+        raise ValueError("Only np.uint8 and np.uint16 data types are supported")
+    
+    if seed is not None:
+        np.random.seed(seed)
+    
+    if pattern == "random":
+        if dtype == np.uint8:
+            return np.random.randint(0, 256, (depth, height, width), dtype=dtype)
+        else:
+            return np.random.randint(0, 65536, (depth, height, width), dtype=dtype)
+    
+    elif pattern == "gradient":
+        x = np.linspace(0, 1, width)
+        y = np.linspace(0, 1, height)
+        z = np.linspace(0, 1, depth)
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        data = (xx + yy + zz) / 3
+        
+        if dtype == np.uint8:
+            data = (data * 255).astype(dtype)
+        else:
+            data = (data * 65535).astype(dtype)
+        
+        return np.transpose(data, [2, 1, 0])
+    
+    elif pattern == "stripes":
+        x = np.arange(width)
+        data = np.sin(x * 8 * np.pi / width)
+        data = np.tile(data, (depth, height, 1))
+        
+        data = (data + 1) / 2
+        
+        if dtype == np.uint8:
+            data = (data * 255).astype(dtype)
+        else:
+            data = (data * 65535).astype(dtype)
+        
+        return data  
+    
+    else:
+        raise ValueError(f"Unknown pattern: {pattern}")

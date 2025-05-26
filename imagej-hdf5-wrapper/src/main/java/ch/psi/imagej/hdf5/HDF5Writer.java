@@ -1,5 +1,6 @@
 package ch.psi.imagej.hdf5;
 
+
 import hdf.object.Dataset;
 import hdf.object.Datatype;
 import hdf.object.FileFormat;
@@ -15,22 +16,13 @@ import ij.gui.*;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+//import hdf.object.*; // the common object package
+//import hdf.object.h5.*; // the HDF5 implementation
 import hdf.hdf5lib.exceptions.HDF5Exception;
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
-
-import com.cailab.hdf5.NativeLibraryLoader;
 
 public class HDF5Writer implements PlugInFilter {
 
 	private static final Logger logger = Logger.getLogger(HDF5Writer.class.getName());
-
-	static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 
 	public int setup(String arg, ImagePlus imp) {
 		// see http://rsb.info.nih.gov/ij/developer/api/ij/plugin/filter/PlugInFilter.html

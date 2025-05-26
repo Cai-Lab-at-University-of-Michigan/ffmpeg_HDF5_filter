@@ -23,8 +23,7 @@ package hdf.object;
  * @version 1.0 4/2/2018
  * @author Jordan T. Henderson
  */
-public interface DataFormat
-{
+public interface DataFormat {
     /**
      * The status of initialization for this object
      *
@@ -48,10 +47,11 @@ public interface DataFormat
     Object getData() throws Exception, OutOfMemoryError;
 
     /**
+     * setData() is not safe to use because it changes memory buffer of the dataset object. Dataset operations
+     * such as write/read will fail if the buffer type or size is changed.
      *
      *
-     * @param data
-     *            the data to write.
+     * @param data the data to write.
      */
     void setData(Object data);
 
@@ -186,7 +186,6 @@ public interface DataFormat
      * @return the dimension sizes of the data object.
      */
     long[] getDims();
-
 
     /****************************************************************
      * * The following four definitions are used for data subsetting. * *

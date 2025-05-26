@@ -14,21 +14,9 @@ import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 import ij.process.ShortProcessor;
 
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
-
-import com.cailab.hdf5.NativeLibraryLoader;
-
 public class VirtualStackHDF5 extends BufferedVirtualStack {
 
 	private static final Logger logger = Logger.getLogger(VirtualStackHDF5.class.getName());
-
-	static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 
 	private int bitDepth = 0;
 	private Dataset dataset;
@@ -42,13 +30,12 @@ public class VirtualStackHDF5 extends BufferedVirtualStack {
 		this.file = file;
 		// simply run getChunkSize() will return null,
 		// needs to run getMetadata() first;
-		try {
-			// dataset.getMetadata();
-			if (!dataset.isInited()) dataset.init();
-		} // get chunking and compression info
-		catch (Exception ex) {
-			logger.info("get chunking and compression info:" + ex);
-		}
+		// try {
+		// 	dataset.getMetadata();
+		// } // get chunking and compression info
+		// catch (Exception ex) {
+		// 	logger.info("get chunking and compression info:" + ex);
+		// }
 		long[] chunks = dataset.getChunkSize();
 		String sizeStr;
 		if (chunks != null) {

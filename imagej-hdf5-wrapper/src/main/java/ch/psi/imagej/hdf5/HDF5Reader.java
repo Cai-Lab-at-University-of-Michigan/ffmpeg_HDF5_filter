@@ -21,21 +21,9 @@ import ij.gui.GenericDialog;
 import ij.io.OpenDialog;
 import ij.plugin.PlugIn;
 
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
-
-import com.cailab.hdf5.NativeLibraryLoader;
-
 public class HDF5Reader implements PlugIn {
 
 	private static final Logger logger = Logger.getLogger(HDF5Reader.class.getName());
-
-	static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 
 	/**
 	 * Main function for testing
@@ -346,13 +334,12 @@ public class HDF5Reader implements PlugIn {
 
 							// workaround for loading large images
 							if (totalSelectedSpacePoints > Integer.MAX_VALUE) {
-								try {
-									// var.getMetadata();
-									if (!var.isInited()) var.init();
-								} // get chunking and compression info
-								catch (Exception ex) {
-									logger.info("get chunking and compression info:" + ex);
-								}
+								// try {
+								// 	var.getMetadata();
+								// } // get chunking and compression info
+								// catch (Exception ex) {
+								// 	logger.info("get chunking and compression info:" + ex);
+								// }
 								int zChunk = (int) var.getChunkSize()[0];
 								long[] start = var.getStartDims();
 								Object wholeDataset = null;

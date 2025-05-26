@@ -18,21 +18,9 @@ import hdf.object.Group;
 import hdf.object.HObject;
 import hdf.object.h5.H5File;
 
-import hdf.hdf5lib.exceptions.HDF5LibraryException;
-
-import com.cailab.hdf5.NativeLibraryLoader;
-
 public class HDF5Utilities {
 	
 	private static final Logger logger = Logger.getLogger(HDF5Utilities.class.getName());
-
-	static {
-        try {
-            NativeLibraryLoader.initialize();
-        } catch (Exception e) {
-			throw new HDF5LibraryException("Failed to load FFmpeg HDF5 filter native library");
-        }
-    }
 	
 //	/**
 //	 * Get attributes from object

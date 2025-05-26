@@ -5,32 +5,32 @@ version = '1.0.0'
 
 description = """Combined HDF5-FFMPEG Compression and Viewer"""
 
-sourceCompatibility = 1.8
-targetCompatibility = 1.8
+sourceCompatibility = JavaVersion.VERSION_21
+targetCompatibility = JavaVersion.VERSION_21
 
 repositories {
     mavenCentral()
     maven { url "https://artifacts.psi.ch/artifactory/libs-releases" }
     maven { url "https://maven.imagej.net/content/repositories/public/" }
-    flatDir {
-        dirs 'lib'
-    }
 }
 
 // define a provided scope
 configurations {
     provided
-    compile.extendsFrom provided
+    implementation.extendsFrom provided
 }
 
 dependencies {
-    // Commons-IO from Maven Central
-    compile group: 'commons-io', name: 'commons-io', version: '2.6'
+    // Commons-IO from Maven Central - updated to latest stable version
+    implementation group: 'commons-io', name: 'commons-io', version: '2.16.1'
     
-    // Other dependencies
-    compile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.6'
+    // SLF4J - updated to latest stable version
+    implementation group: 'org.slf4j', name: 'slf4j-api', version: '2.0.13'
     
-    // ImageJ dependency
+    // Add SLF4J implementation for runtime logging
+    runtimeOnly group: 'org.slf4j', name: 'slf4j-simple', version: '2.0.13'
+    
+    // ImageJ dependency - updated to latest version
     provided group: 'net.imagej', name: 'ij', version: '1.54p'
 }
 
@@ -38,23 +38,14 @@ dependencies {
 task packJar(type: Jar) {
     archiveBaseName = 'HDF5-ffmpeg'
     
-    // Include native libraries in the JAR in the correct location for NativeLibraryLoader
-    from('imagej-hdf5-wrapper/lib/native/linux') {
-        into 'native/linux'
-    }
-    from('imagej-hdf5-wrapper/lib/native/windows') {
-        into 'native/windows'
-    }
-    from('imagej-hdf5-wrapper/lib/native/macos') {
-        into 'native/macos'
-    }
-    
     // Include compiled classes and resources
-    from { (configurations.compile - configurations.provided).collect { it.isDirectory() ? it : zipTree(it) } }
+    from { (configurations.runtimeClasspath - configurations.provided).collect { it.isDirectory() ? it : zipTree(it) } }
     with jar
     
     // Exclude unnecessary files from dependencies
     exclude 'META-INF/*.SF'
     exclude 'META-INF/*.DSA'
     exclude 'META-INF/*.RSA'
+    
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
