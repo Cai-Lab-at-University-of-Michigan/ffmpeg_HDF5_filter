@@ -216,15 +216,21 @@ jobs:
           ls -la "$FFMPEG_ROOT" || echo "FFMPEG_ROOT not found"
           "$FFMPEG_ROOT/bin/ffmpeg" -version || echo "FFmpeg not working"
 
+      - name: Set Python version for wheel
+        run: |
+          PYTHON_VERSION="${{ matrix.python }}"
+          PYTHON_VERSION_NODOT="${PYTHON_VERSION//./}"
+          echo "PYTHON_VERSION_NODOT=cp${PYTHON_VERSION_NODOT}-*" >> $GITHUB_ENV
+
       - name: Build wheels (Linux/macOS)
         if: matrix.config.os != 'windows'
         run: |
           echo "=== Starting cibuildwheel ==="
-          echo "Building: cp${{ matrix.python | replace('.', '') }}-*"
+          echo "Building: $PYTHON_VERSION_NODOT"
           
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: "cp${{ matrix.python | replace('.', '') }}-*"
+          CIBW_BUILD: "${{ env.PYTHON_VERSION_NODOT }}"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
           CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
           CIBW_BUILD_VERBOSITY: 3
@@ -258,16 +264,24 @@ jobs:
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
 
+      - name: Set Python version for wheel (Windows)
+        if: matrix.config.os == 'windows'
+        shell: pwsh
+        run: |
+          $pythonVersion = "${{ matrix.python }}"
+          $pythonVersionNoDot = "cp" + ($pythonVersion -replace '\.', '') + "-*"
+          echo "PYTHON_VERSION_NODOT=$pythonVersionNoDot" >> $env:GITHUB_ENV
+
       - name: Build wheels (Windows)
         if: matrix.config.os == 'windows'
         shell: pwsh
         run: |
           Write-Host "=== Starting cibuildwheel ==="
-          Write-Host "Building: cp${{ matrix.python | replace('.', '') }}-*"
+          Write-Host "Building: $env:PYTHON_VERSION_NODOT"
           
           python -m cibuildwheel --output-dir wheelhouse
         env:
-          CIBW_BUILD: "cp${{ matrix.python | replace('.', '') }}-*"
+          CIBW_BUILD: "${{ env.PYTHON_VERSION_NODOT }}"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
           CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
           CIBW_BUILD_VERBOSITY: 3
