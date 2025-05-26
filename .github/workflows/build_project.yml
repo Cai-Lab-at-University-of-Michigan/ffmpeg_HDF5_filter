@@ -15,200 +15,102 @@ env:
   PYTHON_VERSION: '3.10'
 
 jobs:
-  build_ffmpeg:
-    name: Build FFmpeg (${{ matrix.os }})
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
-    strategy:
-      matrix:
-        include:
-          - os: linux
-            runner: ubuntu-latest
-            script: build_linux.sh
-            artifact_name: ffmpeg-Linux
-            target_arch: x86_64
-          - os: windows
-            runner: ubuntu-latest
-            script: build_windows.sh
-            artifact_name: ffmpeg-Windows
-            target_arch: AMD64
-          - os: macos
-            runner: macos-14
-            script: build_macos.sh
-            artifact_name: ffmpeg-macOS
-            target_arch: arm64
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-
-      - name: Check if build scripts exist
-        run: |
-          if [[ ! -f "scripts/${{ matrix.script }}" ]]; then
-            echo "ERROR: Script scripts/${{ matrix.script }} not found"
-            echo "Available files in scripts directory:"
-            ls -la scripts/ || echo "scripts/ directory does not exist"
-            exit 1
-          fi
-
-      - name: Free disk space (Linux/Windows)
-        if: matrix.os == 'linux' || matrix.os == 'windows'
-        run: |
-          sudo apt-get remove -y '^dotnet-.*' '^llvm-.*' '^mongodb-.*' '^mysql-.*' '^postgresql-.*'
-          sudo apt-get autoremove -y && sudo apt-get autoclean
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
-          df -h
-
-      - name: Clean build directories
-        run: |
-          BUILD_DIR=${{ matrix.os == 'windows' && 'ffmpeg_build_windows' || 'ffmpeg_build' }}
-          SRC_DIR=${{ matrix.os == 'windows' && 'ffmpeg_src_windows' || 'ffmpeg_src' }}
-          
-          rm -rf "$BUILD_DIR" "$SRC_DIR" build_logs
-          mkdir -p "$BUILD_DIR"
-
-      - name: Cache FFmpeg dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ffmpeg_build*
-            ffmpeg_src*
-          key: ${{ matrix.os }}-ffmpeg-v2-${{ hashFiles('scripts/${{ matrix.script }}') }}
-          restore-keys: |
-            ${{ matrix.os }}-ffmpeg-v2-
-            ${{ matrix.os }}-ffmpeg-
-
-      - name: Build FFmpeg
-        run: |
-          chmod +x scripts/${{ matrix.script }}
-          
-          export TARGET_ARCH="${{ matrix.target_arch }}"
-          
-          if [[ "${{ matrix.os }}" == "windows" || "${{ matrix.os }}" == "linux" ]]; then
-            export DEBIAN_FRONTEND=noninteractive
-            export CI_BUILD=1
-          fi
-          
-          echo "Building FFmpeg for architecture: ${TARGET_ARCH}"
-          ./scripts/${{ matrix.script }}
-
-      - name: Verify build output
-        run: |
-          BUILD_DIR=${{ matrix.os == 'windows' && 'ffmpeg_build_windows' || 'ffmpeg_build' }}
-          
-          echo "=== Build Verification ==="
-          find "${BUILD_DIR}" -type f \( -name "ffmpeg*" -o -name "*.exe" -o -name "*.dll" -o -name "*.so*" -o -name "*.dylib" \) 2>/dev/null | head -10 || true
-          
-          echo "=== Hardware Acceleration Check ==="
-          if [[ "${{ matrix.os }}" == "windows" ]]; then
-            command -v wine &> /dev/null && wine "${BUILD_DIR}/bin/ffmpeg.exe" -hwaccels 2>/dev/null || echo "Wine test skipped"
-          else
-            export LD_LIBRARY_PATH="${BUILD_DIR}/lib:$LD_LIBRARY_PATH"
-            "${BUILD_DIR}/bin/ffmpeg" -hwaccels 2>/dev/null || true
-          fi
-
-      - name: Package artifacts
-        run: |
-          BUILD_DIR=${{ matrix.os == 'windows' && 'ffmpeg_build_windows' || 'ffmpeg_build' }}
-          
-          mkdir -p upload_artifacts
-          cp -r "${BUILD_DIR}"/* upload_artifacts/
-          
-          if [[ "${{ matrix.os }}" == "windows" ]]; then
-            find upload_artifacts/lib -name "*.dll" -exec mv {} upload_artifacts/bin/ \; 2>/dev/null || true
-            echo "Windows build verification:"
-            find upload_artifacts/bin -name "*.exe" -o -name "*.dll" 2>/dev/null | head -10 || true
-          fi
-
-      - name: Upload FFmpeg artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.artifact_name }}
-          path: upload_artifacts/
-          retention-days: 7
-
-      - name: Upload build logs (on failure)
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-logs-${{ matrix.os }}
-          path: build_logs/
-          retention-days: 3
-  
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
-    needs: build_ffmpeg
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-2022, macos-14]
-        python: ['3.9', '3.10', '3.11', '3.12']
+        # ubuntu-latest is x86_64, ubuntu-24.04-arm is ARM64
+        # macos-latest is apple silicon
+        os: [ubuntu-latest, ubuntu-24.04-arm, windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download FFmpeg artifacts (Linux)
-        if: matrix.os == 'ubuntu-latest'
-        uses: actions/download-artifact@v4
+      - name: Set up QEMU (Linux only)
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
         with:
-          name: ffmpeg-Linux
-          path: ffmpeg_deps
-
-      - name: Download FFmpeg artifacts (Windows)
-        if: matrix.os == 'windows-2022'
-        uses: actions/download-artifact@v4
-        with:
-          name: ffmpeg-Windows
-          path: ffmpeg_deps
-
-      - name: Download FFmpeg artifacts (macOS)
-        if: matrix.os == 'macos-14'
-        uses: actions/download-artifact@v4
-        with:
-          name: ffmpeg-macOS
-          path: ffmpeg_deps
+          platforms: all
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
         env:
-          CIBW_BUILD: >-
-            ${{
-              matrix.python == '3.9' && 'cp39-*' ||
-              matrix.python == '3.10' && 'cp310-*' ||
-              matrix.python == '3.11' && 'cp311-*' ||
-              matrix.python == '3.12' && 'cp312-*' ||
-              'cp39-*'
-            }}
+          # Build for Python 3.11-3.12 (minimum Python 3.11)
+          CIBW_BUILD: "cp311-* cp312-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
-          CIBW_BUILD_VERBOSITY: 3
-          CIBW_TEST_REQUIRES: pytest numpy
+          CIBW_BUILD_VERBOSITY: 2
+          
+          # Configure architectures based on runner
+          CIBW_ARCHS_LINUX: ${{ matrix.os == 'ubuntu-latest' && 'x86_64' || 'aarch64' }}
+          CIBW_ARCHS_MACOS: arm64
+          CIBW_ARCHS_WINDOWS: AMD64
 
-          # Linux
+          # Test requirements
+          CIBW_TEST_REQUIRES: pytest numpy
+          CIBW_TEST_COMMAND: python -c "import h5ffmpeg; print('Import successful')"
+
+          # ===== LINUX =====
           CIBW_BEFORE_ALL_LINUX: |
-            yum install -y hdf5-devel patchelf &&
-            mkdir -p /opt/ffmpeg &&
-            cp -r /project/ffmpeg_deps/* /opt/ffmpeg/ &&
-            ls -la /opt/ffmpeg/
+            # Copy build script into container
+            cp /project/scripts/build_linux.sh /tmp/
+            chmod +x /tmp/build_linux.sh
+            
+            # Set environment for the build script
+            export CI_BUILD=1
+            export DEBIAN_FRONTEND=noninteractive
+            export TARGET_ARCH="${{ matrix.os == 'ubuntu-latest' && 'x86_64' || 'aarch64' }}"
+            
+            # Run the build script
+            cd /tmp
+            ./build_linux.sh
+            
+            # The script creates ffmpeg_build directory, so we link it to expected location
+            if [ -d "/tmp/ffmpeg_build" ]; then
+              mkdir -p /opt/ffmpeg
+              cp -r /tmp/ffmpeg_build/* /opt/ffmpeg/
+            fi
+            
+            # Verify build
+            /opt/ffmpeg/bin/ffmpeg -version
+            echo "FFmpeg build completed using build_linux.sh"
+
           CIBW_ENVIRONMENT_LINUX: |
             FFMPEG_ROOT=/opt/ffmpeg
             PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH
             LD_LIBRARY_PATH=/opt/ffmpeg/lib:$LD_LIBRARY_PATH
             PATH=/opt/ffmpeg/bin:$PATH
-          CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
 
-          # macOS
+          CIBW_REPAIR_WHEEL_COMMAND_LINUX: |
+            auditwheel repair -w {dest_dir} {wheel}
+
+          # ===== MACOS =====
           CIBW_BEFORE_ALL_MACOS: |
-            brew install hdf5 pkg-config &&
-            mkdir -p $HOME/ffmpeg &&
-            cp -r /project/ffmpeg_deps/* $HOME/ffmpeg/ &&
-            ls -la $HOME/ffmpeg/
+            # Copy and execute the build script
+            cp /project/scripts/build_macos.sh /tmp/
+            chmod +x /tmp/build_macos.sh
+            
+            # Set environment for the build script
+            export TARGET_ARCH="arm64"
+            export MACOSX_DEPLOYMENT_TARGET="11.0"
+            export ARCHFLAGS="-arch arm64"
+            
+            # Run the build script
+            cd /tmp
+            ./build_macos.sh
+            
+            # The script creates ffmpeg_build directory, copy it to expected location
+            if [ -d "/tmp/ffmpeg_build" ]; then
+              mkdir -p $HOME/ffmpeg
+              cp -r /tmp/ffmpeg_build/* $HOME/ffmpeg/
+            fi
+            
+            # Verify build
+            $HOME/ffmpeg/bin/ffmpeg -version
+            echo "FFmpeg build completed using build_macos.sh"
+
           CIBW_ENVIRONMENT_MACOS: |
             FFMPEG_ROOT=$HOME/ffmpeg
             PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH
@@ -216,31 +118,204 @@ jobs:
             PATH=$HOME/ffmpeg/bin:$PATH
             MACOSX_DEPLOYMENT_TARGET=11.0
             ARCHFLAGS="-arch arm64"
+
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
-            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
+            DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel}
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
 
-          # Windows
+          # ===== WINDOWS (Using our script with quick MSYS2 setup) =====
           CIBW_BEFORE_ALL_WINDOWS: |
-            if not exist C:\ffmpeg mkdir C:\ffmpeg &&
-            xcopy /E /I /Y \project\ffmpeg_deps C:\ffmpeg &&
-            dir C:\ffmpeg
-          CIBW_ENVIRONMENT_WINDOWS: |
-            FFMPEG_ROOT=C:\ffmpeg
-            PKG_CONFIG_PATH=C:\ffmpeg\lib\pkgconfig
-            PATH=C:\ffmpeg\bin;%PATH%
-          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
-            delvewheel repair -w {dest_dir} {wheel} --add-path C:\ffmpeg\bin
+            # Create directories
+            mkdir C:\ffmpeg_build\bin 2>nul
+            mkdir C:\ffmpeg_build\lib 2>nul
+            mkdir C:\ffmpeg_build\include 2>nul
+            mkdir C:\temp_msys2 2>nul
+            
+            # Use PowerShell to download and extract all codec packages
+            powershell -Command "& {
+              # Complete package list with all important codecs
+              $packages = @{
+                'ffmpeg' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-ffmpeg-7.1-3-any.pkg.tar.zst'
+                'x264' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3-any.pkg.tar.zst'
+                'x265' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-x265-4.1-2-any.pkg.tar.zst'
+                'xvidcore' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-xvidcore-1.3.7-4-any.pkg.tar.zst'
+                'aom' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-aom-3.12.1-1-any.pkg.tar.zst'
+                'dav1d' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-dav1d-1.5.0-1-any.pkg.tar.zst'
+                'svt-av1' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-svt-av1-3.0.2-2-any.pkg.tar.zst'
+                'rav1e' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-rav1e-0.7.1-7-any.pkg.tar.zst'
+                'libvpl' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst'
+                'libvpx' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpx-1.15.0-1-any.pkg.tar.zst'
+              }
+              
+              # Install zstd for extraction
+              Write-Host 'Installing zstd for package extraction...'
+              choco install zstandard -y --no-progress --force
+              
+              # Download and extract each package
+              $totalPackages = $packages.Count
+              $currentPackage = 0
+              
+              foreach ($pkg in $packages.GetEnumerator()) {
+                $currentPackage++
+                Write-Host \"[$currentPackage/$totalPackages] Processing $($pkg.Key)...\"
+                $filename = Split-Path $pkg.Value -Leaf
+                $downloadPath = \"C:\temp_msys2\$filename\"
+                
+                # Download with retry logic
+                $maxRetries = 3
+                $retryCount = 0
+                $downloaded = $false
+                
+                do {
+                  try {
+                    Write-Host \"  Downloading $($pkg.Key) (attempt $($retryCount + 1))...\"
+                    Invoke-WebRequest -Uri $pkg.Value -OutFile $downloadPath -UserAgent 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36' -TimeoutSec 300
+                    $downloaded = $true
+                    break
+                  } catch {
+                    $retryCount++
+                    Write-Warning \"  Download failed: $_\"
+                    if ($retryCount -ge $maxRetries) {
+                      Write-Error \"Failed to download $($pkg.Key) after $maxRetries attempts\"
+                      continue
+                    }
+                    Start-Sleep -Seconds 5
+                  }
+                } while ($retryCount -lt $maxRetries -and -not $downloaded)
+                
+                if (-not $downloaded) {
+                  Write-Warning \"Skipping $($pkg.Key) due to download failure\"
+                  continue
+                }
+                
+                # Extract using tar
+                try {
+                  Write-Host \"  Extracting $($pkg.Key)...\"
+                  Set-Location 'C:\temp_msys2'
+                  $extractResult = tar --use-compress-program=zstd -xf $filename 2>&1
+                  
+                  if ($LASTEXITCODE -ne 0) {
+                    Write-Warning \"  Extraction failed for $($pkg.Key): $extractResult\"
+                    continue
+                  }
+                  
+                  # Copy files to build directory
+                  $filesCopied = 0
+                  
+                  if (Test-Path 'mingw64\bin') {
+                    Copy-Item 'mingw64\bin\*' 'C:\ffmpeg_build\bin\' -Recurse -Force -ErrorAction SilentlyContinue
+                    $binFiles = (Get-ChildItem 'mingw64\bin' -File).Count
+                    $filesCopied += $binFiles
+                    Write-Host \"    Copied $binFiles binary files\"
+                  }
+                  
+                  if (Test-Path 'mingw64\lib') {
+                    Copy-Item 'mingw64\lib\*' 'C:\ffmpeg_build\lib\' -Recurse -Force -ErrorAction SilentlyContinue
+                    $libFiles = (Get-ChildItem 'mingw64\lib' -Recurse -File).Count
+                    $filesCopied += $libFiles
+                    Write-Host \"    Copied $libFiles library files\"
+                  }
+                  
+                  if (Test-Path 'mingw64\include') {
+                    Copy-Item 'mingw64\include\*' 'C:\ffmpeg_build\include\' -Recurse -Force -ErrorAction SilentlyContinue
+                    $headerFiles = (Get-ChildItem 'mingw64\include' -Recurse -File).Count
+                    $filesCopied += $headerFiles
+                    Write-Host \"    Copied $headerFiles header files\"
+                  }
+                  
+                  Write-Host \"  Successfully processed $($pkg.Key) ($filesCopied total files)\"
+                  
+                } catch {
+                  Write-Warning \"  Error processing $($pkg.Key): $_\"
+                } finally {
+                  # Clean up extraction files
+                  Remove-Item 'mingw64' -Recurse -Force -ErrorAction SilentlyContinue
+                  Remove-Item $filename -Force -ErrorAction SilentlyContinue
+                }
+              }
+              
+              Write-Host 'All packages processed successfully!'
+            }"
+            
+            # Clean up temp directory
+            rmdir /S /Q C:\temp_msys2 2>nul
+            
+            # Verify installation and show comprehensive info
+            echo "========================================="
+            echo "Verifying FFmpeg installation..."
+            echo "========================================="
+            
+            if exist "C:\ffmpeg_build\bin\ffmpeg.exe" (
+              echo "=== FFmpeg Version ==="
+              C:\ffmpeg_build\bin\ffmpeg.exe -version
+              echo.
+              
+              echo "=== Available Executables ==="
+              dir C:\ffmpeg_build\bin\*.exe
+              echo.
+              
+              echo "=== Available DLLs ==="
+              dir C:\ffmpeg_build\bin\*.dll | find /c ".dll" > nul && (
+                for /f %%i in ('dir C:\ffmpeg_build\bin\*.dll /b ^| find /c /v ""') do echo Found %%i DLL files
+                dir C:\ffmpeg_build\bin\*.dll /b | findstr /i "avcodec\|avformat\|avutil\|swscale\|swresample\|x264\|x265\|aom\|vpx"
+              ) || echo No DLL files found
+              echo.
+              
+              echo "=== Testing Codec Support ==="
+              echo "Video encoders:"
+              C:\ffmpeg_build\bin\ffmpeg.exe -encoders 2>nul | findstr /i "h264\|h265\|hevc\|av1\|vp8\|vp9\|xvid" || echo "  No major video encoders found"
+              echo "Audio encoders:"
+              C:\ffmpeg_build\bin\ffmpeg.exe -encoders 2>nul | findstr /i "aac\|mp3\|opus\|vorbis" || echo "  No major audio encoders found"
+              echo "Video decoders:"
+              C:\ffmpeg_build\bin\ffmpeg.exe -decoders 2>nul | findstr /i "h264\|h265\|hevc\|av1\|vp8\|vp9" || echo "  No major video decoders found"
+              echo.
+              
+              echo "=== Library Files ==="
+              if exist "C:\ffmpeg_build\lib\*.a" (
+                for /f %%i in ('dir C:\ffmpeg_build\lib\*.a /b /s ^| find /c /v ""') do echo Found %%i static library files
+              ) else (
+                echo No static library files found
+              )
+              echo.
+              
+              echo "=== Header Files ==="
+              if exist "C:\ffmpeg_build\include\libav*" (
+                dir C:\ffmpeg_build\include\libav* /ad /b
+              ) else (
+                echo No FFmpeg headers found
+              )
+              echo.
+              
+              echo "FFmpeg installation completed successfully!"
+              echo "========================================="
+            ) else (
+              echo "ERROR: ffmpeg.exe not found!"
+              echo "Contents of build directory:"
+              dir C:\ffmpeg_build\ /s
+              echo "Checking for any executable files:"
+              dir C:\ffmpeg_build\bin\*.exe 2>nul || echo "No executable files found"
+              exit 1
+            )
 
-      - uses: actions/upload-artifact@v4
+          CIBW_ENVIRONMENT_WINDOWS: |
+            FFMPEG_ROOT=C:\ffmpeg_build
+            PKG_CONFIG_PATH=C:\ffmpeg_build\lib\pkgconfig
+            PATH=C:\ffmpeg_build\bin;%PATH%
+
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
+            delvewheel repair -w {dest_dir} {wheel} --add-path C:\ffmpeg_build\bin
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}-py${{ matrix.python }}
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
           path: ./wheelhouse/*.whl
+          retention-days: 7
 
   build_sdist:
     name: Build source distribution
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -265,14 +340,14 @@ jobs:
       - name: Upload sdist
         uses: actions/upload-artifact@v4
         with:
-          path: ./dist/*.tar.gz
           name: sdist
+          path: ./dist/*.tar.gz
           retention-days: 7
 
   assemble_java:
     name: Assemble Java JAR
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -294,10 +369,10 @@ jobs:
 
       - name: Build JAR with Gradle
         uses: gradle/actions/setup-gradle@v4
-        
-      - name: Run build in a subdirectory
+
+      - name: Run Gradle build
         working-directory: imagej-hdf5-wrapper
-        run: ./gradlew packJar
+        run: ./gradlew packJar --no-daemon
 
       - name: Verify JAR contents
         run: |
@@ -311,6 +386,7 @@ jobs:
             unzip -l "$JAR_FILE" | head -20
           else
             echo "ERROR: JAR file not found"
+            find imagej-hdf5-wrapper/build -name "*.jar" || echo "No JAR files found"
             exit 1
           fi
 
@@ -325,6 +401,7 @@ jobs:
     needs: [build_wheels, build_sdist, assemble_java]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || contains(fromJSON('["refs/heads/main", "refs/heads/master"]'), github.ref)) || github.event_name == 'workflow_dispatch'
+    timeout-minutes: 15
 
     steps:
       - name: Checkout code
@@ -340,42 +417,49 @@ jobs:
           python -m pip install --upgrade pip twine
           mkdir -p dist java-dist
 
-      - name: Download wheels
+      - name: Download all wheel artifacts
         uses: actions/download-artifact@v4
         with:
-          path: dist/
-          pattern: wheels-*
-          merge-multiple: true
+          path: artifacts/
 
-      - name: Download sdist
-        uses: actions/download-artifact@v4
-        with:
-          name: sdist
-          path: dist/
-
-      - name: Download Java JAR
-        uses: actions/download-artifact@v4
-        with:
-          name: hdf5-ffmpeg-jar
-          path: java-dist/
+      - name: Collect wheels and sdist
+        run: |
+          # Move all wheels to dist/
+          find artifacts/ -name "*.whl" -exec cp {} dist/ \;
+          
+          # Move sdist to dist/
+          find artifacts/sdist/ -name "*.tar.gz" -exec cp {} dist/ \; 2>/dev/null || true
+          
+          # Move JAR to java-dist/
+          find artifacts/hdf5-ffmpeg-jar/ -name "*.jar" -exec cp {} java-dist/ \; 2>/dev/null || true
+          
+          echo "=== Distribution files ==="
+          ls -la dist/
+          echo "=== Java files ==="
+          ls -la java-dist/
 
       - name: Verify distribution files
         run: |
-          find dist -type f \( -name "*.whl" -o -name "*.tar.gz" \) | sort
+          echo "=== Checking wheel and sdist integrity ==="
           python -m twine check dist/*.whl dist/*.tar.gz
 
       - name: Publish to TestPyPI
+        if: (github.event_name == 'push' && contains(fromJSON('["refs/heads/main", "refs/heads/master"]'), github.ref)) || github.event_name == 'workflow_dispatch'
         env:
-          TWINE_USERNAME: ${{ secrets.TESTPYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.TESTPYPI_PASSWORD }}
-        run: python -m twine upload --repository testpypi dist/*.whl dist/*.tar.gz
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.TESTPYPI_API_TOKEN }}
+        run: |
+          echo "Publishing to TestPyPI..."
+          python -m twine upload --repository testpypi dist/*.whl dist/*.tar.gz --verbose
 
       - name: Publish to PyPI
         if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
         env:
-          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-        run: python -m twine upload dist/*.whl dist/*.tar.gz
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          echo "Publishing to PyPI..."
+          python -m twine upload dist/*.whl dist/*.tar.gz --verbose
 
       - name: Delete previous snapshot release
         if: github.event_name == 'push' && contains(fromJSON('["refs/heads/main", "refs/heads/master"]'), github.ref)
@@ -383,24 +467,33 @@ jobs:
         with:
           tag_name: snapshot-${{ github.ref_name }}
           delete_release: true
-          repo: ${{ github.repository }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        continue-on-error: true
 
       - name: Get timestamp for snapshot
         id: timestamp
         if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
-        run: echo "timestamp=$(date +'%Y%m%d%H%M%S')" >> $GITHUB_OUTPUT
+        run: echo "timestamp=$(date +'%Y%m%d-%H%M%S')" >> $GITHUB_OUTPUT
 
       - name: Create GitHub release
         if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || contains(fromJSON('["refs/heads/main", "refs/heads/master"]'), github.ref))
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@v2
         with:
-          files: java-dist/HDF5-ffmpeg-*.jar
+          files: |
+            java-dist/*.jar
+            dist/*.whl
+            dist/*.tar.gz
           tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('snapshot-{0}', github.ref_name) }}
           name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || format('Snapshot {0} ({1})', github.ref_name, steps.timestamp.outputs.timestamp) }}
           prerelease: ${{ !startsWith(github.ref, 'refs/tags/') }}
           draft: false
-          body: ${{ !startsWith(github.ref, 'refs/tags/') && format('Development build from {0} branch, commit {1} created at {2}', github.ref_name, github.sha, steps.timestamp.outputs.timestamp) || '' }}
+          body: |
+            ${{ !startsWith(github.ref, 'refs/tags/') && format('Development build from {0} branch
+            
+            **Commit:** {1}
+            **Created:** {2}
+            
+            This is an automated snapshot build. Use at your own risk.', github.ref_name, github.sha, steps.timestamp.outputs.timestamp) || 'Release build' }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -303,15 +303,13 @@ setup(
         'nvidia': ['cupy-cuda11x'],  # For NVIDIA GPU support
         'intel': ['intel-openmp'],   # For Intel QSV support
     },
-    python_requires=">=3.9",
+    python_requires=">=3.11",
     cmdclass={'build_ext': CustomBuildExt},
     license="MIT",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.9",
-        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Topic :: Scientific/Engineering",

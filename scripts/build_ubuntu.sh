@@ -44,127 +44,83 @@ CFLAGS="-I${BUILD_DIR}/include -O3"
 LDFLAGS="-L${BUILD_DIR}/lib"
 EXTRAFLAGS="-lm -lstdc++ -lnuma"
 
-# Detect CentOS version and package manager
-detect_centos_version() {
-    if [ -f /etc/centos-release ]; then
-        CENTOS_VERSION=$(rpm -q --queryformat '%{VERSION}' centos-release 2>/dev/null || echo "unknown")
-        print_info "Detected CentOS version: $CENTOS_VERSION"
-    elif [ -f /etc/redhat-release ]; then
-        CENTOS_VERSION=$(cat /etc/redhat-release | grep -oE '[0-9]+' | head -n1)
-        print_info "Detected Red Hat-based system version: $CENTOS_VERSION"
-    else
-        print_warning "Cannot detect CentOS version, assuming CentOS 7+"
-        CENTOS_VERSION="7"
-    fi
-    
-    # Determine package manager
-    if command -v dnf &> /dev/null; then
-        PKG_MGR="dnf"
-        print_info "Using dnf package manager"
-    elif command -v yum &> /dev/null; then
-        PKG_MGR="yum"
-        print_info "Using yum package manager"
-    else
-        print_error "Neither dnf nor yum package manager found!"
-        exit 1
-    fi
-}
-
-# Install CentOS dependencies
+# Install Linux dependencies
 install_dependencies() {
-    print_info "Installing FFmpeg build dependencies for CentOS..."
+    print_info "Installing FFmpeg build dependencies for Linux..."
     
-    detect_centos_version
-    
-    # Enable EPEL repository for additional packages
-    print_info "Enabling EPEL repository..."
-    if [ "$CENTOS_VERSION" -ge 8 ]; then
-        sudo $PKG_MGR install -y epel-release dnf-plugins-core
-        sudo $PKG_MGR config-manager --set-enabled powertools 2>/dev/null || sudo $PKG_MGR config-manager --set-enabled PowerTools 2>/dev/null || true
+    # Detect Linux distribution
+    if [ -f /etc/os-release ]; then
+        . /etc/os-release
+        DISTRO=$ID
+        print_info "Detected distribution: $DISTRO"
     else
-        sudo $PKG_MGR install -y epel-release
+        print_warning "Could not determine Linux distribution. Assuming Ubuntu..."
+        DISTRO="ubuntu"
     fi
-    
-    # Update package database
-    sudo $PKG_MGR update -y
     
     # Basic build tools and dependencies
-    sudo $PKG_MGR groupinstall -y "Development Tools"
-    sudo $PKG_MGR install -y \
-        cmake3 \
-        pkgconfig \
+    sudo apt-get update
+    sudo apt-get install -y \
+        build-essential \
+        cmake \
+        pkg-config \
         autoconf \
         automake \
         libtool \
         nasm \
         yasm \
+        ninja-build \
+        meson \
         git \
         wget \
         curl \
         texinfo \
-        zlib-devel \
-        openssl-devel \
+        zlib1g-dev \
+        libssl-dev \
         patchelf
     
-    # Install newer cmake if cmake3 is available
-    if command -v cmake3 &> /dev/null; then
-        sudo ln -sf /usr/bin/cmake3 /usr/local/bin/cmake
-    fi
+    # Codec-specific dependencies
+    sudo apt-get install -y \
+        libx264-dev \
+        libx265-dev \
+        libnuma-dev \
+        libdav1d-dev \
+        libaom-dev \
+        libtheora-dev \
+        libfreetype6-dev \
+        libfontconfig1-dev
     
-    # Install ninja and meson (may need to build from source on older CentOS)
-    if [ "$CENTOS_VERSION" -ge 8 ]; then
-        sudo $PKG_MGR install -y ninja-build python3-meson
-    else
-        # Install pip3 and meson via pip for CentOS 7
-        sudo $PKG_MGR install -y python3-pip
-        sudo pip3 install meson ninja
-    fi
-    
-    # Codec-specific dependencies (some may need to be built from source)
-    # Note: Many of these packages may not be available in standard CentOS repos
-    sudo $PKG_MGR install -y \
-        numactl-devel \
-        freetype-devel \
-        fontconfig-devel || print_warning "Some codec dependencies not available in repos"
-    
-    # Try to install available codec libraries
-    for pkg in libtheora-devel; do
-        sudo $PKG_MGR install -y $pkg 2>/dev/null || print_warning "$pkg not available, will build from source"
-    done
-    
-    # Hardware acceleration and screen capture dependencies
-    sudo $PKG_MGR install -y \
-        libva-devel \
-        libdrm-devel \
-        libvdpau-devel \
-        SDL2-devel \
-        libX11-devel \
-        libXext-devel \
-        libXfixes-devel \
-        pciaccess-devel || print_warning "Some hardware acceleration dependencies not available"
-    
-    # X11 and XCB development libraries
-    sudo $PKG_MGR install -y \
-        libX11-devel \
-        libxcb-devel || print_warning "Some X11 dependencies not available"
+    # Hardware acceleration and screen capture - IMPORTANT for oneVPL/QSV
+    sudo apt-get install -y \
+        libva-dev \
+        libdrm-dev \
+        libvdpau-dev \
+        libsdl2-dev \
+        libxcb1-dev \
+        libxcb-shm0-dev \
+        libxcb-xfixes0-dev \
+        libxcb-shape0-dev \
+        libx11-dev \
+        libx11-xcb-dev \
+        libxext-dev \
+        libpciaccess-dev
     
     # Python-specific dependencies
-    sudo $PKG_MGR install -y \
-        python3-devel \
+    sudo apt-get install -y \
+        python3-dev \
         python3-pip \
         python3-setuptools \
+        python3-wheel \
         python3-numpy \
-        hdf5-devel || print_warning "Some Python dependencies not available"
+        libhdf5-dev
     
-    # Install CUDA if available (typically requires NVIDIA repo)
+    # Install CUDA if not already installed
     if ! command -v nvcc &> /dev/null; then
-        print_info "CUDA not found. To install CUDA:"
-        print_info "1. Download CUDA repo RPM from NVIDIA"
-        print_info "2. Install with: sudo rpm -i cuda-repo-*.rpm"
-        print_info "3. Run: sudo $PKG_MGR install cuda-toolkit"
+        print_info "Installing NVIDIA CUDA toolkit..."
+        sudo apt-get install -y nvidia-cuda-toolkit
     fi
     
-    # Install Rust for rav1e
+    # Rust for rav1e
     if ! command -v cargo &> /dev/null; then
         print_info "Installing Rust..."
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -173,7 +129,7 @@ install_dependencies() {
         cargo install cargo-c
     fi
     
-    print_info "CentOS dependencies installed successfully."
+    print_info "Linux dependencies installed successfully."
 }
 
 # Function to download source using git
@@ -565,21 +521,17 @@ build_qsv() {
     
     print_info "Intel oneVPL build completed."
     
-    # Build Intel libva for Linux QSV support (if not already installed)
-    if ! pkg-config --exists libva; then
-        print_info "Building libva for QSV hardware access..."
-        cd "${SRC_DIR}"
-        git_clone "https://github.com/intel/libva.git" "libva"
-        cd libva
-        ./autogen.sh
-        ./configure --prefix="${BUILD_DIR}" --enable-shared
-        make -j${NPROC}
-        make install
-        
-        print_info "Intel libva build completed."
-    else
-        print_info "libva already available from system packages."
-    fi
+    # Build Intel libva for Linux QSV support
+    print_info "Building libva for QSV hardware access..."
+    cd "${SRC_DIR}"
+    git_clone "https://github.com/intel/libva.git" "libva"
+    cd libva
+    ./autogen.sh
+    ./configure --prefix="${BUILD_DIR}" --enable-shared
+    make -j${NPROC}
+    make install
+    
+    print_info "Intel libva build completed."
 }
 
 # Function to build nvenc support (headers only)
@@ -626,7 +578,7 @@ EOF
 
 # Build FFmpeg
 build_ffmpeg() {
-    print_info "Building FFmpeg for CentOS..."
+    print_info "Building FFmpeg for Linux..."
     cd "${SRC_DIR}"
     git_clone "https://github.com/FFmpeg/FFmpeg.git" "ffmpeg"
     
@@ -754,7 +706,7 @@ verify_build() {
 
 # Main build process
 main() {
-    print_info "Starting FFmpeg build process for CentOS..."
+    print_info "Starting FFmpeg build process for Linux..."
 
     install_dependencies
     
@@ -793,11 +745,6 @@ main() {
     print_info "FFmpeg libraries: ${BUILD_DIR}/lib"
     print_info "FFmpeg headers: ${BUILD_DIR}/include"
     print_info "======================================="
-    print_info ""
-    print_info "To use the built FFmpeg, add to your environment:"
-    print_info "export PATH=\"${BUILD_DIR}/bin:\$PATH\""
-    print_info "export LD_LIBRARY_PATH=\"${BUILD_DIR}/lib:\$LD_LIBRARY_PATH\""
-    print_info "export PKG_CONFIG_PATH=\"${BUILD_DIR}/lib/pkgconfig:\$PKG_CONFIG_PATH\""
     
     # Create a marker file for the build process
     touch "${BUILD_DIR}/.build_completed"
