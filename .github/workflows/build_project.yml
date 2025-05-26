@@ -141,121 +141,70 @@ jobs:
           retention-days: 3
   
   build_wheels:
-    name: Build wheels (${{ matrix.config.os }}, Python ${{ matrix.python }})
+    name: Build wheels on ${{ matrix.os }}
     needs: build_ffmpeg
-    runs-on: ${{ matrix.config.runner }}
+    runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        config:
-          - os: linux
-            runner: ubuntu-latest
-            artifact_name: ffmpeg-Linux
-            cibw_archs: "x86_64"
-            wheel_arch: "x86_64"
-          - os: windows
-            runner: windows-2022
-            artifact_name: ffmpeg-Windows
-            cibw_archs: "AMD64"
-            wheel_arch: "amd64"
-          - os: macos
-            runner: macos-14
-            artifact_name: ffmpeg-macOS
-            cibw_archs: "arm64"
-            wheel_arch: "arm64"
+        os: [ubuntu-latest, windows-2022, macos-14]
         python: ['3.9', '3.10', '3.11', '3.12']
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: ${{ matrix.python }}
-
-      - name: Install Python dependencies
-        run: |
-          python -m pip install --upgrade pip cibuildwheel setuptools wheel
-
-      - name: Download FFmpeg artifacts
+      - name: Download FFmpeg artifacts (Linux)
+        if: matrix.os == 'ubuntu-latest'
         uses: actions/download-artifact@v4
         with:
-          name: ${{ matrix.config.artifact_name }}
-          path: ffmpeg_build
+          name: ffmpeg-Linux
+          path: ffmpeg_deps
 
-      # Debug: Verify FFmpeg artifacts
-      - name: Debug - Verify FFmpeg artifacts
-        run: |
-          echo "=== FFmpeg Artifact Contents ==="
-          ls -la ffmpeg_build/ || dir ffmpeg_build\
-          echo "=== FFmpeg bin/lib directories ==="
-          ls -la ffmpeg_build/bin/ ffmpeg_build/lib/ || echo "Missing directories"
+      - name: Download FFmpeg artifacts (Windows)
+        if: matrix.os == 'windows-2022'
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-Windows
+          path: ffmpeg_deps
 
-      - name: Setup environment (Linux/macOS)
-        if: matrix.config.os != 'windows'
-        run: |
-          FFMPEG_ROOT="${{ github.workspace }}/ffmpeg_build"
-          echo "FFMPEG_ROOT=$FFMPEG_ROOT" >> $GITHUB_ENV
-          chmod -R +x "$FFMPEG_ROOT/bin" 2>/dev/null || true
+      - name: Download FFmpeg artifacts (macOS)
+        if: matrix.os == 'macos-14'
+        uses: actions/download-artifact@v4
+        with:
+          name: ffmpeg-macOS
+          path: ffmpeg_deps
 
-      - name: Setup environment (Windows)
-        if: matrix.config.os == 'windows'
-        shell: pwsh
-        run: |
-          $FFMPEG_ROOT = "${{ github.workspace }}\ffmpeg_build"
-          echo "FFMPEG_ROOT=$FFMPEG_ROOT" >> $env:GITHUB_ENV
-          echo "$FFMPEG_ROOT\bin" >> $env:GITHUB_PATH
-
-      # Debug: Verify environment setup
-      - name: Debug - Verify environment
-        run: |
-          echo "=== Environment Check ==="
-          echo "FFMPEG_ROOT: $FFMPEG_ROOT"
-          ls -la "$FFMPEG_ROOT" || echo "FFMPEG_ROOT not found"
-          "$FFMPEG_ROOT/bin/ffmpeg" -version || echo "FFmpeg not working"
-
-      - name: Set Python version for wheel
-        run: |
-          PYTHON_VERSION="${{ matrix.python }}"
-          PYTHON_VERSION_NODOT="${PYTHON_VERSION//./}"
-          echo "PYTHON_VERSION_NODOT=cp${PYTHON_VERSION_NODOT}-*" >> $GITHUB_ENV
-
-      - name: Build wheels (Linux/macOS)
-        if: matrix.config.os != 'windows'
-        run: |
-          echo "=== Starting cibuildwheel ==="
-          echo "Building: $PYTHON_VERSION_NODOT"
-          
-          python -m cibuildwheel --output-dir wheelhouse
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.23.3
         env:
-          CIBW_BUILD: "${{ env.PYTHON_VERSION_NODOT }}"
+          CIBW_BUILD: "cp${{ matrix.python | replace('.', '') }}-*"
           CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
-          CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
           CIBW_BUILD_VERBOSITY: 3
           CIBW_TEST_REQUIRES: pytest numpy
 
-          # Linux environment
+          # Linux
           CIBW_BEFORE_ALL_LINUX: |
-            yum install -y hdf5-devel patchelf && 
-            mkdir -p /opt/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* /opt/ffmpeg/
+            yum install -y hdf5-devel patchelf &&
+            mkdir -p /opt/ffmpeg &&
+            cp -r /project/ffmpeg_deps/* /opt/ffmpeg/ &&
+            ls -la /opt/ffmpeg/
           CIBW_ENVIRONMENT_LINUX: |
-            FFMPEG_ROOT=/opt/ffmpeg 
-            PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
+            FFMPEG_ROOT=/opt/ffmpeg
+            PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH
             LD_LIBRARY_PATH=/opt/ffmpeg/lib:$LD_LIBRARY_PATH
             PATH=/opt/ffmpeg/bin:$PATH
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
 
-          # macOS environment
+          # macOS
           CIBW_BEFORE_ALL_MACOS: |
-            brew install hdf5 pkg-config && 
-            mkdir -p $HOME/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* $HOME/ffmpeg/
+            brew install hdf5 pkg-config &&
+            mkdir -p $HOME/ffmpeg &&
+            cp -r /project/ffmpeg_deps/* $HOME/ffmpeg/ &&
+            ls -la $HOME/ffmpeg/
           CIBW_ENVIRONMENT_MACOS: |
-            FFMPEG_ROOT=$HOME/ffmpeg 
-            PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
+            FFMPEG_ROOT=$HOME/ffmpeg
+            PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH
             DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH
             PATH=$HOME/ffmpeg/bin:$PATH
             MACOSX_DEPLOYMENT_TARGET=11.0
@@ -264,46 +213,22 @@ jobs:
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
 
-      - name: Set Python version for wheel (Windows)
-        if: matrix.config.os == 'windows'
-        shell: pwsh
-        run: |
-          $pythonVersion = "${{ matrix.python }}"
-          $pythonVersionNoDot = "cp" + ($pythonVersion -replace '\.', '') + "-*"
-          echo "PYTHON_VERSION_NODOT=$pythonVersionNoDot" >> $env:GITHUB_ENV
-
-      - name: Build wheels (Windows)
-        if: matrix.config.os == 'windows'
-        shell: pwsh
-        run: |
-          Write-Host "=== Starting cibuildwheel ==="
-          Write-Host "Building: $env:PYTHON_VERSION_NODOT"
-          
-          python -m cibuildwheel --output-dir wheelhouse
-        env:
-          CIBW_BUILD: "${{ env.PYTHON_VERSION_NODOT }}"
-          CIBW_SKIP: "*-musllinux* *-win32 *-manylinux_i686"
-          CIBW_ARCHS: ${{ matrix.config.cibw_archs }}
-          CIBW_BUILD_VERBOSITY: 3
-          CIBW_TEST_REQUIRES: pytest numpy
-
-          # Windows environment
+          # Windows
           CIBW_BEFORE_ALL_WINDOWS: |
-            if not exist C:\ffmpeg mkdir C:\ffmpeg
-            xcopy /E /I /Y %FFMPEG_ROOT% C:\ffmpeg
+            if not exist C:\ffmpeg mkdir C:\ffmpeg &&
+            xcopy /E /I /Y \project\ffmpeg_deps C:\ffmpeg &&
+            dir C:\ffmpeg
           CIBW_ENVIRONMENT_WINDOWS: |
-            FFMPEG_ROOT=C:\ffmpeg 
-            PKG_CONFIG_PATH=C:\ffmpeg\lib\pkgconfig 
+            FFMPEG_ROOT=C:\ffmpeg
+            PKG_CONFIG_PATH=C:\ffmpeg\lib\pkgconfig
             PATH=C:\ffmpeg\bin;%PATH%
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
             delvewheel repair -w {dest_dir} {wheel} --add-path C:\ffmpeg\bin
 
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}-py${{ matrix.python }}
           path: ./wheelhouse/*.whl
-          name: wheels-${{ matrix.config.wheel_arch }}-${{ matrix.python }}
-          retention-days: 7
 
   build_sdist:
     name: Build source distribution
@@ -361,10 +286,11 @@ jobs:
           fi
 
       - name: Build JAR with Gradle
-        uses: gradle/gradle-build-action@v3
-        with:
-          build-root-directory: imagej-hdf5-wrapper
-          arguments: packJar --info
+        uses: gradle/actions/setup-gradle@v4
+        
+      - name: Run build in a subdirectory
+        working-directory: imagej-hdf5-wrapper
+        run: ./gradlew packJar
 
       - name: Verify JAR contents
         run: |
