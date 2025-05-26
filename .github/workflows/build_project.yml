@@ -185,6 +185,34 @@ jobs:
           name: ${{ matrix.config.artifact_name }}
           path: ffmpeg_build
 
+      # === DEBUGGING: Verify artifact download ===
+      - name: Debug - Verify FFmpeg artifacts (Linux/macOS)
+        if: matrix.config.os != 'windows'
+        run: |
+          echo "=== FFmpeg Artifact Contents ==="
+          ls -la ffmpeg_build/
+          echo ""
+          echo "=== FFmpeg bin directory ==="
+          ls -la ffmpeg_build/bin/ || echo "No bin directory found"
+          echo ""
+          echo "=== FFmpeg lib directory ==="
+          ls -la ffmpeg_build/lib/ || echo "No lib directory found"
+          echo ""
+          echo "=== Current working directory ==="
+          pwd
+          ls -la
+
+      - name: Debug - Verify FFmpeg artifacts (Windows)
+        if: matrix.config.os == 'windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== FFmpeg Artifact Contents ==="
+          Get-ChildItem ffmpeg_build\ -Recurse | Select-Object FullName, Length
+          Write-Host ""
+          Write-Host "=== Current working directory ==="
+          Get-Location
+          Get-ChildItem
+
       - name: Setup environment (Linux/macOS)
         if: matrix.config.os != 'windows'
         run: |
@@ -200,12 +228,120 @@ jobs:
           echo "FFMPEG_ROOT=$FFMPEG_ROOT" >> $env:GITHUB_ENV
           echo "$FFMPEG_ROOT\bin" >> $env:GITHUB_PATH
 
+      # === DEBUGGING: Verify environment setup ===
+      - name: Debug - Verify environment setup (Linux/macOS)
+        if: matrix.config.os != 'windows'
+        run: |
+          echo "=== Environment Variables ==="
+          echo "FFMPEG_ROOT: $FFMPEG_ROOT"
+          echo "PATH: $PATH"
+          echo "PKG_CONFIG_PATH: $PKG_CONFIG_PATH"
+          echo ""
+          echo "=== FFmpeg Installation Check ==="
+          ls -la "$FFMPEG_ROOT" || echo "FFMPEG_ROOT directory not found"
+          ls -la "$FFMPEG_ROOT/bin" || echo "FFMPEG_ROOT/bin directory not found"
+          ls -la "$FFMPEG_ROOT/lib" || echo "FFMPEG_ROOT/lib directory not found"
+          echo ""
+          echo "=== Test FFmpeg executables ==="
+          "$FFMPEG_ROOT/bin/ffmpeg" -version || echo "ffmpeg executable not working"
+          "$FFMPEG_ROOT/bin/pkg-config" --version || echo "pkg-config not working"
+          echo ""
+          echo "=== System info ==="
+          uname -a
+          python --version
+          which python
+          echo ""
+          echo "=== Available system packages ==="
+          if command -v apt >/dev/null 2>&1; then
+            apt list --installed | grep -E "(gcc|g\+\+|make|cmake|hdf5)" || echo "No relevant packages found"
+          elif command -v yum >/dev/null 2>&1; then
+            yum list installed | grep -E "(gcc|g\+\+|make|cmake|hdf5)" || echo "No relevant packages found"
+          fi
+
+      - name: Debug - Verify environment setup (Windows)
+        if: matrix.config.os == 'windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== Environment Variables ==="
+          Write-Host "FFMPEG_ROOT: $env:FFMPEG_ROOT"
+          Write-Host "PATH: $env:PATH"
+          Write-Host "PKG_CONFIG_PATH: $env:PKG_CONFIG_PATH"
+          Write-Host ""
+          Write-Host "=== FFmpeg Installation Check ==="
+          if (Test-Path $env:FFMPEG_ROOT) {
+            Get-ChildItem $env:FFMPEG_ROOT
+          } else {
+            Write-Host "FFMPEG_ROOT directory not found"
+          }
+          if (Test-Path "$env:FFMPEG_ROOT\bin") {
+            Get-ChildItem "$env:FFMPEG_ROOT\bin"
+          } else {
+            Write-Host "FFMPEG_ROOT\bin directory not found"
+          }
+          Write-Host ""
+          Write-Host "=== Test FFmpeg executables ==="
+          try {
+            & "$env:FFMPEG_ROOT\bin\ffmpeg.exe" -version
+          } catch {
+            Write-Host "ffmpeg executable not working: $($_.Exception.Message)"
+          }
+          Write-Host ""
+          Write-Host "=== System info ==="
+          Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion
+          python --version
+          Get-Command python | Select-Object Source
+
+      # === DEBUGGING: Test build environment before cibuildwheel ===
+      - name: Debug - Test build environment (Linux/macOS)
+        if: matrix.config.os != 'windows'
+        run: |
+          echo "=== Testing basic build tools ==="
+          gcc --version || echo "gcc not available"
+          g++ --version || echo "g++ not available"
+          make --version || echo "make not available"
+          cmake --version || echo "cmake not available"
+          echo ""
+          echo "=== Python build environment ==="
+          python -c "import sys; print(f'Python: {sys.version}')"
+          python -c "import platform; print(f'Platform: {platform.platform()}')"
+          python -c "import sysconfig; print(f'Python lib: {sysconfig.get_config_var(\"LIBDIR\")}')"
+          echo ""
+          echo "=== Test pkg-config with FFmpeg ==="
+          export PKG_CONFIG_PATH="$FFMPEG_ROOT/lib/pkgconfig:$PKG_CONFIG_PATH"
+          pkg-config --list-all | grep -i ffmpeg || echo "No FFmpeg pkg-config files found"
+          pkg-config --cflags libavcodec || echo "libavcodec pkg-config not working"
+
+      - name: Debug - Test build environment (Windows)
+        if: matrix.config.os == 'windows'
+        shell: pwsh
+        run: |
+          Write-Host "=== Testing basic build tools ==="
+          try { & cl } catch { Write-Host "MSVC cl not available: $($_.Exception.Message)" }
+          try { & cmake --version } catch { Write-Host "cmake not available: $($_.Exception.Message)" }
+          Write-Host ""
+          Write-Host "=== Python build environment ==="
+          python -c "import sys; print(f'Python: {sys.version}')"
+          python -c "import platform; print(f'Platform: {platform.platform()}')"
+          Write-Host ""
+          Write-Host "=== Test pkg-config with FFmpeg ==="
+          $env:PKG_CONFIG_PATH = "$env:FFMPEG_ROOT\lib\pkgconfig"
+          if (Test-Path "$env:FFMPEG_ROOT\lib\pkgconfig") {
+            Get-ChildItem "$env:FFMPEG_ROOT\lib\pkgconfig"
+          } else {
+            Write-Host "No pkg-config directory found"
+          }
+
       - name: Build wheels (Linux/macOS)
         if: matrix.config.os != 'windows'
         run: |
           # Start progress indicator for non-Windows
           while true; do echo "Building wheel... $(date)"; sleep 60; done &
           PROGRESS_PID=$!
+          
+          echo "=== Starting cibuildwheel ==="
+          echo "CIBW_BUILD: ${{ matrix.python }}-*"
+          echo "CIBW_ARCHS: ${{ matrix.config.cibw_archs }}"
+          echo "FFMPEG_ROOT: $FFMPEG_ROOT"
           
           python -m cibuildwheel --output-dir wheelhouse
           
@@ -220,9 +356,13 @@ jobs:
 
           # Linux environment
           CIBW_BEFORE_ALL_LINUX: |
+            echo "=== CIBW Linux: Installing dependencies ===" &&
             yum install -y hdf5-devel patchelf && 
+            echo "=== CIBW Linux: Setting up FFmpeg ===" &&
             mkdir -p /opt/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* /opt/ffmpeg/
+            cp -r ${FFMPEG_ROOT}/* /opt/ffmpeg/ &&
+            echo "=== CIBW Linux: FFmpeg setup complete ===" &&
+            ls -la /opt/ffmpeg/
           CIBW_ENVIRONMENT_LINUX: |
             FFMPEG_ROOT=/opt/ffmpeg 
             PKG_CONFIG_PATH=/opt/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
@@ -231,13 +371,23 @@ jobs:
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
+          CIBW_BEFORE_BUILD_LINUX: |
+            echo "=== CIBW Linux: Pre-build check ===" &&
+            echo "FFMPEG_ROOT: $FFMPEG_ROOT" &&
+            ls -la $FFMPEG_ROOT/ &&
+            pkg-config --list-all | grep ffmpeg || echo "No FFmpeg pkg-config found" &&
+            echo "=== CIBW Linux: Starting build ==="
           CIBW_REPAIR_WHEEL_COMMAND_LINUX: auditwheel repair -w {dest_dir} {wheel}
 
           # macOS environment
           CIBW_BEFORE_ALL_MACOS: |
+            echo "=== CIBW macOS: Installing dependencies ===" &&
             brew install hdf5 pkg-config && 
+            echo "=== CIBW macOS: Setting up FFmpeg ===" &&
             mkdir -p $HOME/ffmpeg && 
-            cp -r ${FFMPEG_ROOT}/* $HOME/ffmpeg/
+            cp -r ${FFMPEG_ROOT}/* $HOME/ffmpeg/ &&
+            echo "=== CIBW macOS: FFmpeg setup complete ===" &&
+            ls -la $HOME/ffmpeg/
           CIBW_ENVIRONMENT_MACOS: |
             FFMPEG_ROOT=$HOME/ffmpeg 
             PKG_CONFIG_PATH=$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH 
@@ -248,6 +398,12 @@ jobs:
             CARGO_BUILD_FLAGS="--release --jobs 2"
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
+          CIBW_BEFORE_BUILD_MACOS: |
+            echo "=== CIBW macOS: Pre-build check ===" &&
+            echo "FFMPEG_ROOT: $FFMPEG_ROOT" &&
+            ls -la $FFMPEG_ROOT/ &&
+            pkg-config --list-all | grep ffmpeg || echo "No FFmpeg pkg-config found" &&
+            echo "=== CIBW macOS: Starting build ==="
           CIBW_REPAIR_WHEEL_COMMAND_MACOS: |
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-listdeps {wheel} &&
             DYLD_LIBRARY_PATH=${FFMPEG_ROOT}/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}
@@ -256,6 +412,11 @@ jobs:
         if: matrix.config.os == 'windows'
         shell: pwsh
         run: |
+          Write-Host "=== Starting cibuildwheel ==="
+          Write-Host "CIBW_BUILD: ${{ matrix.python }}-*"
+          Write-Host "CIBW_ARCHS: ${{ matrix.config.cibw_archs }}"
+          Write-Host "FFMPEG_ROOT: $env:FFMPEG_ROOT"
+          
           python -m cibuildwheel --output-dir wheelhouse
         env:
           CIBW_BUILD: "${{ matrix.python }}-*"
@@ -266,8 +427,11 @@ jobs:
 
           # Windows environment
           CIBW_BEFORE_ALL_WINDOWS: |
-            if not exist C:\ffmpeg mkdir C:\ffmpeg
-            xcopy /E /I /Y %FFMPEG_ROOT% C:\ffmpeg
+            echo "=== CIBW Windows: Setting up FFmpeg ===" &&
+            if not exist C:\ffmpeg mkdir C:\ffmpeg &&
+            xcopy /E /I /Y %FFMPEG_ROOT% C:\ffmpeg &&
+            echo "=== CIBW Windows: FFmpeg setup complete ===" &&
+            dir C:\ffmpeg
           CIBW_ENVIRONMENT_WINDOWS: |
             FFMPEG_ROOT=C:\ffmpeg 
             PKG_CONFIG_PATH=C:\ffmpeg\lib\pkgconfig 
@@ -275,8 +439,22 @@ jobs:
             CARGO_BUILD_FLAGS=--release --jobs 2
             CARGO_NET_FETCH_WITH_CLI=true
             RUST_LOG=info
+          CIBW_BEFORE_BUILD_WINDOWS: |
+            echo "=== CIBW Windows: Pre-build check ===" &&
+            echo "FFMPEG_ROOT: %FFMPEG_ROOT%" &&
+            dir %FFMPEG_ROOT% &&
+            echo "=== CIBW Windows: Starting build ==="
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: |
             delvewheel repair -w {dest_dir} {wheel} --add-path C:\ffmpeg\bin
+            
+      - name: Debug - Check build results
+        if: always()
+        run: |
+          echo "=== Build Results ==="
+          ls -la wheelhouse/ || echo "No wheelhouse directory found"
+          echo ""
+          echo "=== Disk usage ==="
+          df -h || echo "Cannot check disk usage"
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
