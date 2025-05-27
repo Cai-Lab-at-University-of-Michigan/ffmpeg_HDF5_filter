@@ -78,10 +78,6 @@ curl -L --retry 3 --retry-delay 5 https://mirror.msys2.org/mingw/mingw64/mingw-w
 xcopy libvpl_extracted_tar\mingw64\lib\* %FFMPEG_ROOT%\lib\ /E /I /Q
 xcopy libvpl_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
 xcopy libvpl_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
-
-:: Copy pkg-config files (they might be in lib/pkgconfig or share/pkgconfig)
-xcopy libvpl_extracted_tar\mingw64\lib\pkgconfig\*.pc %FFMPEG_ROOT%\lib\pkgconfig\ /I /Q 2>nul
-xcopy libvpl_extracted_tar\mingw64\share\pkgconfig\*.pc %FFMPEG_ROOT%\lib\pkgconfig\ /I /Q 2>nul
 cd /D %HOME%\temp_build
 
 :: Clone FFmpeg
@@ -100,7 +96,7 @@ if not exist "configure" (
 
 :: Build FFmpeg
 echo Building FFmpeg...
-%HOME%\miniconda3\Library\usr\bin\bash.exe -c "export PATH='%HOME%/miniconda3/Library/bin:%FFMPEG_ROOT%/bin' && export PKG_CONFIG_PATH='%HOME%/miniconda3/Library/lib/pkgconfig:%FFMPEG_ROOT%/lib/pkgconfig' && export CFLAGS='-I%HOME%/miniconda3/Library/include -I%FFMPEG_ROOT%/include' && export LDFLAGS='-L%HOME%/miniconda3/Library/lib -L%FFMPEG_ROOT%/lib' && ./configure --prefix='%FFMPEG_ROOT%' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc && make -j 4 && make install"
+%HOME%\miniconda3\Library\usr\bin\bash.exe -c "export PATH='%HOME%/miniconda3/Library/bin:%FFMPEG_ROOT%/bin' && export PKG_CONFIG_PATH='%HOME%/miniconda3/Library/lib/pkgconfig:%FFMPEG_ROOT%/lib/pkgconfig' && export CFLAGS='-I%HOME%/miniconda3/Library/include -I%FFMPEG_ROOT%/include' && export LDFLAGS='-L%HOME%/miniconda3/Library/lib -L%FFMPEG_ROOT%/lib' && ./configure --prefix='%FFMPEG_ROOT%' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug && make -j 4 && make install"
 
 :: Verify installation
 echo Verifying FFmpeg installation...
