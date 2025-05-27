@@ -13,8 +13,8 @@ test-requires = "pytest numpy h5py"
 test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
-manylinux-x86_64-image = "manylinux_2_28"
-manylinux-aarch64-image = "manylinux_2_28"
+manylinux-x86_64-image = "manylinux_x_y"
+manylinux-aarch64-image = "manylinux_x_y"
 
 before-all = [
     """
@@ -144,6 +144,16 @@ before-all = [
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
+
+    if [ ! -f "$HOME/miniconda/lib/pkgconfig/dav1d.pc" ]; then
+        echo "Building dav1d from source..."
+        git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
+        cd dav1d
+        meson setup build --prefix=/opt/miniconda --libdir=lib
+        ninja -C build
+        ninja -C build install
+        cd /tmp/hwaccel_src
+    fi
     
     git config --global http.postBuffer 524288000
     git config --global http.maxRequestBuffer 100M
@@ -264,10 +274,29 @@ before-all = [
     %FFMPEG_ROOT%miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
     %FFMPEG_ROOT%miniconda3/Scripts/conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
     %FFMPEG_ROOT%miniconda3/Scripts/conda.exe install -y openssl -c conda-forge
-    %FFMPEG_ROOT%miniconda3/Scripts/conda.exe install -y cuda-nvcc=12.0 libnpp=12.0 -c nvidia || echo "CUDA libs not available"
     %FFMPEG_ROOT%miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
+    pip install nvidia-cuda-nvcc || echo "CUDA libs not available"
     
     mkdir %FFMPEG_ROOT%ffmpeg_build %FFMPEG_ROOT%ffmpeg_build/bin %FFMPEG_ROOT%ffmpeg_build/lib %FFMPEG_ROOT%ffmpeg_build/include %FFMPEG_ROOT%temp_build 2>nul
+    if not exist "%FFMPEG_ROOT%ffmpeg_build" (
+        echo ERROR: ffmpeg_build directory was not created
+        exit /b 1
+    )
+
+    if not exist "%FFMPEG_ROOT%ffmpeg_build/lib" (
+        echo ERROR: ffmpeg_build/lib directory missing
+        exit /b 1
+    )
+
+    if not exist "%FFMPEG_ROOT%ffmpeg_build/include" (
+        echo ERROR: ffmpeg_build/include directory missing  
+        exit /b 1
+    )
+
+    if not exist "%FFMPEG_ROOT%temp_build" (
+        echo ERROR: ffmpeg_build/include directory missing  
+        exit /b 1
+    )
     
     echo "Current working directory: %CD%"
     echo "Setting up environment variables..."
