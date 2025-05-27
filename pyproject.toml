@@ -18,7 +18,6 @@ before-all = [
     # Install Miniconda
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
-    export PATH="/opt/miniconda/bin:$PATH"
     
     # Update conda and add conda-forge channel
     /opt/miniconda/bin/conda config --add channels conda-forge
@@ -75,8 +74,8 @@ before-all = [
         -c conda-forge
     
     # Set up build environment
-    export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig:$PKG_CONFIG_PATH"
-    export LD_LIBRARY_PATH="/opt/miniconda/lib:$LD_LIBRARY_PATH"
+    export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig"
+    export LD_LIBRARY_PATH="/opt/miniconda/lib"
     export CC=/opt/miniconda/bin/x86_64-conda-linux-gnu-gcc
     export CXX=/opt/miniconda/bin/x86_64-conda-linux-gnu-g++
     export CFLAGS="-I/opt/miniconda/include"
@@ -188,8 +187,7 @@ before-all = [
 FFMPEG_ROOT = "/opt/ffmpeg"
 HDF5_ROOT = "/opt/miniconda"
 PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig"
-LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib:$LD_LIBRARY_PATH"
-PATH = "/opt/ffmpeg/bin:/opt/miniconda/bin:$PATH"
+LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib"
 CPPFLAGS = "-I/opt/miniconda/include -I/opt/ffmpeg/include"
 LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
 
@@ -201,7 +199,6 @@ before-all = [
     # Install Miniconda for macOS
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
     bash miniconda.sh -b -p $HOME/miniconda
-    export PATH="$HOME/miniconda/bin:$PATH"
     
     # Update conda and add conda-forge channel
     $HOME/miniconda/bin/conda config --add channels conda-forge
@@ -249,8 +246,8 @@ before-all = [
         -c conda-forge
     
     # Set up build environment
-    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig:$PKG_CONFIG_PATH"
-    export DYLD_LIBRARY_PATH="$HOME/miniconda/lib:$DYLD_LIBRARY_PATH"
+    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
+    export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
     export CC=$HOME/miniconda/bin/clang
     export CXX=$HOME/miniconda/bin/clang++
     export CFLAGS="-I$HOME/miniconda/include"
@@ -352,8 +349,7 @@ before-all = [
 FFMPEG_ROOT = "$HOME/ffmpeg"
 HDF5_ROOT = "$HOME/miniconda"
 PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
-DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib:$DYLD_LIBRARY_PATH"
-PATH = "$HOME/ffmpeg/bin:$HOME/miniconda/bin:$PATH"
+DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
 MACOSX_DEPLOYMENT_TARGET = "14.0"
 ARCHFLAGS = "-arch arm64"
 CPPFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include"
@@ -368,58 +364,25 @@ repair-wheel-command = [
 before-all = [
     """
     # Install Miniconda for Windows
-    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniforge.exe
-    start /wait "" miniforge.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:\\Miniforge3
-    set PATH=C:\\Miniforge3;C:\\Miniforge3\\Scripts;C:\\Miniforge3\\Library\\bin;%PATH%
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
+    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:\\Miniconda3
     
     # Update conda and add conda-forge channel
-    C:\\Miniforge3\\Scripts\\conda.exe config --add channels conda-forge
-    C:\\Miniforge3\\Scripts\\conda.exe config --set channel_priority strict
-    C:\\Miniforge3\\Scripts\\conda.exe update -y conda
+    C:\\Miniconda3\\Scripts\\conda.exe config --add channels conda-forge
+    C:\\Miniconda3\\Scripts\\conda.exe config --set channel_priority strict
+    C:\\Miniconda3\\Scripts\\conda.exe update -y conda
     
     # Install HDF5 and core build tools
-    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
-        hdf5 ^
-        hdf5-external-filter-plugins ^
-        pkg-config ^
-        cmake ^
-        ninja ^
-        nasm ^
-        yasm ^
-        git ^
-        msys2-conda-epoch ^
-        m2-base ^
-        m2-autoconf ^
-        m2-automake ^
-        m2-libtool ^
-        m2-make ^
-        -c conda-forge
+    C:\\Miniconda3\\Scripts\\conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
     
     # Install video codecs from conda-forge
-    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
-        x264 ^
-        x265 ^
-        libaom ^
-        libvpx ^
-        dav1d ^
-        rav1e ^
-        svt-av1 ^
-        zlib ^
-        bzip2 ^
-        xz ^
-        lz4 ^
-        zstd ^
-        -c conda-forge
+    C:\\Miniconda3\\Scripts\\conda.exe install -y x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
     
     # Install minimal network libraries
-    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
-        openssl ^
-        -c conda-forge
+    C:\\Miniconda3\\Scripts\\conda.exe install -y openssl -c conda-forge
     
     # Install Visual Studio build tools
-    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
-        vs2019_win-64 ^
-        -c conda-forge
+    C:\\Miniconda3\\Scripts\\conda.exe install -y vs2019_win-64 -c conda-forge
     
     # Create build directories
     mkdir C:\\ffmpeg_build\\bin 2>nul
@@ -428,10 +391,9 @@ before-all = [
     mkdir C:\\temp_build 2>nul
     
     # Set up build environment
-    set PKG_CONFIG_PATH=C:\\Miniforge3\\Library\\lib\\pkgconfig
-    set PATH=C:\\Miniforge3\\Library\\bin;C:\\Miniforge3\\bin;%PATH%
-    set INCLUDE=C:\\Miniforge3\\Library\\include;%INCLUDE%
-    set LIB=C:\\Miniforge3\\Library\\lib;%LIB%
+    set PKG_CONFIG_PATH=C:\\Miniconda3\\Library\\lib\\pkgconfig
+    set INCLUDE=C:\\Miniconda3\\Library\\include;%INCLUDE%
+    set LIB=C:\\Miniconda3\\Library\\lib;%LIB%
     
     cd C:\\temp_build
     
@@ -465,11 +427,11 @@ before-all = [
     cd ffmpeg
     
     # Use MSYS2 environment for FFmpeg build
-    C:\\Miniforge3\\Library\\usr\\bin\\bash.exe -c "
-    export PATH='/c/Miniforge3/Library/bin:/c/ffmpeg_build/bin:$PATH'
-    export PKG_CONFIG_PATH='/c/Miniforge3/Library/lib/pkgconfig:/c/ffmpeg_build/lib/pkgconfig'
-    export CFLAGS='-I/c/Miniforge3/Library/include -I/c/ffmpeg_build/include'
-    export LDFLAGS='-L/c/Miniforge3/Library/lib -L/c/ffmpeg_build/lib'
+    C:\\Miniconda3\\Library\\usr\\bin\\bash.exe -c "
+    export PATH='/c/Miniconda3/Library/bin:/c/ffmpeg_build/bin'
+    export PKG_CONFIG_PATH='/c/Miniconda3/Library/lib/pkgconfig:/c/ffmpeg_build/lib/pkgconfig'
+    export CFLAGS='-I/c/Miniconda3/Library/include -I/c/ffmpeg_build/include'
+    export LDFLAGS='-L/c/Miniconda3/Library/lib -L/c/ffmpeg_build/lib'
     
     ./configure \
         --prefix='/c/ffmpeg_build' \
@@ -523,7 +485,7 @@ before-all = [
         exit /b 1
     )
     
-    if exist "C:\\Miniforge3\\Library\\include\\hdf5.h" (
+    if exist "C:\\Miniconda3\\Library\\include\\hdf5.h" (
         echo SUCCESS: HDF5 headers found
     ) else (
         echo ERROR: HDF5 headers not found
@@ -536,10 +498,9 @@ before-all = [
 
 [tool.cibuildwheel.windows.environment]
 FFMPEG_ROOT = "C:/ffmpeg_build"
-HDF5_ROOT = "C:/Miniforge3/Library"
-PKG_CONFIG_PATH = "C:/ffmpeg_build/lib/pkgconfig;C:/Miniforge3/Library/lib/pkgconfig"
-PATH = "C:/ffmpeg_build/bin;C:/Miniforge3/Library/bin;C:/Miniforge3/bin;$PATH"
-INCLUDE = "C:/ffmpeg_build/include;C:/Miniforge3/Library/include;$INCLUDE"
-LIB = "C:/ffmpeg_build/lib;C:/Miniforge3/Library/lib;$LIB"
+HDF5_ROOT = "C:/Miniconda3/Library"
+PKG_CONFIG_PATH = "C:/ffmpeg_build/lib/pkgconfig;C:/Miniconda3/Library/lib/pkgconfig"
+INCLUDE = "C:/ffmpeg_build/include;C:/Miniconda3/Library/include"
+LIB = "C:/ffmpeg_build/lib;C:/Miniconda3/Library/lib"
 
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg_build/bin;C:/Miniforge3/Library/bin"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg_build/bin;C:/Miniconda3/Library/bin"
