@@ -33,7 +33,6 @@ echo Installing build dependencies...
 %HOME%\miniconda3\Scripts\conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
 %HOME%\miniconda3\Scripts\conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
 %HOME%\miniconda3\Scripts\conda.exe install -y openssl -c conda-forge
-%HOME%\miniconda3\Scripts\conda.exe install -y vs2019_win-64 -c conda-forge
 
 :: Install CUDA if available
 pip install nvidia-cuda-nvcc || echo CUDA libs not available
@@ -67,15 +66,22 @@ cd nv-codec-headers
 make install PREFIX="%FFMPEG_ROOT%"
 cd /D %HOME%\temp_build
 
-:: Build oneVPL
-echo Building oneVPL...
-git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
-cd oneVPL
-mkdir build
-cd build
-cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX="%FFMPEG_ROOT%" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF
-cmake --build . --config Release -j 4
-cmake --install . --config Release
+:: Download libvpl package manually
+echo Downloading libvpl...
+wget -q https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst -O libvpl.pkg.tar.zst
+
+:: 7-Zip two-step extraction
+7z x libvpl.pkg.tar.zst -olibvpl_extracted_zst
+7z x libvpl_extracted_zst\*.tar -olibvpl_extracted_tar
+
+:: Copy libraries, headers, DLLs, and pkg-config files
+xcopy libvpl_extracted_tar\mingw64\lib\* %FFMPEG_ROOT%\lib\ /E /I /Q
+xcopy libvpl_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
+xcopy libvpl_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
+
+:: Copy pkg-config files (they might be in lib/pkgconfig or share/pkgconfig)
+xcopy libvpl_extracted_tar\mingw64\lib\pkgconfig\*.pc %FFMPEG_ROOT%\lib\pkgconfig\ /I /Q 2>nul
+xcopy libvpl_extracted_tar\mingw64\share\pkgconfig\*.pc %FFMPEG_ROOT%\lib\pkgconfig\ /I /Q 2>nul
 cd /D %HOME%\temp_build
 
 :: Clone FFmpeg
