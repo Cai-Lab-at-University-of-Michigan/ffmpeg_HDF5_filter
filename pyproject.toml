@@ -22,7 +22,7 @@ before-all = [
     yum groupinstall -y "Development Tools" || apt-get install -y build-essential
     yum install -y epel-release cmake nasm yasm pkg-config zlib-devel bzip2-devel xz-devel openssl-devel git wget which || apt-get install -y cmake nasm yasm pkg-config libz-dev libbz2-dev liblzma-dev libssl-dev git wget
     
-    curl -L https://repo.anaconda.com/miniconda/miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
     
     /opt/miniconda/bin/conda config --add channels conda-forge
@@ -31,8 +31,7 @@ before-all = [
     
     /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make -c conda-forge
     /opt/miniconda/bin/conda install -y x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
-    /opt/miniconda/bin/conda install -y cuda-toolkit cuda-runtime -c nvidia || echo "CUDA libs not available"
-    /opt/miniconda/bin/conda install -y cuda-nvcc=12.4 libnpp=12.4 -c nvidia || echo "CUDA libs not available"
+    /opt/miniconda/bin/conda install -y cuda-nvcc=12.0 libnpp=12.0 -c nvidia || echo "CUDA libs not available"
     /opt/miniconda/bin/conda install -y libva libdrm libvpl -c conda-forge || echo "Hardware acceleration libs not available"
     /opt/miniconda/bin/conda install -y openssl -c conda-forge
     
@@ -106,7 +105,7 @@ LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
 [tool.cibuildwheel.macos]
 before-all = [
     """
-    curl -L https://repo.anaconda.com/miniconda/miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
     bash miniconda.sh -b -p $HOME/miniconda
     
     $HOME/miniconda/bin/conda config --add channels conda-forge
@@ -161,7 +160,7 @@ repair-wheel-command = [
 [tool.cibuildwheel.windows]
 before-all = [
     """
-    curl -L https://repo.anaconda.com/miniconda/miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
     start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=D:/a/miniconda3
     
     D:/a/miniconda3/Scripts/conda.exe config --add channels conda-forge
