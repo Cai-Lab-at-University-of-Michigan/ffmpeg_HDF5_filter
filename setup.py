@@ -20,7 +20,7 @@ def get_ffmpeg_root():
     # CI-appropriate fallback locations (matching pyproject.toml)
     system = platform.system().lower()
     if system == 'windows':
-        return 'C:\\ffmpeg_build'
+        return 'D:/a/ffmpeg_build'
     elif system == 'darwin':
         return os.path.expanduser('~/ffmpeg')
     else:  # Linux

@@ -31,7 +31,8 @@ before-all = [
     
     /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make -c conda-forge
     /opt/miniconda/bin/conda install -y x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
-    /opt/miniconda/bin/conda install -y cuda-nvcc libnpp -c nvidia || echo "CUDA libs not available"
+    /opt/miniconda/bin/conda install -y cuda-toolkit cuda-runtime -c nvidia || echo "CUDA libs not available"
+    /opt/miniconda/bin/conda install -y cuda-nvcc=12.4 libnpp=12.4 -c nvidia || echo "CUDA libs not available"
     /opt/miniconda/bin/conda install -y libva libdrm libvpl -c conda-forge || echo "Hardware acceleration libs not available"
     /opt/miniconda/bin/conda install -y openssl -c conda-forge
     
@@ -127,18 +128,10 @@ before-all = [
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
-    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
-    cd oneVPL
-    mkdir build && cd build
-    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 ..
-    make -j$(sysctl -n hw.ncpu)
-    make install
-    cd /tmp/hwaccel_src
-    
     git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    ./configure --prefix="$HOME/ffmpeg" --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" --extra-libs="-lm -lstdc++" --pkg-config-flags="--static" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-videotoolbox --enable-audiotoolbox --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --cc=$CC --cxx=$CXX
+    ./configure --prefix="$HOME/ffmpeg" --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" --extra-libs="-lm -lstdc++" --pkg-config-flags="--static" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-videotoolbox --enable-audiotoolbox --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --cc=$CC --cxx=$CXX
     
     make -j$(sysctl -n hw.ncpu)
     make install
@@ -169,68 +162,81 @@ repair-wheel-command = [
 before-all = [
     """
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
-    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:/Miniconda3
+    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=D:/a/Miniconda3
     
-    C:/Miniconda3/Scripts/conda.exe config --add channels conda-forge
-    C:/Miniconda3/Scripts/conda.exe config --add channels nvidia
-    C:/Miniconda3/Scripts/conda.exe config --set channel_priority strict
-    C:/Miniconda3/Scripts/conda.exe update -y conda
+    D:/a/Miniconda3/Scripts/conda.exe config --add channels conda-forge
+    D:/a/Miniconda3/Scripts/conda.exe config --add channels nvidia
+    D:/a/Miniconda3/Scripts/conda.exe config --set channel_priority strict
+    D:/a/Miniconda3/Scripts/conda.exe update -y conda
     
-    C:/Miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
-    C:/Miniconda3/Scripts/conda.exe install -y wget x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd libvpl -c conda-forge
-    C:/Miniconda3/Scripts/conda.exe install -y openssl cuda-toolkit-dev -c conda-forge
-    C:/Miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
+    D:/a/Miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
+    D:/a/Miniconda3/Scripts/conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+    D:/a/Miniconda3/Scripts/conda.exe install -y openssl -c conda-forge
+    D:/a/Miniconda3/Scripts/conda.exe install -y cuda-toolkit cuda-runtime -c nvidia || echo "CUDA libs not available"
+    D:/a/Miniconda3/Scripts/conda.exe install -y cuda-nvcc=12.4 libnpp=12.4 -c nvidia || echo "CUDA libs not available"
+    D:/a/Miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
     
-    mkdir C:/ffmpeg_build/bin C:/ffmpeg_build/lib C:/ffmpeg_build/include C:/temp_build 2>nul
+    mkdir D:/a/ffmpeg_build/bin D:/a/ffmpeg_build/lib D:/a/ffmpeg_build/include D:/a/temp_build 2>nul
     
-    set PKG_CONFIG_PATH=C:/Miniconda3/Library/lib/pkgconfig
-    set INCLUDE=C:/Miniconda3/Library/include;%INCLUDE%
-    set LIB=C:/Miniconda3/Library/lib;%LIB%
+    echo "Current working directory: %CD%"
+    echo "Setting up environment variables..."
     
-    cd C:/temp_build
+    set PKG_CONFIG_PATH=D:/a/Miniconda3/Library/lib/pkgconfig
+    set INCLUDE=D:/a/Miniconda3/Library/include;%INCLUDE%
+    set LIB=D:/a/Miniconda3/Library/lib;%LIB%
+    set PATH=D:/a/ffmpeg_build/bin;D:/a/Miniconda3/Library/bin;D:/a/Miniconda3/Scripts;%PATH%
+    
+    cd D:/a/temp_build
     
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
-    make install PREFIX="C:/ffmpeg_build"
-    cd C:/temp_build
+    make install PREFIX="D:/a/ffmpeg_build"
+    cd D:/a/temp_build
     
     git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
     cd oneVPL
     mkdir build && cd build
-    cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX="C:/ffmpeg_build" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF ..
+    cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX="D:/a/ffmpeg_build" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF ..
     cmake --build . --config Release -j 4
     cmake --install . --config Release
-    cd C:/temp_build
+    cd D:/a/temp_build
     
     git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    C:/Miniconda3/Library/usr/bin/bash.exe -c "
-    export PATH='/c/Miniconda3/Library/bin:/c/ffmpeg_build/bin'
-    export PKG_CONFIG_PATH='/c/Miniconda3/Library/lib/pkgconfig:/c/ffmpeg_build/lib/pkgconfig'
-    export CFLAGS='-I/c/Miniconda3/Library/include -I/c/ffmpeg_build/include'
-    export LDFLAGS='-L/c/Miniconda3/Library/lib -L/c/ffmpeg_build/lib'
+    D:/a/Miniconda3/Library/usr/bin/bash.exe -c "
+    export PATH='/c/Miniconda3/Library/bin:/d/a/ffmpeg_build/bin'
+    export PKG_CONFIG_PATH='/c/Miniconda3/Library/lib/pkgconfig:/d/a/ffmpeg_build/lib/pkgconfig'
+    export CFLAGS='-I/c/Miniconda3/Library/include -I/d/a/ffmpeg_build/include'
+    export LDFLAGS='-L/c/Miniconda3/Library/lib -L/d/a/ffmpeg_build/lib'
     
-    ./configure --prefix='/c/ffmpeg_build' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc
+    ./configure --prefix='/d/a/ffmpeg_build' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc
     
     make -j 4
     make install
     "
     
-    if exist "C:/ffmpeg_build/bin/ffmpeg.exe" (
-        C:/ffmpeg_build/bin/ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
+    if exist "D:/a/ffmpeg_build/bin/ffmpeg.exe" (
+        echo SUCCESS: FFmpeg executable found
+        D:/a/ffmpeg_build/bin/ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
+        dir D:/a/ffmpeg_build/lib | findstr /C:".lib .dll" 2>nul
+        echo FFmpeg build completed successfully
     ) else (
         echo ERROR: FFmpeg executable not found
+        echo Contents of D:/a/ffmpeg_build:
+        dir D:/a/ffmpeg_build 2>nul
+        echo Contents of D:/a/ffmpeg_build/bin:
+        dir D:/a/ffmpeg_build/bin 2>nul
         exit /b 1
     )
     """
 ]
 
 [tool.cibuildwheel.windows.environment]
-FFMPEG_ROOT = "C:/ffmpeg_build"
-HDF5_ROOT = "C:/Miniconda3/Library"
-PKG_CONFIG_PATH = "C:/ffmpeg_build/lib/pkgconfig;C:/Miniconda3/Library/lib/pkgconfig"
-INCLUDE = "C:/ffmpeg_build/include;C:/Miniconda3/Library/include"
-LIB = "C:/ffmpeg_build/lib;C:/Miniconda3/Library/lib"
+FFMPEG_ROOT = "D:/a/ffmpeg_build"
+HDF5_ROOT = "D:/a/Miniconda3/Library"
+PKG_CONFIG_PATH = "D:/a/ffmpeg_build/lib/pkgconfig;D:/a/Miniconda3/Library/lib/pkgconfig"
+INCLUDE = "D:/a/ffmpeg_build/include;D:/a/Miniconda3/Library/include"
+LIB = "D:/a/ffmpeg_build/lib;D:/a/Miniconda3/Library/lib"
 
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path C:/ffmpeg_build/bin;C:/Miniconda3/Library/bin"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path D:/a/ffmpeg_build/bin;D:/a/Miniconda3/Library/bin"

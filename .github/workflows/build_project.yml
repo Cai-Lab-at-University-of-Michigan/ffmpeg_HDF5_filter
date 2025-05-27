@@ -58,8 +58,8 @@ jobs:
           ls -la ./wheelhouse/ || echo "No wheelhouse directory"
           echo "=== FFmpeg Installation Check ==="
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            ls -la C:/ffmpeg_build/ || echo "No Windows FFmpeg build"
-            if [[ -f "C:/ffmpeg_build/bin/ffmpeg.exe" ]]; then
+            ls -la D:/a/ffmpeg_build/ || echo "No Windows FFmpeg build"
+            if [[ -f "D:/a/ffmpeg_build/bin/ffmpeg.exe" ]]; then
               echo "FFmpeg found on Windows"
             else
               echo "FFmpeg NOT found on Windows"
