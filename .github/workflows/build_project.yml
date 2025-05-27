@@ -22,8 +22,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # ubuntu-latest is x86_64, macos-latest is apple silicon
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        # ubuntu-latest is x86_64, macos-15 is apple silicon
+        os: [ubuntu-latest, windows-latest, macos-15]
 
     steps:
       - uses: actions/checkout@v4

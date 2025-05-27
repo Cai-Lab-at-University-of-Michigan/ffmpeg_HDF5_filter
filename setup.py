@@ -20,9 +20,11 @@ def get_ffmpeg_root():
     # CI-appropriate fallback locations (matching pyproject.toml)
     system = platform.system().lower()
     if system == 'windows':
-        return 'D:/a/ffmpeg_build'
+        home = os.environ.get('HOME', '.')
+        return os.path.join(home, 'ffmpeg_build')
     elif system == 'darwin':
-        return os.path.expanduser('~/ffmpeg')
+        home = os.path.expanduser('~')
+        return os.path.join(home, 'ffmpeg')
     else:  # Linux
         return '/opt/ffmpeg'
 
@@ -31,13 +33,32 @@ def get_hdf5_root():
     if 'HDF5_ROOT' in os.environ:
         return os.environ['HDF5_ROOT']
     
-    # Platform-specific fallbacks for CI environments
     system = platform.system().lower()
     if system == 'windows':
-        # Check for conda-forge installation (from pyproject.toml)
-        conda_hdf5 = 'D:/a/miniconda3/Library'
+        home = os.environ.get('HOME', '.')
+        conda_hdf5 = os.path.join(home, 'miniconda3', 'Library')
+        
         if os.path.exists(os.path.join(conda_hdf5, 'include', 'hdf5.h')):
             return conda_hdf5
+    elif system == 'darwin':
+        # Check common macOS locations
+        possible_paths = [
+            '/opt/homebrew/opt/hdf5',
+            '/usr/local/opt/hdf5', 
+            os.path.expanduser('~/miniconda3/lib'),  # Conda
+        ]
+        for path in possible_paths:
+            if os.path.exists(os.path.join(path, 'include', 'hdf5.h')):
+                return path
+    else:  # Linux
+        possible_paths = [
+            '/usr/include/hdf5',
+            '/usr/local/include/hdf5',
+            '/opt/conda/include',
+        ]
+        for path in possible_paths:
+            if os.path.exists(os.path.join(path, 'hdf5.h')):
+                return os.path.dirname(path)  # Return parent directory
     
     return None
 
