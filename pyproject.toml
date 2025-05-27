@@ -22,7 +22,7 @@ before-all = [
     yum groupinstall -y "Development Tools" || apt-get install -y build-essential
     yum install -y epel-release cmake nasm yasm pkg-config zlib-devel bzip2-devel xz-devel openssl-devel git wget which || apt-get install -y cmake nasm yasm pkg-config libz-dev libbz2-dev liblzma-dev libssl-dev git wget
     
-    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
+    curl -L https://repo.anaconda.com/miniconda/miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
     
     /opt/miniconda/bin/conda config --add channels conda-forge
@@ -106,7 +106,7 @@ LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
 [tool.cibuildwheel.macos]
 before-all = [
     """
-    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
+    curl -L https://repo.anaconda.com/miniconda/miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
     bash miniconda.sh -b -p $HOME/miniconda
     
     $HOME/miniconda/bin/conda config --add channels conda-forge
@@ -161,30 +161,29 @@ repair-wheel-command = [
 [tool.cibuildwheel.windows]
 before-all = [
     """
-    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
-    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=D:/a/Miniconda3
+    curl -L https://repo.anaconda.com/miniconda/miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
+    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=D:/a/miniconda3
     
-    D:/a/Miniconda3/Scripts/conda.exe config --add channels conda-forge
-    D:/a/Miniconda3/Scripts/conda.exe config --add channels nvidia
-    D:/a/Miniconda3/Scripts/conda.exe config --set channel_priority strict
-    D:/a/Miniconda3/Scripts/conda.exe update -y conda
+    D:/a/miniconda3/Scripts/conda.exe config --add channels conda-forge
+    D:/a/miniconda3/Scripts/conda.exe config --add channels nvidia
+    D:/a/miniconda3/Scripts/conda.exe config --set channel_priority strict
+    D:/a/miniconda3/Scripts/conda.exe update -y conda
     
-    D:/a/Miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
-    D:/a/Miniconda3/Scripts/conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
-    D:/a/Miniconda3/Scripts/conda.exe install -y openssl -c conda-forge
-    D:/a/Miniconda3/Scripts/conda.exe install -y cuda-toolkit cuda-runtime -c nvidia || echo "CUDA libs not available"
-    D:/a/Miniconda3/Scripts/conda.exe install -y cuda-nvcc=12.4 libnpp=12.4 -c nvidia || echo "CUDA libs not available"
-    D:/a/Miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
+    D:/a/miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
+    D:/a/miniconda3/Scripts/conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+    D:/a/miniconda3/Scripts/conda.exe install -y openssl -c conda-forge
+    D:/a/miniconda3/Scripts/conda.exe install -y cuda-nvcc=12.0 libnpp=12.0 -c nvidia || echo "CUDA libs not available"
+    D:/a/miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
     
-    mkdir D:/a/ffmpeg_build/bin D:/a/ffmpeg_build/lib D:/a/ffmpeg_build/include D:/a/temp_build 2>nul
+    mkdir D:/a/ffmpeg_build D:/a/ffmpeg_build/bin D:/a/ffmpeg_build/lib D:/a/ffmpeg_build/include D:/a/temp_build 2>nul
     
     echo "Current working directory: %CD%"
     echo "Setting up environment variables..."
     
-    set PKG_CONFIG_PATH=D:/a/Miniconda3/Library/lib/pkgconfig
-    set INCLUDE=D:/a/Miniconda3/Library/include;%INCLUDE%
-    set LIB=D:/a/Miniconda3/Library/lib;%LIB%
-    set PATH=D:/a/ffmpeg_build/bin;D:/a/Miniconda3/Library/bin;D:/a/Miniconda3/Scripts;%PATH%
+    set PKG_CONFIG_PATH=D:/a/miniconda3/Library/lib/pkgconfig
+    set INCLUDE=D:/a/miniconda3/Library/include;%INCLUDE%
+    set LIB=D:/a/miniconda3/Library/lib;%LIB%
+    set PATH=D:/a/ffmpeg_build/bin;D:/a/miniconda3/Library/bin;D:/a/miniconda3/Scripts;%PATH%
     
     cd D:/a/temp_build
     
@@ -204,11 +203,11 @@ before-all = [
     git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    D:/a/Miniconda3/Library/usr/bin/bash.exe -c "
-    export PATH='/c/Miniconda3/Library/bin:/d/a/ffmpeg_build/bin'
-    export PKG_CONFIG_PATH='/c/Miniconda3/Library/lib/pkgconfig:/d/a/ffmpeg_build/lib/pkgconfig'
-    export CFLAGS='-I/c/Miniconda3/Library/include -I/d/a/ffmpeg_build/include'
-    export LDFLAGS='-L/c/Miniconda3/Library/lib -L/d/a/ffmpeg_build/lib'
+    D:/a/miniconda3/Library/usr/bin/bash.exe -c "
+    export PATH='/c/miniconda3/Library/bin:/d/a/ffmpeg_build/bin'
+    export PKG_CONFIG_PATH='/c/miniconda3/Library/lib/pkgconfig:/d/a/ffmpeg_build/lib/pkgconfig'
+    export CFLAGS='-I/c/miniconda3/Library/include -I/d/a/ffmpeg_build/include'
+    export LDFLAGS='-L/c/miniconda3/Library/lib -L/d/a/ffmpeg_build/lib'
     
     ./configure --prefix='/d/a/ffmpeg_build' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc
     
@@ -234,9 +233,9 @@ before-all = [
 
 [tool.cibuildwheel.windows.environment]
 FFMPEG_ROOT = "D:/a/ffmpeg_build"
-HDF5_ROOT = "D:/a/Miniconda3/Library"
-PKG_CONFIG_PATH = "D:/a/ffmpeg_build/lib/pkgconfig;D:/a/Miniconda3/Library/lib/pkgconfig"
-INCLUDE = "D:/a/ffmpeg_build/include;D:/a/Miniconda3/Library/include"
-LIB = "D:/a/ffmpeg_build/lib;D:/a/Miniconda3/Library/lib"
+HDF5_ROOT = "D:/a/miniconda3/Library"
+PKG_CONFIG_PATH = "D:/a/ffmpeg_build/lib/pkgconfig;D:/a/miniconda3/Library/lib/pkgconfig"
+INCLUDE = "D:/a/ffmpeg_build/include;D:/a/miniconda3/Library/include"
+LIB = "D:/a/ffmpeg_build/lib;D:/a/miniconda3/Library/lib"
 
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path D:/a/ffmpeg_build/bin;D:/a/Miniconda3/Library/bin"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path D:/a/ffmpeg_build/bin;D:/a/miniconda3/Library/bin"

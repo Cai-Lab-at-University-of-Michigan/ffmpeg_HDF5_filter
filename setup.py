@@ -35,7 +35,7 @@ def get_hdf5_root():
     system = platform.system().lower()
     if system == 'windows':
         # Check for conda-forge installation (from pyproject.toml)
-        conda_hdf5 = 'C:\\Miniforge3\\Library'
+        conda_hdf5 = 'D:/a/miniconda3/Library'
         if os.path.exists(os.path.join(conda_hdf5, 'include', 'hdf5.h')):
             return conda_hdf5
     
