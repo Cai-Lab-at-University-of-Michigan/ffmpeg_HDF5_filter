@@ -48,12 +48,14 @@ before-all = [
     mkdir -p /tmp/hwaccel_src /opt/ffmpeg/include /opt/ffmpeg/lib /opt/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
+    echo "Cloning nv-codec-headers..."
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
     make install PREFIX="/opt/ffmpeg"
     cd /tmp/hwaccel_src
     
-    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
+    echo "Cloning oneVPL..."
+    git clone --depth 1 https://github.com/intel/libvpl.git
     cd oneVPL
     mkdir build && cd build
     cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="/opt/ffmpeg" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX ..
@@ -64,6 +66,7 @@ before-all = [
     export PKG_CONFIG_PATH="/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
     
     if [ ! -f "/opt/miniconda/lib/pkgconfig/dav1d.pc" ]; then
+        echo "Building dav1d from source..."
         git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
         cd dav1d
         meson setup build --prefix=/opt/miniconda --libdir=lib
@@ -72,7 +75,16 @@ before-all = [
         cd /tmp/hwaccel_src
     fi
     
-    git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    echo "Cloning FFmpeg..."
+    git config --global http.postBuffer 524288000
+    git config --global http.maxRequestBuffer 100M
+    git config --global core.compression 0
+    
+    if ! git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg; then
+        echo "Shallow clone failed, trying full clone..."
+        git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    fi
+    
     cd ffmpeg
     
     if command -v nvcc &> /dev/null; then
@@ -81,8 +93,10 @@ before-all = [
         CUDA_FLAGS=""
     fi
     
+    echo "Configuring FFmpeg..."
     ./configure --prefix="/opt/ffmpeg" --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include -fPIC" --extra-ldflags="-L/opt/miniconda/lib -L/opt/ffmpeg/lib" --extra-libs="-lm -lstdc++" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl ${CUDA_FLAGS} --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug
     
+    echo "Building FFmpeg..."
     make -j$(nproc)
     make install
     
@@ -91,6 +105,8 @@ before-all = [
     ldconfig
     
     export LD_LIBRARY_PATH="/opt/ffmpeg/lib:/opt/miniconda/lib:$LD_LIBRARY_PATH"
+    
+    echo "Verifying FFmpeg installation..."
     /opt/ffmpeg/bin/ffmpeg -version
     """
 ]
@@ -117,25 +133,101 @@ before-all = [
     $HOME/miniconda/bin/conda install -y x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
     $HOME/miniconda/bin/conda install -y openssl -c conda-forge
     
+    export PATH="$HOME/miniconda/bin:$PATH"
     export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
     export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
     export CFLAGS="-I$HOME/miniconda/include"
     export CXXFLAGS="-I$HOME/miniconda/include"
     export LDFLAGS="-L$HOME/miniconda/lib"
-    export MACOSX_DEPLOYMENT_TARGET="15.0"
+    export MACOSX_DEPLOYMENT_TARGET="12.0"
     export ARCHFLAGS="-arch arm64"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
-    git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
-    cd /tmp/hwaccel_src/ffmpeg
+    git config --global http.postBuffer 524288000
+    git config --global http.maxRequestBuffer 100M
+    git config --global core.compression 0
+    git config --global http.lowSpeedLimit 0
+    git config --global http.lowSpeedTime 999999
     
-    ./configure --prefix="$HOME/ffmpeg" --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" --extra-libs="-lm -lstdc++" --pkg-config-flags="--static" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-videotoolbox --enable-audiotoolbox --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --cc=$CC --cxx=$CXX
+    echo "Cloning FFmpeg..."
+    RETRY_COUNT=0
+    MAX_RETRIES=3
     
+    while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+        if git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg; then
+            echo "FFmpeg clone successful"
+            break
+        else
+            RETRY_COUNT=$((RETRY_COUNT + 1))
+            echo "FFmpeg clone failed, attempt $RETRY_COUNT/$MAX_RETRIES"
+            rm -rf ffmpeg
+            
+            if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
+                echo "Trying full clone as last resort..."
+                if git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg; then
+                    echo "Full clone successful"
+                    break
+                else
+                    echo "All clone attempts failed"
+                    exit 1
+                fi
+            fi
+            
+            sleep 5
+        fi
+    done
+    
+    cd ffmpeg
+    
+    if [ ! -f "configure" ]; then
+        echo "ERROR: configure script not found"
+        ls -la
+        exit 1
+    fi
+    
+    echo "Configuring FFmpeg..."
+    ./configure \
+        --prefix="$HOME/ffmpeg" \
+        --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
+        --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" \
+        --extra-libs="-lm -lstdc++" \
+        --pkg-config-flags="--static" \
+        --enable-shared \
+        --disable-static \
+        --enable-pic \
+        --enable-gpl \
+        --enable-nonfree \
+        --enable-version3 \
+        --enable-pthreads \
+        --enable-libx264 \
+        --enable-libx265 \
+        --enable-libaom \
+        --enable-libdav1d \
+        --enable-librav1e \
+        --enable-libsvtav1 \
+        --enable-libvpx \
+        --enable-videotoolbox \
+        --enable-audiotoolbox \
+        --enable-openssl \
+        --enable-lzma \
+        --enable-bzlib \
+        --enable-zlib \
+        --enable-runtime-cpudetect \
+        --enable-hardcoded-tables \
+        --enable-optimizations \
+        --disable-doc \
+        --disable-ffplay \
+        --disable-debug \
+        --cc="$CC" \
+        --cxx="$CXX"
+    
+    echo "Building FFmpeg..."
     make -j$(sysctl -n hw.ncpu)
     make install
     
+    echo "Verifying FFmpeg installation..."
     $HOME/ffmpeg/bin/ffmpeg -version
     """
 ]
@@ -147,7 +239,7 @@ CC = "/usr/bin/clang"
 CXX = "/usr/bin/clang++"
 PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
 DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
-MACOSX_DEPLOYMENT_TARGET = "15.0"
+MACOSX_DEPLOYMENT_TARGET = "12.0"
 ARCHFLAGS = "-arch arm64"
 CFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
 CXXFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
@@ -187,6 +279,10 @@ before-all = [
     
     cd %FFMPEG_ROOT%temp_build
     
+    git config --global http.postBuffer 524288000
+    git config --global http.maxRequestBuffer 100M
+    git config --global core.compression 0
+    
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
     make install PREFIX="%FFMPEG_ROOT%ffmpeg_build"
@@ -200,8 +296,19 @@ before-all = [
     cmake --install . --config Release
     cd %FFMPEG_ROOT%temp_build
     
-    git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    echo "Cloning FFmpeg..."
+    if not git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg (
+        echo "Shallow clone failed, trying full clone..."
+        git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    )
+    
     cd ffmpeg
+    
+    if not exist "configure" (
+        echo "ERROR: configure script not found"
+        dir
+        exit /b 1
+    )
     
     %FFMPEG_ROOT%miniconda3/Library/usr/bin/bash.exe -c "
     export PATH='/c/miniconda3/Library/bin:/d/a/ffmpeg_build/bin'
@@ -209,8 +316,10 @@ before-all = [
     export CFLAGS='-I/c/miniconda3/Library/include -I/d/a/ffmpeg_build/include'
     export LDFLAGS='-L/c/miniconda3/Library/lib -L/d/a/ffmpeg_build/lib'
     
+    echo 'Configuring FFmpeg...'
     ./configure --prefix='/d/a/ffmpeg_build' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc
     
+    echo 'Building FFmpeg...'
     make -j 4
     make install
     "
