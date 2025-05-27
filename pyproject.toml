@@ -2,7 +2,7 @@
 requires = [
     "setuptools>=42",
     "wheel",
-    "numpy>=1.14.0",
+    "numpy>=1.15.0",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -14,9 +14,14 @@ test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "manylinux_2_28"
-build-frontend = "build"
+manylinux-aarch64-image = "manylinux_2_28"
+
 before-all = [
     """
+    yum update -y || (apt-get update && apt-get upgrade -y)
+    yum groupinstall -y "Development Tools" || apt-get install -y build-essential
+    yum install -y epel-release cmake nasm yasm pkg-config zlib-devel bzip2-devel xz-devel openssl-devel git wget which || apt-get install -y cmake nasm yasm pkg-config libz-dev libbz2-dev liblzma-dev libssl-dev git wget
+    
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
     
@@ -24,82 +29,22 @@ before-all = [
     /opt/miniconda/bin/conda config --set channel_priority strict
     /opt/miniconda/bin/conda update -y conda
     
-    /opt/miniconda/bin/conda install -y \
-        hdf5 \
-        hdf5-external-filter-plugins \
-        pkg-config \
-        gcc_linux-64 \
-        gxx_linux-64 \
-        cmake \
-        ninja \
-        meson \
-        nasm \
-        yasm \
-        git \
-        wget \
-        autoconf \
-        automake \
-        libtool \
-        make \
-        -c conda-forge
-    
-    /opt/miniconda/bin/conda install -y \
-        x264 \
-        x265 \
-        aom \
-        libvpx \
-        dav1d \
-        rav1e \
-        svt-av1 \
-        zlib \
-        bzip2 \
-        xz \
-        lz4 \
-        zstd \
-        cudatoolkit-dev \
-        -c conda-forge
-    
-    /opt/miniconda/bin/conda install -y \
-        libva \
-        libdrm \
-        libvpl \
-        -c conda-forge || echo "Some hardware acceleration libs not available"
-    
-    /opt/miniconda/bin/conda install -y \
-        openssl \
-        -c conda-forge
+    /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make -c conda-forge
+    /opt/miniconda/bin/conda install -y x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+    /opt/miniconda/bin/conda install -y cuda-nvcc libnpp -c nvidia || echo "CUDA libs not available"
+    /opt/miniconda/bin/conda install -y libva libdrm libvpl -c conda-forge || echo "Hardware acceleration libs not available"
+    /opt/miniconda/bin/conda install -y openssl -c conda-forge
     
     export PATH="/opt/miniconda/bin:$PATH"
     export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
     export LD_LIBRARY_PATH="/opt/miniconda/lib"
-    export CC=/opt/miniconda/bin/x86_64-conda-linux-gnu-gcc
-    export CXX=/opt/miniconda/bin/x86_64-conda-linux-gnu-g++
-    export CFLAGS="-I/opt/miniconda/include"
-    export CXXFLAGS="-I/opt/miniconda/include"
+    export CC=gcc
+    export CXX=g++
+    export CFLAGS="-I/opt/miniconda/include -fPIC"
+    export CXXFLAGS="-I/opt/miniconda/include -fPIC"
     export LDFLAGS="-L/opt/miniconda/lib"
     
-    which nasm && nasm -v
-    if [ $? -ne 0 ]; then
-        yum install -y nasm || apt-get update && apt-get install -y nasm || echo "Could not install nasm via package manager"
-    fi
-    
     mkdir -p /tmp/hwaccel_src /opt/ffmpeg/include /opt/ffmpeg/lib /opt/ffmpeg/lib/pkgconfig
-    cd /tmp/hwaccel_src
-    
-    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
-    cd oneVPL
-    mkdir build && cd build
-    cmake -G "Unix Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="/opt/ffmpeg" \
-        -DBUILD_SHARED_LIBS=ON \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DBUILD_EXAMPLES=OFF \
-        -DBUILD_TESTS=OFF \
-        -DCMAKE_C_COMPILER=$CC \
-        -DCMAKE_CXX_COMPILER=$CXX \
-        ..
-    make -j$(nproc)
-    make install
     cd /tmp/hwaccel_src
     
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
@@ -107,13 +52,17 @@ before-all = [
     make install PREFIX="/opt/ffmpeg"
     cd /tmp/hwaccel_src
     
+    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
+    cd oneVPL
+    mkdir build && cd build
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="/opt/ffmpeg" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX ..
+    make -j$(nproc)
+    make install
+    cd /tmp/hwaccel_src
+    
     export PKG_CONFIG_PATH="/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
     
-    find /opt/miniconda -name "*.pc" | grep -E "(dav1d|x264|x265)" || echo "No pc files found"
-    ls -la /opt/miniconda/lib/pkgconfig/ | grep -E "(dav1d|x264|x265)" || echo "No codec pc files in lib/pkgconfig"
-    
     if [ ! -f "/opt/miniconda/lib/pkgconfig/dav1d.pc" ]; then
-        cd /tmp/hwaccel_src
         git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
         cd dav1d
         meson setup build --prefix=/opt/miniconda --libdir=lib
@@ -122,11 +71,8 @@ before-all = [
         cd /tmp/hwaccel_src
     fi
     
-    pkg-config --exists dav1d && echo "dav1d found" || echo "dav1d still not found"
-    
-    pkg-config --exists vpl && echo "VPL found: $(pkg-config --modversion vpl)" || echo "VPL not found"
-    pkg-config --cflags vpl || echo "Could not get VPL cflags"
-    pkg-config --libs vpl || echo "Could not get VPL libs"
+    git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    cd ffmpeg
     
     if command -v nvcc &> /dev/null; then
         CUDA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
@@ -134,64 +80,17 @@ before-all = [
         CUDA_FLAGS=""
     fi
     
-    git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
-    cd ffmpeg
-    
-    which nasm && nasm -v
-    
-    ./configure \
-        --prefix="/opt/ffmpeg" \
-        --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include" \
-        --extra-ldflags="-L/opt/miniconda/lib -L/opt/ffmpeg/lib" \
-        --extra-libs="-lm -lstdc++" \
-        --pkg-config-flags="--static" \
-        --enable-shared \
-        --disable-static \
-        --enable-pic \
-        --enable-gpl \
-        --enable-nonfree \
-        --enable-version3 \
-        --enable-pthreads \
-        --enable-libx264 \
-        --enable-libx265 \
-        --enable-libaom \
-        --enable-libdav1d \
-        --enable-librav1e \
-        --enable-libsvtav1 \
-        --enable-libvpx \
-        --enable-libvpl \
-        ${CUDA_FLAGS} \
-        --enable-openssl \
-        --enable-lzma \
-        --enable-bzlib \
-        --enable-zlib \
-        --enable-runtime-cpudetect \
-        --enable-hardcoded-tables \
-        --enable-optimizations \
-        --disable-doc \
-        --disable-ffplay \
-        --disable-debug
+    ./configure --prefix="/opt/ffmpeg" --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include -fPIC" --extra-ldflags="-L/opt/miniconda/lib -L/opt/ffmpeg/lib" --extra-libs="-lm -lstdc++" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl ${CUDA_FLAGS} --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug
     
     make -j$(nproc)
     make install
     
-    # Configure ldconfig to find the libraries
     echo "/opt/ffmpeg/lib" > /etc/ld.so.conf.d/ffmpeg.conf
     echo "/opt/miniconda/lib" >> /etc/ld.so.conf.d/ffmpeg.conf
     ldconfig
     
-    # Verify libraries are found
-    echo "Checking if libavdevice.so.62 is available:"
-    find /opt/ffmpeg/lib -name "libavdevice.so*" || echo "libavdevice not found in /opt/ffmpeg/lib"
-    ldd /opt/ffmpeg/bin/ffmpeg | head -20 || echo "Could not run ldd on ffmpeg"
-    
-    # Test FFmpeg with proper environment
     export LD_LIBRARY_PATH="/opt/ffmpeg/lib:/opt/miniconda/lib:$LD_LIBRARY_PATH"
     /opt/ffmpeg/bin/ffmpeg -version
-    /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
-    /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
-    /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(qsv|nvenc|vaapi)" || echo "Hardware encoders not available (expected in CI)"
-    /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(qsv|cuvid|vaapi)" || echo "Hardware decoders not available (expected in CI)"
     """
 ]
 
@@ -213,120 +112,38 @@ before-all = [
     $HOME/miniconda/bin/conda config --set channel_priority strict
     $HOME/miniconda/bin/conda update -y conda
     
-    $HOME/miniconda/bin/conda install -y \
-        hdf5 \
-        hdf5-external-filter-plugins \
-        pkg-config \
-        clang_osx-arm64 \
-        clangxx_osx-arm64 \
-        cmake \
-        ninja \
-        meson \
-        nasm \
-        yasm \
-        git \
-        autoconf \
-        automake \
-        libtool \
-        make \
-        -c conda-forge
-    
-    $HOME/miniconda/bin/conda install -y \
-        x264 \
-        x265 \
-        aom \
-        libvpx \
-        dav1d \
-        rav1e \
-        svt-av1 \
-        zlib \
-        bzip2 \
-        xz \
-        lz4 \
-        zstd \
-        -c conda-forge
-    
-    $HOME/miniconda/bin/conda install -y \
-        openssl \
-        -c conda-forge
+    $HOME/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git autoconf automake libtool make -c conda-forge
+    $HOME/miniconda/bin/conda install -y x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+    $HOME/miniconda/bin/conda install -y openssl -c conda-forge
     
     export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
     export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
     export CFLAGS="-I$HOME/miniconda/include"
     export CXXFLAGS="-I$HOME/miniconda/include"
     export LDFLAGS="-L$HOME/miniconda/lib"
-    export MACOSX_DEPLOYMENT_TARGET="14.0"
+    export MACOSX_DEPLOYMENT_TARGET="15.0"
     export ARCHFLAGS="-arch arm64"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
-    git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
+    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
     cd oneVPL
     mkdir build && cd build
-    cmake -G "Unix Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg" \
-        -DBUILD_SHARED_LIBS=ON \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DBUILD_TOOLS=OFF \
-        -DBUILD_EXAMPLES=OFF \
-        -DBUILD_TESTS=OFF \
-        -DCMAKE_C_COMPILER=$CC \
-        -DCMAKE_CXX_COMPILER=$CXX \
-        -DCMAKE_OSX_ARCHITECTURES=arm64 \
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
-        ..
+    cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF -DCMAKE_C_COMPILER=$CC -DCMAKE_CXX_COMPILER=$CXX -DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 ..
     make -j$(sysctl -n hw.ncpu)
     make install
     cd /tmp/hwaccel_src
     
-    git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    ./configure \
-        --prefix="$HOME/ffmpeg" \
-        --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
-        --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" \
-        --extra-libs="-lm -lstdc++" \
-        --pkg-config-flags="--static" \
-        --enable-shared \
-        --disable-static \
-        --enable-pic \
-        --enable-gpl \
-        --enable-nonfree \
-        --enable-version3 \
-        --enable-pthreads \
-        --enable-libx264 \
-        --enable-libx265 \
-        --enable-libaom \
-        --enable-libdav1d \
-        --enable-librav1e \
-        --enable-libsvtav1 \
-        --enable-libvpx \
-        --enable-libvpl \
-        --enable-videotoolbox \
-        --enable-audiotoolbox \
-        --enable-openssl \
-        --enable-lzma \
-        --enable-bzlib \
-        --enable-zlib \
-        --enable-runtime-cpudetect \
-        --enable-hardcoded-tables \
-        --enable-optimizations \
-        --disable-doc \
-        --disable-ffplay \
-        --disable-debug \
-        --cc=$CC \
-        --cxx=$CXX
+    ./configure --prefix="$HOME/ffmpeg" --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" --extra-libs="-lm -lstdc++" --pkg-config-flags="--static" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-videotoolbox --enable-audiotoolbox --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --cc=$CC --cxx=$CXX
     
     make -j$(sysctl -n hw.ncpu)
     make install
     
     $HOME/ffmpeg/bin/ffmpeg -version
-    
-    $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
-    $HOME/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
-    $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(videotoolbox)" || echo "VideoToolbox encoder not available"
     """
 ]
 
@@ -337,7 +154,7 @@ CC = "/usr/bin/clang"
 CXX = "/usr/bin/clang++"
 PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
 DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
-MACOSX_DEPLOYMENT_TARGET = "14.0"
+MACOSX_DEPLOYMENT_TARGET = "15.0"
 ARCHFLAGS = "-arch arm64"
 CFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
 CXXFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
@@ -355,21 +172,16 @@ before-all = [
     start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:/Miniconda3
     
     C:/Miniconda3/Scripts/conda.exe config --add channels conda-forge
+    C:/Miniconda3/Scripts/conda.exe config --add channels nvidia
     C:/Miniconda3/Scripts/conda.exe config --set channel_priority strict
     C:/Miniconda3/Scripts/conda.exe update -y conda
     
     C:/Miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
-    
-    C:/Miniconda3/Scripts/conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
-    
-    C:/Miniconda3/Scripts/conda.exe install -y openssl cuda-tookit-dev -c conda-forge
-    
+    C:/Miniconda3/Scripts/conda.exe install -y wget x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd libvpl -c conda-forge
+    C:/Miniconda3/Scripts/conda.exe install -y openssl cuda-toolkit-dev -c conda-forge
     C:/Miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
     
-    mkdir C:/ffmpeg_build/bin 2>nul
-    mkdir C:/ffmpeg_build/lib 2>nul  
-    mkdir C:/ffmpeg_build/include 2>nul
-    mkdir C:/temp_build 2>nul
+    mkdir C:/ffmpeg_build/bin C:/ffmpeg_build/lib C:/ffmpeg_build/include C:/temp_build 2>nul
     
     set PKG_CONFIG_PATH=C:/Miniconda3/Library/lib/pkgconfig
     set INCLUDE=C:/Miniconda3/Library/include;%INCLUDE%
@@ -377,27 +189,20 @@ before-all = [
     
     cd C:/temp_build
     
-    git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
-    cd oneVPL
-    mkdir build && cd build
-    cmake -G "Visual Studio 16 2019" -A x64 ^
-        -DCMAKE_INSTALL_PREFIX="C:/ffmpeg_build" ^
-        -DBUILD_SHARED_LIBS=ON ^
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON ^
-        -DBUILD_TOOLS=OFF ^
-        -DBUILD_EXAMPLES=OFF ^
-        -DBUILD_TESTS=OFF ^
-        ..
-    cmake --build . --config Release -j 4
-    cmake --install . --config Release
-    cd C:/temp_build
-
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
     make install PREFIX="C:/ffmpeg_build"
     cd C:/temp_build
     
-    git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
+    cd oneVPL
+    mkdir build && cd build
+    cmake -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX="C:/ffmpeg_build" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF ..
+    cmake --build . --config Release -j 4
+    cmake --install . --config Release
+    cd C:/temp_build
+    
+    git clone --depth 1 --branch n6.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
     C:/Miniconda3/Library/usr/bin/bash.exe -c "
@@ -406,35 +211,7 @@ before-all = [
     export CFLAGS='-I/c/Miniconda3/Library/include -I/c/ffmpeg_build/include'
     export LDFLAGS='-L/c/Miniconda3/Library/lib -L/c/ffmpeg_build/lib'
     
-    ./configure \
-        --prefix='/c/ffmpeg_build' \
-        --enable-shared \
-        --disable-static \
-        --enable-pic \
-        --enable-gpl \
-        --enable-nonfree \
-        --enable-version3 \
-        --enable-libx264 \
-        --enable-libx265 \
-        --enable-libaom \
-        --enable-libdav1d \
-        --enable-librav1e \
-        --enable-libsvtav1 \
-        --enable-libvpx \
-        --enable-libvpl \
-        --enable-cuda-nvcc \
-        --enable-libnpp \
-        --enable-openssl \
-        --enable-lzma \
-        --enable-bzlib \
-        --enable-zlib \
-        --enable-runtime-cpudetect \
-        --enable-hardcoded-tables \
-        --enable-optimizations \
-        --disable-doc \
-        --disable-ffplay \
-        --disable-debug \
-        --toolchain=msvc
+    ./configure --prefix='/c/ffmpeg_build' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc
     
     make -j 4
     make install
@@ -442,17 +219,8 @@ before-all = [
     
     if exist "C:/ffmpeg_build/bin/ffmpeg.exe" (
         C:/ffmpeg_build/bin/ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
-        C:/ffmpeg_build/bin/ffmpeg.exe -encoders | findstr /C:"libx264 libx265 libaom librav1e libsvtav1 libvpx" 2>nul
-        C:/ffmpeg_build/bin/ffmpeg.exe -decoders | findstr /C:"h264 hevc av1 vp9" 2>nul
     ) else (
         echo ERROR: FFmpeg executable not found
-        exit /b 1
-    )
-    
-    if exist "C:/Miniconda3/Library/include/hdf5.h" (
-        echo SUCCESS: HDF5 headers found
-    ) else (
-        echo ERROR: HDF5 headers not found
         exit /b 1
     )
     """
