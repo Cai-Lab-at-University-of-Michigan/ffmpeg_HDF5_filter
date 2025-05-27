@@ -68,7 +68,7 @@ cd /D %HOME%\temp_build
 
 :: Download libvpl package manually
 echo Downloading libvpl...
-wget -q https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst -O libvpl.pkg.tar.zst
+curl -L --retry 3 --retry-delay 5 https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst -o libvpl.pkg.tar.zst
 
 :: 7-Zip two-step extraction
 7z x libvpl.pkg.tar.zst -olibvpl_extracted_zst

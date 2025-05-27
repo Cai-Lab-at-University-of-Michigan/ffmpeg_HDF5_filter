@@ -170,6 +170,8 @@ before-all = [
     export LDFLAGS="-L$HOME/miniconda/lib"
     export MACOSX_DEPLOYMENT_TARGET="15.0"
     export ARCHFLAGS="-arch arm64"
+    export CC=/usr/bin/clang
+    export CXX=/usr/bin/clang++
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
