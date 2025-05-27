@@ -1,0 +1,126 @@
+:: build_ffmpeg_complete.bat
+@echo off
+setlocal enabledelayedexpansion
+
+:: Set environment variables
+set HOME=D:\a
+set FFMPEG_ROOT=%HOME%\ffmpeg_build
+set HDF5_ROOT=%HOME%\miniconda3\Library
+set PKG_CONFIG_PATH=%FFMPEG_ROOT%\lib\pkgconfig;%HOME%\miniconda3\Library\lib\pkgconfig
+set INCLUDE=%FFMPEG_ROOT%\include;%HOME%\miniconda3\Library\include
+set LIB=%FFMPEG_ROOT%\lib;%HOME%\miniconda3\Library\lib
+
+:: Download and setup Miniconda
+echo Downloading Miniconda...
+curl -L --retry 3 --retry-delay 5 https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
+if %ERRORLEVEL% NEQ 0 (
+    echo ERROR: Failed to download Miniconda
+    exit /b 1
+)
+
+echo Installing Miniconda...
+miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=%HOME%\miniconda3
+
+:: Configure conda
+echo Setting up conda...
+%HOME%\miniconda3\Scripts\conda.exe config --add channels conda-forge
+%HOME%\miniconda3\Scripts\conda.exe config --add channels nvidia
+%HOME%\miniconda3\Scripts\conda.exe config --set channel_priority strict
+%HOME%\miniconda3\Scripts\conda.exe update -y conda
+
+:: Install dependencies
+echo Installing build dependencies...
+%HOME%\miniconda3\Scripts\conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
+%HOME%\miniconda3\Scripts\conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+%HOME%\miniconda3\Scripts\conda.exe install -y openssl -c conda-forge
+%HOME%\miniconda3\Scripts\conda.exe install -y vs2019_win-64 -c conda-forge
+
+:: Install CUDA if available
+pip install nvidia-cuda-nvcc || echo CUDA libs not available
+
+:: Create build directories
+echo Creating build directories...
+mkdir %FFMPEG_ROOT% 2>nul
+mkdir %FFMPEG_ROOT%\bin 2>nul
+mkdir %FFMPEG_ROOT%\lib 2>nul
+mkdir %FFMPEG_ROOT%\include 2>nul
+mkdir %HOME%\temp_build 2>nul
+
+:: Setup build environment
+set PKG_CONFIG_PATH=%HOME%\miniconda3\Library\lib\pkgconfig
+set INCLUDE=%HOME%\miniconda3\Library\include;%INCLUDE%
+set LIB=%HOME%\miniconda3\Library\lib;%LIB%
+set PATH=%FFMPEG_ROOT%\bin;%HOME%\miniconda3\Library\bin;%HOME%\miniconda3\Scripts;%PATH%
+
+cd /D %HOME%\temp_build
+
+:: Configure git for large repos
+echo Configuring git...
+git config --global http.postBuffer 524288000
+git config --global http.maxRequestBuffer 100M
+git config --global core.compression 0
+
+:: Build NVIDIA codec headers
+echo Building NVIDIA codec headers...
+git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
+cd nv-codec-headers
+make install PREFIX="%FFMPEG_ROOT%"
+cd /D %HOME%\temp_build
+
+:: Build oneVPL
+echo Building oneVPL...
+git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
+cd oneVPL
+mkdir build
+cd build
+cmake .. -G "Visual Studio 16 2019" -A x64 -DCMAKE_INSTALL_PREFIX="%FFMPEG_ROOT%" -DBUILD_SHARED_LIBS=ON -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DBUILD_TOOLS=OFF -DBUILD_EXAMPLES=OFF -DBUILD_TESTS=OFF
+cmake --build . --config Release -j 4
+cmake --install . --config Release
+cd /D %HOME%\temp_build
+
+:: Clone FFmpeg
+echo Cloning FFmpeg...
+git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg || (
+    echo Shallow clone failed, trying full clone...
+    git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg
+)
+
+cd ffmpeg
+
+if not exist "configure" (
+    echo ERROR: configure script not found
+    exit /b 1
+)
+
+:: Build FFmpeg
+echo Building FFmpeg...
+%HOME%\miniconda3\Library\usr\bin\bash.exe -c "export PATH='%HOME%/miniconda3/Library/bin:%FFMPEG_ROOT%/bin' && export PKG_CONFIG_PATH='%HOME%/miniconda3/Library/lib/pkgconfig:%FFMPEG_ROOT%/lib/pkgconfig' && export CFLAGS='-I%HOME%/miniconda3/Library/include -I%FFMPEG_ROOT%/include' && export LDFLAGS='-L%HOME%/miniconda3/Library/lib -L%FFMPEG_ROOT%/lib' && ./configure --prefix='%FFMPEG_ROOT%' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug --toolchain=msvc && make -j 4 && make install"
+
+:: Verify installation
+echo Verifying FFmpeg installation...
+if exist "%FFMPEG_ROOT%\bin\ffmpeg.exe" (
+    echo SUCCESS: FFmpeg executable found
+    %FFMPEG_ROOT%\bin\ffmpeg.exe -version | findstr /C:"ffmpeg version"
+    echo FFmpeg build completed successfully
+) else (
+    echo ERROR: FFmpeg executable not found
+    exit /b 1
+)
+
+:: Create package structure
+echo Creating package...
+mkdir package\bin 2>nul
+mkdir package\lib 2>nul
+mkdir package\include 2>nul
+
+:: Copy built files
+copy %FFMPEG_ROOT%\bin\*.exe package\bin\
+copy %FFMPEG_ROOT%\bin\*.dll package\bin\
+copy %FFMPEG_ROOT%\lib\*.lib package\lib\
+xcopy %FFMPEG_ROOT%\include package\include\ /E /I /Q
+
+echo.
+echo Build completed successfully!
+echo FFmpeg binaries: package\bin\
+echo Libraries: package\lib\
+echo Headers: package\include\
