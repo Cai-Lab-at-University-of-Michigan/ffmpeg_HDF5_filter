@@ -13,18 +13,17 @@ test-requires = "pytest numpy h5py"
 test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
+manylinux-x86_64-image = "manylinux_2_28"
+build-frontend = "build"
 before-all = [
     """
-    # Install Miniconda
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
     
-    # Update conda and add conda-forge channel
     /opt/miniconda/bin/conda config --add channels conda-forge
     /opt/miniconda/bin/conda config --set channel_priority strict
     /opt/miniconda/bin/conda update -y conda
     
-    # Install HDF5 and core build tools
     /opt/miniconda/bin/conda install -y \
         hdf5 \
         hdf5-external-filter-plugins \
@@ -37,17 +36,17 @@ before-all = [
         nasm \
         yasm \
         git \
+        wget \
         autoconf \
         automake \
         libtool \
         make \
         -c conda-forge
     
-    # Install video codecs from conda-forge
     /opt/miniconda/bin/conda install -y \
         x264 \
         x265 \
-        libaom \
+        aom \
         libvpx \
         dav1d \
         rav1e \
@@ -57,24 +56,21 @@ before-all = [
         xz \
         lz4 \
         zstd \
+        cudatoolkit-dev \
         -c conda-forge
     
-    # Install hardware acceleration libraries (where available)
     /opt/miniconda/bin/conda install -y \
         libva \
-        libvdpau \
         libdrm \
-        intel-media-sdk \
-        oneapi-level-zero \
+        libvpl \
         -c conda-forge || echo "Some hardware acceleration libs not available"
     
-    # Install network libraries (minimal for video streaming)
     /opt/miniconda/bin/conda install -y \
         openssl \
         -c conda-forge
     
-    # Set up build environment
-    export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig"
+    export PATH="/opt/miniconda/bin:$PATH"
+    export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
     export LD_LIBRARY_PATH="/opt/miniconda/lib"
     export CC=/opt/miniconda/bin/x86_64-conda-linux-gnu-gcc
     export CXX=/opt/miniconda/bin/x86_64-conda-linux-gnu-g++
@@ -82,20 +78,21 @@ before-all = [
     export CXXFLAGS="-I/opt/miniconda/include"
     export LDFLAGS="-L/opt/miniconda/lib"
     
-    # Create build directories
+    which nasm && nasm -v
+    if [ $? -ne 0 ]; then
+        yum install -y nasm || apt-get update && apt-get install -y nasm || echo "Could not install nasm via package manager"
+    fi
+    
     mkdir -p /tmp/hwaccel_src /opt/ffmpeg/include /opt/ffmpeg/lib /opt/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
-    # Build Intel oneVPL (libvpl) for QSV support
-    echo "Building Intel oneVPL for QSV support..."
-    git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
+    git clone --depth 1 --branch v2.13.0 https://github.com/oneapi-src/oneVPL.git
     cd oneVPL
     mkdir build && cd build
     cmake -G "Unix Makefiles" \
         -DCMAKE_INSTALL_PREFIX="/opt/ffmpeg" \
         -DBUILD_SHARED_LIBS=ON \
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DBUILD_TOOLS=OFF \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_TESTS=OFF \
         -DCMAKE_C_COMPILER=$CC \
@@ -105,28 +102,43 @@ before-all = [
     make install
     cd /tmp/hwaccel_src
     
-    # Install NVIDIA headers (for NVENC/NVDEC support)
-    echo "Installing NVIDIA codec headers..."
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
     make install PREFIX="/opt/ffmpeg"
     cd /tmp/hwaccel_src
     
-    # Check if CUDA is available
-    if command -v nvcc &> /dev/null; then
-        CUDA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
-        echo "CUDA found - enabling full CUDA support"
-    else
-        CUDA_FLAGS="--enable-cuda-llvm"
-        echo "CUDA not found - enabling basic CUDA support for compilation"
+    export PKG_CONFIG_PATH="/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
+    
+    find /opt/miniconda -name "*.pc" | grep -E "(dav1d|x264|x265)" || echo "No pc files found"
+    ls -la /opt/miniconda/lib/pkgconfig/ | grep -E "(dav1d|x264|x265)" || echo "No codec pc files in lib/pkgconfig"
+    
+    if [ ! -f "/opt/miniconda/lib/pkgconfig/dav1d.pc" ]; then
+        cd /tmp/hwaccel_src
+        git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
+        cd dav1d
+        meson setup build --prefix=/opt/miniconda --libdir=lib
+        ninja -C build
+        ninja -C build install
+        cd /tmp/hwaccel_src
     fi
     
-    # Build FFmpeg from source with video codec support
-    echo "Building FFmpeg with video codec support..."
+    pkg-config --exists dav1d && echo "dav1d found" || echo "dav1d still not found"
+    
+    pkg-config --exists vpl && echo "VPL found: $(pkg-config --modversion vpl)" || echo "VPL not found"
+    pkg-config --cflags vpl || echo "Could not get VPL cflags"
+    pkg-config --libs vpl || echo "Could not get VPL libs"
+    
+    if command -v nvcc &> /dev/null; then
+        CUDA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
+    else
+        CUDA_FLAGS=""
+    fi
+    
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    # Configure FFmpeg with video codecs
+    which nasm && nasm -v
+    
     ./configure \
         --prefix="/opt/ffmpeg" \
         --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include" \
@@ -148,15 +160,11 @@ before-all = [
         --enable-libsvtav1 \
         --enable-libvpx \
         --enable-libvpl \
-        --enable-vaapi \
-        --enable-vdpau \
-        --enable-libdrm \
         ${CUDA_FLAGS} \
         --enable-openssl \
         --enable-lzma \
         --enable-bzlib \
         --enable-zlib \
-        --enable-libzstd \
         --enable-runtime-cpudetect \
         --enable-hardcoded-tables \
         --enable-optimizations \
@@ -167,45 +175,44 @@ before-all = [
     make -j$(nproc)
     make install
     
-    # Verify the build
-    echo "Verifying FFmpeg build..."
-    /opt/ffmpeg/bin/ffmpeg -version
+    # Configure ldconfig to find the libraries
+    echo "/opt/ffmpeg/lib" > /etc/ld.so.conf.d/ffmpeg.conf
+    echo "/opt/miniconda/lib" >> /etc/ld.so.conf.d/ffmpeg.conf
+    ldconfig
     
-    echo "Checking video codec support:"
+    # Verify libraries are found
+    echo "Checking if libavdevice.so.62 is available:"
+    find /opt/ffmpeg/lib -name "libavdevice.so*" || echo "libavdevice not found in /opt/ffmpeg/lib"
+    ldd /opt/ffmpeg/bin/ffmpeg | head -20 || echo "Could not run ldd on ffmpeg"
+    
+    # Test FFmpeg with proper environment
+    export LD_LIBRARY_PATH="/opt/ffmpeg/lib:/opt/miniconda/lib:$LD_LIBRARY_PATH"
+    /opt/ffmpeg/bin/ffmpeg -version
     /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
     /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
-    
-    echo "Hardware acceleration support:"
     /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(qsv|nvenc|vaapi)" || echo "Hardware encoders not available (expected in CI)"
     /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(qsv|cuvid|vaapi)" || echo "Hardware decoders not available (expected in CI)"
-    
-    echo "FFmpeg build with comprehensive video codec support completed"
     """
 ]
 
 [tool.cibuildwheel.linux.environment]
 FFMPEG_ROOT = "/opt/ffmpeg"
 HDF5_ROOT = "/opt/miniconda"
-PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig"
+PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
 LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib"
 CPPFLAGS = "-I/opt/miniconda/include -I/opt/ffmpeg/include"
 LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
 
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
-
 [tool.cibuildwheel.macos]
 before-all = [
     """
-    # Install Miniconda for macOS
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
     bash miniconda.sh -b -p $HOME/miniconda
     
-    # Update conda and add conda-forge channel
     $HOME/miniconda/bin/conda config --add channels conda-forge
     $HOME/miniconda/bin/conda config --set channel_priority strict
     $HOME/miniconda/bin/conda update -y conda
     
-    # Install HDF5 and core build tools
     $HOME/miniconda/bin/conda install -y \
         hdf5 \
         hdf5-external-filter-plugins \
@@ -224,11 +231,10 @@ before-all = [
         make \
         -c conda-forge
     
-    # Install video codecs from conda-forge
     $HOME/miniconda/bin/conda install -y \
         x264 \
         x265 \
-        libaom \
+        aom \
         libvpx \
         dav1d \
         rav1e \
@@ -240,31 +246,21 @@ before-all = [
         zstd \
         -c conda-forge
     
-    # Install minimal network libraries
     $HOME/miniconda/bin/conda install -y \
         openssl \
         -c conda-forge
     
-    # Set up build environment
     export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
     export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
-    export CC=$HOME/miniconda/bin/clang
-    export CXX=$HOME/miniconda/bin/clang++
     export CFLAGS="-I$HOME/miniconda/include"
     export CXXFLAGS="-I$HOME/miniconda/include"
     export LDFLAGS="-L$HOME/miniconda/lib"
-    export MACOSX_DEPLOYMENT_TARGET="14.0"
+    export MACOSX_DEPLOYMENT_TARGET="15.0"
     export ARCHFLAGS="-arch arm64"
     
-    # Create build directories
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
-    # Install Apple VideoToolbox headers (built-in, just verify)
-    echo "VideoToolbox support will be automatically detected..."
-    
-    # Build Intel oneVPL for potential Intel Mac support
-    echo "Building Intel oneVPL..."
     git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
     cd oneVPL
     mkdir build && cd build
@@ -278,18 +274,15 @@ before-all = [
         -DCMAKE_C_COMPILER=$CC \
         -DCMAKE_CXX_COMPILER=$CXX \
         -DCMAKE_OSX_ARCHITECTURES=arm64 \
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
         ..
     make -j$(sysctl -n hw.ncpu)
     make install
     cd /tmp/hwaccel_src
     
-    # Build FFmpeg from source with video codec support
-    echo "Building FFmpeg with video codec support..."
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    # Configure FFmpeg with video codecs
     ./configure \
         --prefix="$HOME/ffmpeg" \
         --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
@@ -317,7 +310,6 @@ before-all = [
         --enable-lzma \
         --enable-bzlib \
         --enable-zlib \
-        --enable-libzstd \
         --enable-runtime-cpudetect \
         --enable-hardcoded-tables \
         --enable-optimizations \
@@ -330,30 +322,26 @@ before-all = [
     make -j$(sysctl -n hw.ncpu)
     make install
     
-    # Verify the build
-    echo "Verifying FFmpeg build..."
     $HOME/ffmpeg/bin/ffmpeg -version
     
-    echo "Checking video codec support:"
     $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
     $HOME/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
-    
-    echo "Hardware acceleration support:"
     $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(videotoolbox)" || echo "VideoToolbox encoder not available"
-    
-    echo "FFmpeg build with video codec support completed"
     """
 ]
 
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "$HOME/ffmpeg"
 HDF5_ROOT = "$HOME/miniconda"
+CC = "/usr/bin/clang"
+CXX = "/usr/bin/clang++"
 PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
 DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
-MACOSX_DEPLOYMENT_TARGET = "14.0"
+MACOSX_DEPLOYMENT_TARGET = "15.0"
 ARCHFLAGS = "-arch arm64"
-CPPFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include"
-LDFLAGS = "-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-headerpad_max_install_names"
+CFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
+CXXFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
+LDFLAGS = "-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-headerpad_max_install_names -fno-lto"
 
 repair-wheel-command = [
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-listdeps {wheel}",
@@ -363,42 +351,32 @@ repair-wheel-command = [
 [tool.cibuildwheel.windows]
 before-all = [
     """
-    # Install Miniconda for Windows
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
     start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:\\Miniconda3
     
-    # Update conda and add conda-forge channel
     C:\\Miniconda3\\Scripts\\conda.exe config --add channels conda-forge
     C:\\Miniconda3\\Scripts\\conda.exe config --set channel_priority strict
     C:\\Miniconda3\\Scripts\\conda.exe update -y conda
     
-    # Install HDF5 and core build tools
     C:\\Miniconda3\\Scripts\\conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
     
-    # Install video codecs from conda-forge
     C:\\Miniconda3\\Scripts\\conda.exe install -y x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
     
-    # Install minimal network libraries
     C:\\Miniconda3\\Scripts\\conda.exe install -y openssl -c conda-forge
     
-    # Install Visual Studio build tools
     C:\\Miniconda3\\Scripts\\conda.exe install -y vs2019_win-64 -c conda-forge
     
-    # Create build directories
     mkdir C:\\ffmpeg_build\\bin 2>nul
     mkdir C:\\ffmpeg_build\\lib 2>nul  
     mkdir C:\\ffmpeg_build\\include 2>nul
     mkdir C:\\temp_build 2>nul
     
-    # Set up build environment
     set PKG_CONFIG_PATH=C:\\Miniconda3\\Library\\lib\\pkgconfig
     set INCLUDE=C:\\Miniconda3\\Library\\include;%INCLUDE%
     set LIB=C:\\Miniconda3\\Library\\lib;%LIB%
     
     cd C:\\temp_build
     
-    # Build Intel oneVPL for QSV support
-    echo Building Intel oneVPL for QSV support...
     git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
     cd oneVPL
     mkdir build && cd build
@@ -413,20 +391,15 @@ before-all = [
     cmake --build . --config Release -j 4
     cmake --install . --config Release
     cd C:\\temp_build
-    
-    # Install NVIDIA headers
-    echo Installing NVIDIA codec headers...
+
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
     make install PREFIX="C:\\ffmpeg_build"
     cd C:\\temp_build
     
-    # Build FFmpeg from source
-    echo Building FFmpeg with video codec support...
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    # Use MSYS2 environment for FFmpeg build
     C:\\Miniconda3\\Library\\usr\\bin\\bash.exe -c "
     export PATH='/c/Miniconda3/Library/bin:/c/ffmpeg_build/bin'
     export PKG_CONFIG_PATH='/c/Miniconda3/Library/lib/pkgconfig:/c/ffmpeg_build/lib/pkgconfig'
@@ -457,7 +430,6 @@ before-all = [
         --enable-lzma \
         --enable-bzlib \
         --enable-zlib \
-        --enable-libzstd \
         --enable-runtime-cpudetect \
         --enable-hardcoded-tables \
         --enable-optimizations \
@@ -470,16 +442,10 @@ before-all = [
     make install
     "
     
-    # Verify the build
-    echo Verifying FFmpeg build...
     if exist "C:\\ffmpeg_build\\bin\\ffmpeg.exe" (
-        echo SUCCESS: FFmpeg executable found
         C:\\ffmpeg_build\\bin\\ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
-        
-        echo Checking video codec support:
         C:\\ffmpeg_build\\bin\\ffmpeg.exe -encoders | findstr /C:"libx264 libx265 libaom librav1e libsvtav1 libvpx" 2>nul
         C:\\ffmpeg_build\\bin\\ffmpeg.exe -decoders | findstr /C:"h264 hevc av1 vp9" 2>nul
-        
     ) else (
         echo ERROR: FFmpeg executable not found
         exit /b 1
@@ -491,8 +457,6 @@ before-all = [
         echo ERROR: HDF5 headers not found
         exit /b 1
     )
-    
-    echo FFmpeg build with video codec support completed!
     """
 ]
 
