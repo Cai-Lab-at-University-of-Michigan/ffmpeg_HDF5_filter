@@ -80,58 +80,20 @@ xcopy libvpl_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
 xcopy libvpl_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
 cd /D %HOME%\temp_build
 
-:: Clone FFmpeg
-echo Cloning FFmpeg...
-git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg || (
-    echo Shallow clone failed, trying full clone...
-    git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg
-)
 
-cd ffmpeg
+:: Download ffmpeg package manually
+echo Downloading ffmpeg...
+curl -L --retry 3 --retry-delay 5 https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-ffmpeg-7.1.1-4-any.pkg.tar.zst -o ffmpeg.pkg.tar.zst
 
-if not exist "configure" (
-    echo ERROR: configure script not found
-    exit /b 1
-)
+:: 7-Zip two-step extraction
+7z x ffmpeg.pkg.tar.zst -offmpeg_extracted_zst
+7z x ffmpeg_extracted_zst\*.tar -offmpeg_extracted_tar
 
-:: Convert Windows path to MSYS path
-for /f %%i in ('C:\msys64\usr\bin\bash -c "cygpath '%FFMPEG_ROOT%'"') do set "FFMPEG_ROOT_UNIX=%%i"
-
-C:\msys64\usr\bin\bash.exe -lc " \
-export PATH='/mingw64/bin:$PATH'; \
-export PKG_CONFIG_PATH='/mingw64/lib/pkgconfig:%FFMPEG_ROOT_UNIX%/lib/pkgconfig'; \
-export CFLAGS='-I/mingw64/include -I%FFMPEG_ROOT_UNIX%/include'; \
-export LDFLAGS='-L/mingw64/lib -L%FFMPEG_ROOT_UNIX%/lib'; \
-cd ffmpeg && \
-./configure \
-  --prefix='%FFMPEG_ROOT_UNIX%' \
-  --enable-shared \
-  --disable-static \
-  --enable-pic \
-  --enable-gpl \
-  --enable-nonfree \
-  --enable-version3 \
-  --enable-libx264 \
-  --enable-libx265 \
-  --enable-libaom \
-  --enable-libdav1d \
-  --enable-librav1e \
-  --enable-libsvtav1 \
-  --enable-libvpx \
-  --enable-libvpl \
-  --enable-cuda-nvcc \
-  --enable-libnpp \
-  --enable-openssl \
-  --enable-lzma \
-  --enable-bzlib \
-  --enable-zlib \
-  --enable-runtime-cpudetect \
-  --enable-hardcoded-tables \
-  --enable-optimizations \
-  --disable-doc \
-  --disable-ffplay \
-  --disable-debug && \
-make -j4 && make install"
+:: Copy libraries, headers, DLLs, and pkg-config files
+xcopy offmpeg_extracted_tar\mingw64\lib\* %FFMPEG_ROOT%\lib\ /E /I /Q
+xcopy offmpeg_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
+xcopy offmpeg_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
+cd /D %HOME%\temp_build
 
 :: Verify installation
 echo Verifying FFmpeg installation...
@@ -143,21 +105,3 @@ if exist "%FFMPEG_ROOT%\bin\ffmpeg.exe" (
     echo ERROR: FFmpeg executable not found
     exit /b 1
 )
-
-:: Create package structure
-echo Creating package...
-mkdir package\bin 2>nul
-mkdir package\lib 2>nul
-mkdir package\include 2>nul
-
-:: Copy built files
-copy %FFMPEG_ROOT%\bin\*.exe package\bin\
-copy %FFMPEG_ROOT%\bin\*.dll package\bin\
-copy %FFMPEG_ROOT%\lib\*.lib package\lib\
-xcopy %FFMPEG_ROOT%\include package\include\ /E /I /Q
-
-echo.
-echo Build completed successfully!
-echo FFmpeg binaries: package\bin\
-echo Libraries: package\lib\
-echo Headers: package\include\

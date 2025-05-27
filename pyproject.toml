@@ -205,8 +205,6 @@ before-all = [
         --enable-librav1e \
         --enable-libsvtav1 \
         --enable-libvpx \
-        --enable-videotoolbox \
-        --enable-audiotoolbox \
         --enable-openssl \
         --enable-lzma \
         --enable-bzlib \
@@ -227,7 +225,6 @@ before-all = [
     
     $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
     $HOME/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
-    $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(videotoolbox)" || echo "VideoToolbox encoder not available"
     """
 ]
 
