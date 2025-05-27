@@ -13,8 +13,8 @@ test-requires = "pytest numpy h5py"
 test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
-manylinux-x86_64-image = "manylinux_2_34"
-manylinux-aarch64-image = "manylinux_2_34"
+archs = ["x86_64"]
+manylinux-x86_64-image = "manylinux_2_28"
 
 before-all = [
     """
@@ -134,7 +134,7 @@ before-all = [
     $HOME/miniconda/bin/conda install -y openssl -c conda-forge
     
     export PATH="$HOME/miniconda/bin:$PATH"
-    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
+    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig:$HOME/ffmpeg/lib"
     export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
     export CFLAGS="-I$HOME/miniconda/include"
     export CXXFLAGS="-I$HOME/miniconda/include"
