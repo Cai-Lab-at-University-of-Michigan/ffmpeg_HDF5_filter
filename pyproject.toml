@@ -2,7 +2,7 @@
 requires = [
     "setuptools>=42",
     "wheel",
-    "numpy>=1.15.0",
+    "numpy>=1.14.0",
 ]
 build-backend = "setuptools.build_meta"
 
@@ -255,7 +255,7 @@ before-all = [
     export CFLAGS="-I$HOME/miniconda/include"
     export CXXFLAGS="-I$HOME/miniconda/include"
     export LDFLAGS="-L$HOME/miniconda/lib"
-    export MACOSX_DEPLOYMENT_TARGET="15.0"
+    export MACOSX_DEPLOYMENT_TARGET="14.0"
     export ARCHFLAGS="-arch arm64"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
@@ -274,7 +274,7 @@ before-all = [
         -DCMAKE_C_COMPILER=$CC \
         -DCMAKE_CXX_COMPILER=$CXX \
         -DCMAKE_OSX_ARCHITECTURES=arm64 \
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
         ..
     make -j$(sysctl -n hw.ncpu)
     make install
@@ -337,7 +337,7 @@ CC = "/usr/bin/clang"
 CXX = "/usr/bin/clang++"
 PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
 DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
-MACOSX_DEPLOYMENT_TARGET = "15.0"
+MACOSX_DEPLOYMENT_TARGET = "14.0"
 ARCHFLAGS = "-arch arm64"
 CFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
 CXXFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
@@ -352,36 +352,36 @@ repair-wheel-command = [
 before-all = [
     """
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniconda.exe
-    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:\\Miniconda3
+    start /wait "" miniconda.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:/Miniconda3
     
-    C:\\Miniconda3\\Scripts\\conda.exe config --add channels conda-forge
-    C:\\Miniconda3\\Scripts\\conda.exe config --set channel_priority strict
-    C:\\Miniconda3\\Scripts\\conda.exe update -y conda
+    C:/Miniconda3/Scripts/conda.exe config --add channels conda-forge
+    C:/Miniconda3/Scripts/conda.exe config --set channel_priority strict
+    C:/Miniconda3/Scripts/conda.exe update -y conda
     
-    C:\\Miniconda3\\Scripts\\conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
+    C:/Miniconda3/Scripts/conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
     
-    C:\\Miniconda3\\Scripts\\conda.exe install -y x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+    C:/Miniconda3/Scripts/conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
     
-    C:\\Miniconda3\\Scripts\\conda.exe install -y openssl -c conda-forge
+    C:/Miniconda3/Scripts/conda.exe install -y openssl cuda-tookit-dev -c conda-forge
     
-    C:\\Miniconda3\\Scripts\\conda.exe install -y vs2019_win-64 -c conda-forge
+    C:/Miniconda3/Scripts/conda.exe install -y vs2019_win-64 -c conda-forge
     
-    mkdir C:\\ffmpeg_build\\bin 2>nul
-    mkdir C:\\ffmpeg_build\\lib 2>nul  
-    mkdir C:\\ffmpeg_build\\include 2>nul
-    mkdir C:\\temp_build 2>nul
+    mkdir C:/ffmpeg_build/bin 2>nul
+    mkdir C:/ffmpeg_build/lib 2>nul  
+    mkdir C:/ffmpeg_build/include 2>nul
+    mkdir C:/temp_build 2>nul
     
-    set PKG_CONFIG_PATH=C:\\Miniconda3\\Library\\lib\\pkgconfig
-    set INCLUDE=C:\\Miniconda3\\Library\\include;%INCLUDE%
-    set LIB=C:\\Miniconda3\\Library\\lib;%LIB%
+    set PKG_CONFIG_PATH=C:/Miniconda3/Library/lib/pkgconfig
+    set INCLUDE=C:/Miniconda3/Library/include;%INCLUDE%
+    set LIB=C:/Miniconda3/Library/lib;%LIB%
     
-    cd C:\\temp_build
+    cd C:/temp_build
     
     git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
     cd oneVPL
     mkdir build && cd build
     cmake -G "Visual Studio 16 2019" -A x64 ^
-        -DCMAKE_INSTALL_PREFIX="C:\\ffmpeg_build" ^
+        -DCMAKE_INSTALL_PREFIX="C:/ffmpeg_build" ^
         -DBUILD_SHARED_LIBS=ON ^
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON ^
         -DBUILD_TOOLS=OFF ^
@@ -390,17 +390,17 @@ before-all = [
         ..
     cmake --build . --config Release -j 4
     cmake --install . --config Release
-    cd C:\\temp_build
+    cd C:/temp_build
 
     git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
     cd nv-codec-headers
-    make install PREFIX="C:\\ffmpeg_build"
-    cd C:\\temp_build
+    make install PREFIX="C:/ffmpeg_build"
+    cd C:/temp_build
     
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    C:\\Miniconda3\\Library\\usr\\bin\\bash.exe -c "
+    C:/Miniconda3/Library/usr/bin/bash.exe -c "
     export PATH='/c/Miniconda3/Library/bin:/c/ffmpeg_build/bin'
     export PKG_CONFIG_PATH='/c/Miniconda3/Library/lib/pkgconfig:/c/ffmpeg_build/lib/pkgconfig'
     export CFLAGS='-I/c/Miniconda3/Library/include -I/c/ffmpeg_build/include'
@@ -422,10 +422,8 @@ before-all = [
         --enable-libsvtav1 \
         --enable-libvpx \
         --enable-libvpl \
-        --enable-nvenc \
-        --enable-nvdec \
-        --enable-d3d11va \
-        --enable-dxva2 \
+        --enable-cuda-nvcc \
+        --enable-libnpp \
         --enable-openssl \
         --enable-lzma \
         --enable-bzlib \
@@ -442,16 +440,16 @@ before-all = [
     make install
     "
     
-    if exist "C:\\ffmpeg_build\\bin\\ffmpeg.exe" (
-        C:\\ffmpeg_build\\bin\\ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
-        C:\\ffmpeg_build\\bin\\ffmpeg.exe -encoders | findstr /C:"libx264 libx265 libaom librav1e libsvtav1 libvpx" 2>nul
-        C:\\ffmpeg_build\\bin\\ffmpeg.exe -decoders | findstr /C:"h264 hevc av1 vp9" 2>nul
+    if exist "C:/ffmpeg_build/bin/ffmpeg.exe" (
+        C:/ffmpeg_build/bin/ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
+        C:/ffmpeg_build/bin/ffmpeg.exe -encoders | findstr /C:"libx264 libx265 libaom librav1e libsvtav1 libvpx" 2>nul
+        C:/ffmpeg_build/bin/ffmpeg.exe -decoders | findstr /C:"h264 hevc av1 vp9" 2>nul
     ) else (
         echo ERROR: FFmpeg executable not found
         exit /b 1
     )
     
-    if exist "C:\\Miniconda3\\Library\\include\\hdf5.h" (
+    if exist "C:/Miniconda3/Library/include/hdf5.h" (
         echo SUCCESS: HDF5 headers found
     ) else (
         echo ERROR: HDF5 headers not found
