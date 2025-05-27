@@ -15,28 +15,23 @@ test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 [tool.cibuildwheel.linux]
 before-all = [
     """
+    # Install Miniconda
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
-    /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config gcc_linux-64 gxx_linux-64 -c conda-forge
-    echo "HDF5 and build tools installed via conda-forge"
+    export PATH="/opt/miniconda/bin:$PATH"
     
-    # Verify HDF5 installation
-    /opt/miniconda/bin/pkg-config --cflags --libs hdf5 || echo "HDF5 pkg-config test failed"
+    # Update conda and add conda-forge channel
+    /opt/miniconda/bin/conda config --add channels conda-forge
+    /opt/miniconda/bin/conda config --set channel_priority strict
+    /opt/miniconda/bin/conda update -y conda
     
-    if [ -f "/opt/miniconda/include/hdf5.h" ]; then
-        echo "HDF5 headers found in conda environment"
-    else
-        echo "HDF5 headers not found"
-    fi
-    
-    if [ -f "/opt/miniconda/lib/libhdf5.so" ]; then
-        echo "HDF5 libraries found in conda environment"
-    else
-        echo "HDF5 libraries not found"
-    fi
-    
-    # Install build tools and basic FFmpeg dependencies via conda
+    # Install HDF5 and core build tools
     /opt/miniconda/bin/conda install -y \
+        hdf5 \
+        hdf5-external-filter-plugins \
+        pkg-config \
+        gcc_linux-64 \
+        gxx_linux-64 \
         cmake \
         ninja \
         meson \
@@ -46,6 +41,11 @@ before-all = [
         autoconf \
         automake \
         libtool \
+        make \
+        -c conda-forge
+    
+    # Install video codecs from conda-forge
+    /opt/miniconda/bin/conda install -y \
         x264 \
         x265 \
         libaom \
@@ -53,14 +53,35 @@ before-all = [
         dav1d \
         rav1e \
         svt-av1 \
+        zlib \
+        bzip2 \
+        xz \
+        lz4 \
+        zstd \
+        -c conda-forge
+    
+    # Install hardware acceleration libraries (where available)
+    /opt/miniconda/bin/conda install -y \
+        libva \
+        libvdpau \
+        libdrm \
+        intel-media-sdk \
+        oneapi-level-zero \
+        -c conda-forge || echo "Some hardware acceleration libs not available"
+    
+    # Install network libraries (minimal for video streaming)
+    /opt/miniconda/bin/conda install -y \
+        openssl \
         -c conda-forge
     
     # Set up build environment
-    export PATH="/opt/miniconda/bin:$PATH"
     export PKG_CONFIG_PATH="/opt/miniconda/lib/pkgconfig:$PKG_CONFIG_PATH"
     export LD_LIBRARY_PATH="/opt/miniconda/lib:$LD_LIBRARY_PATH"
     export CC=/opt/miniconda/bin/x86_64-conda-linux-gnu-gcc
     export CXX=/opt/miniconda/bin/x86_64-conda-linux-gnu-g++
+    export CFLAGS="-I/opt/miniconda/include"
+    export CXXFLAGS="-I/opt/miniconda/include"
+    export LDFLAGS="-L/opt/miniconda/lib"
     
     # Create build directories
     mkdir -p /tmp/hwaccel_src /opt/ffmpeg/include /opt/ffmpeg/lib /opt/ffmpeg/lib/pkgconfig
@@ -78,6 +99,8 @@ before-all = [
         -DBUILD_TOOLS=OFF \
         -DBUILD_EXAMPLES=OFF \
         -DBUILD_TESTS=OFF \
+        -DCMAKE_C_COMPILER=$CC \
+        -DCMAKE_CXX_COMPILER=$CXX \
         ..
     make -j$(nproc)
     make install
@@ -90,21 +113,21 @@ before-all = [
     make install PREFIX="/opt/ffmpeg"
     cd /tmp/hwaccel_src
     
-    # Check if CUDA is available (usually not in CI, but headers will still allow compilation)
+    # Check if CUDA is available
     if command -v nvcc &> /dev/null; then
         CUDA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
         echo "CUDA found - enabling full CUDA support"
     else
-        CUDA_FLAGS="--enable-cuda-llvm"  # Software CUDA support
+        CUDA_FLAGS="--enable-cuda-llvm"
         echo "CUDA not found - enabling basic CUDA support for compilation"
     fi
     
-    # Now build FFmpeg with hardware acceleration
-    echo "Building FFmpeg with hardware acceleration..."
+    # Build FFmpeg from source with video codec support
+    echo "Building FFmpeg with video codec support..."
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    # Configure FFmpeg with all features
+    # Configure FFmpeg with video codecs
     ./configure \
         --prefix="/opt/ffmpeg" \
         --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include" \
@@ -117,6 +140,7 @@ before-all = [
         --enable-gpl \
         --enable-nonfree \
         --enable-version3 \
+        --enable-pthreads \
         --enable-libx264 \
         --enable-libx265 \
         --enable-libaom \
@@ -128,10 +152,15 @@ before-all = [
         --enable-vaapi \
         --enable-vdpau \
         --enable-libdrm \
-        --enable-nvenc \
-        --enable-nvdec \
         ${CUDA_FLAGS} \
+        --enable-openssl \
+        --enable-lzma \
+        --enable-bzlib \
+        --enable-zlib \
+        --enable-libzstd \
         --enable-runtime-cpudetect \
+        --enable-hardcoded-tables \
+        --enable-optimizations \
         --disable-doc \
         --disable-ffplay \
         --disable-debug
@@ -143,15 +172,15 @@ before-all = [
     echo "Verifying FFmpeg build..."
     /opt/ffmpeg/bin/ffmpeg -version
     
-    echo "Checking for hardware acceleration support:"
-    /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(qsv|nvenc|vaapi)" || echo "No hardware encoders found (expected in CI)"
-    /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(qsv|cuvid|vaapi)" || echo "No hardware decoders found (expected in CI)"
+    echo "Checking video codec support:"
+    /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
+    /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
     
-    # List available codecs
-    echo "Available AV1 encoders:"
-    /opt/ffmpeg/bin/ffmpeg -encoders | grep av1 || echo "No AV1 encoders found"
+    echo "Hardware acceleration support:"
+    /opt/ffmpeg/bin/ffmpeg -encoders | grep -E "(qsv|nvenc|vaapi)" || echo "Hardware encoders not available (expected in CI)"
+    /opt/ffmpeg/bin/ffmpeg -decoders | grep -E "(qsv|cuvid|vaapi)" || echo "Hardware decoders not available (expected in CI)"
     
-    echo "FFmpeg build with hardware acceleration completed"
+    echo "FFmpeg build with comprehensive video codec support completed"
     """
 ]
 
@@ -168,216 +197,329 @@ repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.macos]
 before-all = [
-    "brew install hdf5 pkg-config",
     """
-    cp scripts/build_macos.sh /tmp/
-    chmod +x /tmp/build_macos.sh
-    export TARGET_ARCH="arm64"
+    # Install Miniconda for macOS
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
+    bash miniconda.sh -b -p $HOME/miniconda
+    export PATH="$HOME/miniconda/bin:$PATH"
+    
+    # Update conda and add conda-forge channel
+    $HOME/miniconda/bin/conda config --add channels conda-forge
+    $HOME/miniconda/bin/conda config --set channel_priority strict
+    $HOME/miniconda/bin/conda update -y conda
+    
+    # Install HDF5 and core build tools
+    $HOME/miniconda/bin/conda install -y \
+        hdf5 \
+        hdf5-external-filter-plugins \
+        pkg-config \
+        clang_osx-arm64 \
+        clangxx_osx-arm64 \
+        cmake \
+        ninja \
+        meson \
+        nasm \
+        yasm \
+        git \
+        autoconf \
+        automake \
+        libtool \
+        make \
+        -c conda-forge
+    
+    # Install video codecs from conda-forge
+    $HOME/miniconda/bin/conda install -y \
+        x264 \
+        x265 \
+        libaom \
+        libvpx \
+        dav1d \
+        rav1e \
+        svt-av1 \
+        zlib \
+        bzip2 \
+        xz \
+        lz4 \
+        zstd \
+        -c conda-forge
+    
+    # Install minimal network libraries
+    $HOME/miniconda/bin/conda install -y \
+        openssl \
+        -c conda-forge
+    
+    # Set up build environment
+    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig:$PKG_CONFIG_PATH"
+    export DYLD_LIBRARY_PATH="$HOME/miniconda/lib:$DYLD_LIBRARY_PATH"
+    export CC=$HOME/miniconda/bin/clang
+    export CXX=$HOME/miniconda/bin/clang++
+    export CFLAGS="-I$HOME/miniconda/include"
+    export CXXFLAGS="-I$HOME/miniconda/include"
+    export LDFLAGS="-L$HOME/miniconda/lib"
     export MACOSX_DEPLOYMENT_TARGET="14.0"
     export ARCHFLAGS="-arch arm64"
-    cd /tmp
-    ./build_macos.sh
-    if [ -d "/tmp/ffmpeg_build" ]; then
-        mkdir -p $HOME/ffmpeg
-        cp -r /tmp/ffmpeg_build/* $HOME/ffmpeg/
-    fi
+    
+    # Create build directories
+    mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
+    cd /tmp/hwaccel_src
+    
+    # Install Apple VideoToolbox headers (built-in, just verify)
+    echo "VideoToolbox support will be automatically detected..."
+    
+    # Build Intel oneVPL for potential Intel Mac support
+    echo "Building Intel oneVPL..."
+    git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
+    cd oneVPL
+    mkdir build && cd build
+    cmake -G "Unix Makefiles" \
+        -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg" \
+        -DBUILD_SHARED_LIBS=ON \
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
+        -DBUILD_TOOLS=OFF \
+        -DBUILD_EXAMPLES=OFF \
+        -DBUILD_TESTS=OFF \
+        -DCMAKE_C_COMPILER=$CC \
+        -DCMAKE_CXX_COMPILER=$CXX \
+        -DCMAKE_OSX_ARCHITECTURES=arm64 \
+        -DCMAKE_OSX_DEPLOYMENT_TARGET=14.0 \
+        ..
+    make -j$(sysctl -n hw.ncpu)
+    make install
+    cd /tmp/hwaccel_src
+    
+    # Build FFmpeg from source with video codec support
+    echo "Building FFmpeg with video codec support..."
+    git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    cd ffmpeg
+    
+    # Configure FFmpeg with video codecs
+    ./configure \
+        --prefix="$HOME/ffmpeg" \
+        --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
+        --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" \
+        --extra-libs="-lm -lstdc++" \
+        --pkg-config-flags="--static" \
+        --enable-shared \
+        --disable-static \
+        --enable-pic \
+        --enable-gpl \
+        --enable-nonfree \
+        --enable-version3 \
+        --enable-pthreads \
+        --enable-libx264 \
+        --enable-libx265 \
+        --enable-libaom \
+        --enable-libdav1d \
+        --enable-librav1e \
+        --enable-libsvtav1 \
+        --enable-libvpx \
+        --enable-libvpl \
+        --enable-videotoolbox \
+        --enable-audiotoolbox \
+        --enable-openssl \
+        --enable-lzma \
+        --enable-bzlib \
+        --enable-zlib \
+        --enable-libzstd \
+        --enable-runtime-cpudetect \
+        --enable-hardcoded-tables \
+        --enable-optimizations \
+        --disable-doc \
+        --disable-ffplay \
+        --disable-debug \
+        --cc=$CC \
+        --cxx=$CXX
+    
+    make -j$(sysctl -n hw.ncpu)
+    make install
+    
+    # Verify the build
+    echo "Verifying FFmpeg build..."
     $HOME/ffmpeg/bin/ffmpeg -version
-    echo "FFmpeg build completed"
+    
+    echo "Checking video codec support:"
+    $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
+    $HOME/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
+    
+    echo "Hardware acceleration support:"
+    $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(videotoolbox)" || echo "VideoToolbox encoder not available"
+    
+    echo "FFmpeg build with video codec support completed"
     """
 ]
 
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "$HOME/ffmpeg"
-PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:/opt/homebrew/lib/pkgconfig"
-DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$DYLD_LIBRARY_PATH"
-PATH = "$HOME/ffmpeg/bin:$PATH"
+HDF5_ROOT = "$HOME/miniconda"
+PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
+DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib:$DYLD_LIBRARY_PATH"
+PATH = "$HOME/ffmpeg/bin:$HOME/miniconda/bin:$PATH"
 MACOSX_DEPLOYMENT_TARGET = "14.0"
 ARCHFLAGS = "-arch arm64"
-LDFLAGS = "-Wl,-headerpad_max_install_names"
+CPPFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include"
+LDFLAGS = "-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-headerpad_max_install_names"
 
 repair-wheel-command = [
-    "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib delocate-listdeps {wheel}",
-    "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}"
+    "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-listdeps {wheel}",
+    "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}"
 ]
 
 [tool.cibuildwheel.windows]
 before-all = [
     """
-    curl -L https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Windows-x86_64.exe -o miniforge.exe
+    # Install Miniconda for Windows
+    curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Windows-x86_64.exe -o miniforge.exe
     start /wait "" miniforge.exe /InstallationType=JustMe /RegisterPython=0 /S /D=C:\\Miniforge3
-    C:\\Miniforge3\\Scripts\\conda.exe install -y hdf5 hdf5-external-filter-plugins -c conda-forge
+    set PATH=C:\\Miniforge3;C:\\Miniforge3\\Scripts;C:\\Miniforge3\\Library\\bin;%PATH%
     
+    # Update conda and add conda-forge channel
+    C:\\Miniforge3\\Scripts\\conda.exe config --add channels conda-forge
+    C:\\Miniforge3\\Scripts\\conda.exe config --set channel_priority strict
+    C:\\Miniforge3\\Scripts\\conda.exe update -y conda
+    
+    # Install HDF5 and core build tools
+    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
+        hdf5 ^
+        hdf5-external-filter-plugins ^
+        pkg-config ^
+        cmake ^
+        ninja ^
+        nasm ^
+        yasm ^
+        git ^
+        msys2-conda-epoch ^
+        m2-base ^
+        m2-autoconf ^
+        m2-automake ^
+        m2-libtool ^
+        m2-make ^
+        -c conda-forge
+    
+    # Install video codecs from conda-forge
+    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
+        x264 ^
+        x265 ^
+        libaom ^
+        libvpx ^
+        dav1d ^
+        rav1e ^
+        svt-av1 ^
+        zlib ^
+        bzip2 ^
+        xz ^
+        lz4 ^
+        zstd ^
+        -c conda-forge
+    
+    # Install minimal network libraries
+    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
+        openssl ^
+        -c conda-forge
+    
+    # Install Visual Studio build tools
+    C:\\Miniforge3\\Scripts\\conda.exe install -y ^
+        vs2019_win-64 ^
+        -c conda-forge
+    
+    # Create build directories
     mkdir C:\\ffmpeg_build\\bin 2>nul
     mkdir C:\\ffmpeg_build\\lib 2>nul  
     mkdir C:\\ffmpeg_build\\include 2>nul
-    mkdir C:\\temp_msys2 2>nul
+    mkdir C:\\temp_build 2>nul
     
-    echo Installing zstd via scoop...
-    powershell -Command "& {
-        if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
-            Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
-            Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
-        }
-        scoop install zstd
-        scoop install 7zip
-        if (-not (Get-Command zstd -ErrorAction SilentlyContinue)) {
-            Write-Error 'zstd installation failed'
-            exit 1
-        }
-        if (-not (Get-Command 7z -ErrorAction SilentlyContinue)) {
-            Write-Error '7zip installation failed' 
-            exit 1
-        }
-        Write-Host 'Tools installed successfully'
-    }"
+    # Set up build environment
+    set PKG_CONFIG_PATH=C:\\Miniforge3\\Library\\lib\\pkgconfig
+    set PATH=C:\\Miniforge3\\Library\\bin;C:\\Miniforge3\\bin;%PATH%
+    set INCLUDE=C:\\Miniforge3\\Library\\include;%INCLUDE%
+    set LIB=C:\\Miniforge3\\Library\\lib;%LIB%
     
-    powershell -Command "& {
-        $ErrorActionPreference = 'Stop'
-        $packages = @{
-            'ffmpeg' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-ffmpeg-7.1-3-any.pkg.tar.zst'
-            'x264' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libx264-0.164.r3161.a354f11-3-any.pkg.tar.zst'
-            'x265' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-x265-4.1-2-any.pkg.tar.zst'
-            'xvidcore' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-xvidcore-1.3.7-4-any.pkg.tar.zst'
-            'aom' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-aom-3.12.1-1-any.pkg.tar.zst'
-            'dav1d' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-dav1d-1.5.0-1-any.pkg.tar.zst'
-            'svt-av1' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-svt-av1-3.0.2-2-any.pkg.tar.zst'
-            'rav1e' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-rav1e-0.7.1-7-any.pkg.tar.zst'
-            'libvpl' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpl-2.15.0-1-any.pkg.tar.zst'
-            'libvpx' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-libvpx-1.15.0-1-any.pkg.tar.zst'
-            'zlib' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-zlib-1.3.1-1-any.pkg.tar.zst'
-            'bzip2' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-bzip2-1.0.8-4-any.pkg.tar.zst'
-            'xz' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-xz-5.6.3-2-any.pkg.tar.zst'
-            'lame' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-lame-3.100-4-any.pkg.tar.zst'
-            'opus' = 'https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-opus-1.5.2-1-any.pkg.tar.zst'
-        }
-        
-        Set-Location 'C:\\temp_msys2'
-        
-        foreach ($pkg in $packages.GetEnumerator()) {
-            $filename = Split-Path $pkg.Value -Leaf
-            $downloadPath = \"C:\\temp_msys2\\$filename\"
-            $extractDir = \"C:\\temp_msys2\\extract_$($pkg.Key)\"
-            
-            Write-Host \"Processing $($pkg.Key)...\"
-            
-            try {
-                Write-Host \"  Downloading...\"
-                Invoke-WebRequest -Uri $pkg.Value -OutFile $downloadPath -UserAgent 'Mozilla/5.0' -TimeoutSec 300
-                
-                if (-not (Test-Path $downloadPath) -or (Get-Item $downloadPath).Length -eq 0) {
-                    throw \"Download failed or file is empty\"
-                }
-                
-                New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-                
-                Write-Host \"  Extracting zst...\"
-                $tarPath = $downloadPath -replace '\\.zst$', ''
-                & zstd -d $downloadPath -o $tarPath --force
-                
-                if (-not (Test-Path $tarPath)) {
-                    throw \"zstd extraction failed\"
-                }
-                
-                Write-Host \"  Extracting tar...\"
-                & 7z x $tarPath -o\"$extractDir\" -y | Out-Null
-                
-                $mingwDir = \"$extractDir\\mingw64\"
-                if (-not (Test-Path $mingwDir)) {
-                    Write-Warning \"No mingw64 directory found in $($pkg.Key), skipping...\"
-                    continue
-                }
-                
-                $copied = $false
-                
-                if (Test-Path \"$mingwDir\\bin\") {
-                    Write-Host \"  Copying bin files...\"
-                    $binFiles = Get-ChildItem \"$mingwDir\\bin\" -File
-                    foreach ($file in $binFiles) {
-                        Copy-Item $file.FullName 'C:\\ffmpeg_build\\bin\\' -Force
-                    }
-                    $copied = $true
-                }
-                
-                if (Test-Path \"$mingwDir\\lib\") {
-                    Write-Host \"  Copying lib files...\"
-                    $libFiles = Get-ChildItem \"$mingwDir\\lib\" -Recurse
-                    foreach ($file in $libFiles) {
-                        $destPath = $file.FullName.Replace($mingwDir, 'C:\\ffmpeg_build')
-                        $destDir = Split-Path $destPath -Parent
-                        if (-not (Test-Path $destDir)) {
-                            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                        }
-                        if ($file.PSIsContainer -eq $false) {
-                            Copy-Item $file.FullName $destPath -Force
-                        }
-                    }
-                    $copied = $true
-                }
-                
-                if (Test-Path \"$mingwDir\\include\") {
-                    Write-Host \"  Copying include files...\"
-                    $includeFiles = Get-ChildItem \"$mingwDir\\include\" -Recurse
-                    foreach ($file in $includeFiles) {
-                        $destPath = $file.FullName.Replace($mingwDir, 'C:\\ffmpeg_build')
-                        $destDir = Split-Path $destPath -Parent
-                        if (-not (Test-Path $destDir)) {
-                            New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-                        }
-                        if ($file.PSIsContainer -eq $false) {
-                            Copy-Item $file.FullName $destPath -Force
-                        }
-                    }
-                    $copied = $true
-                }
-                
-                if ($copied) {
-                    Write-Host \"  $($pkg.Key) processed successfully\"
-                } else {
-                    Write-Warning \"  No files copied for $($pkg.Key)\"
-                }
-                
-                Remove-Item $downloadPath -Force -ErrorAction SilentlyContinue
-                Remove-Item $tarPath -Force -ErrorAction SilentlyContinue
-                Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
-                
-            } catch {
-                Write-Error \"Failed to process $($pkg.Key): $($_.Exception.Message)\"
-                continue
-            }
-        }
-        
-        Write-Host 'Package extraction completed'
-    }"
+    cd C:\\temp_build
     
-    rmdir /S /Q C:\\temp_msys2 2>nul
+    # Build Intel oneVPL for QSV support
+    echo Building Intel oneVPL for QSV support...
+    git clone --depth 1 https://github.com/oneapi-src/oneVPL.git
+    cd oneVPL
+    mkdir build && cd build
+    cmake -G "Visual Studio 16 2019" -A x64 ^
+        -DCMAKE_INSTALL_PREFIX="C:\\ffmpeg_build" ^
+        -DBUILD_SHARED_LIBS=ON ^
+        -DCMAKE_POSITION_INDEPENDENT_CODE=ON ^
+        -DBUILD_TOOLS=OFF ^
+        -DBUILD_EXAMPLES=OFF ^
+        -DBUILD_TESTS=OFF ^
+        ..
+    cmake --build . --config Release -j 4
+    cmake --install . --config Release
+    cd C:\\temp_build
     
-    echo Verifying FFmpeg installation...
+    # Install NVIDIA headers
+    echo Installing NVIDIA codec headers...
+    git clone --depth 1 https://github.com/FFmpeg/nv-codec-headers.git
+    cd nv-codec-headers
+    make install PREFIX="C:\\ffmpeg_build"
+    cd C:\\temp_build
     
+    # Build FFmpeg from source
+    echo Building FFmpeg with video codec support...
+    git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    cd ffmpeg
+    
+    # Use MSYS2 environment for FFmpeg build
+    C:\\Miniforge3\\Library\\usr\\bin\\bash.exe -c "
+    export PATH='/c/Miniforge3/Library/bin:/c/ffmpeg_build/bin:$PATH'
+    export PKG_CONFIG_PATH='/c/Miniforge3/Library/lib/pkgconfig:/c/ffmpeg_build/lib/pkgconfig'
+    export CFLAGS='-I/c/Miniforge3/Library/include -I/c/ffmpeg_build/include'
+    export LDFLAGS='-L/c/Miniforge3/Library/lib -L/c/ffmpeg_build/lib'
+    
+    ./configure \
+        --prefix='/c/ffmpeg_build' \
+        --enable-shared \
+        --disable-static \
+        --enable-pic \
+        --enable-gpl \
+        --enable-nonfree \
+        --enable-version3 \
+        --enable-libx264 \
+        --enable-libx265 \
+        --enable-libaom \
+        --enable-libdav1d \
+        --enable-librav1e \
+        --enable-libsvtav1 \
+        --enable-libvpx \
+        --enable-libvpl \
+        --enable-nvenc \
+        --enable-nvdec \
+        --enable-d3d11va \
+        --enable-dxva2 \
+        --enable-openssl \
+        --enable-lzma \
+        --enable-bzlib \
+        --enable-zlib \
+        --enable-libzstd \
+        --enable-runtime-cpudetect \
+        --enable-hardcoded-tables \
+        --enable-optimizations \
+        --disable-doc \
+        --disable-ffplay \
+        --disable-debug \
+        --toolchain=msvc
+    
+    make -j 4
+    make install
+    "
+    
+    # Verify the build
+    echo Verifying FFmpeg build...
     if exist "C:\\ffmpeg_build\\bin\\ffmpeg.exe" (
         echo SUCCESS: FFmpeg executable found
         C:\\ffmpeg_build\\bin\\ffmpeg.exe -version 2>nul | findstr /C:"ffmpeg version"
+        
+        echo Checking video codec support:
+        C:\\ffmpeg_build\\bin\\ffmpeg.exe -encoders | findstr /C:"libx264 libx265 libaom librav1e libsvtav1 libvpx" 2>nul
+        C:\\ffmpeg_build\\bin\\ffmpeg.exe -decoders | findstr /C:"h264 hevc av1 vp9" 2>nul
+        
     ) else (
         echo ERROR: FFmpeg executable not found
-        echo Contents of C:\\ffmpeg_build\\bin:
-        dir "C:\\ffmpeg_build\\bin" 2>nul
-        exit /b 1
-    )
-    
-    if exist "C:\\ffmpeg_build\\include\\libavcodec\\avcodec.h" (
-        echo SUCCESS: FFmpeg headers found
-    ) else (
-        echo ERROR: FFmpeg headers not found
-        echo Contents of C:\\ffmpeg_build\\include:
-        dir "C:\\ffmpeg_build\\include" 2>nul
-        exit /b 1
-    )
-    
-    if exist "C:\\ffmpeg_build\\lib\\libavcodec.dll.a" (
-        echo SUCCESS: FFmpeg libraries found
-    ) else (
-        echo ERROR: FFmpeg import libraries not found
-        echo Contents of C:\\ffmpeg_build\\lib:
-        dir "C:\\ffmpeg_build\\lib" 2>nul
         exit /b 1
     )
     
@@ -388,15 +530,15 @@ before-all = [
         exit /b 1
     )
     
-    echo All dependencies verified successfully!
+    echo FFmpeg build with video codec support completed!
     """
 ]
 
 [tool.cibuildwheel.windows.environment]
 FFMPEG_ROOT = "C:/ffmpeg_build"
 HDF5_ROOT = "C:/Miniforge3/Library"
-PKG_CONFIG_PATH = "C:/ffmpeg_build/lib/pkgconfig"
-PATH = "C:/ffmpeg_build/bin;C:/Miniforge3/Library/bin;$PATH"
+PKG_CONFIG_PATH = "C:/ffmpeg_build/lib/pkgconfig;C:/Miniforge3/Library/lib/pkgconfig"
+PATH = "C:/ffmpeg_build/bin;C:/Miniforge3/Library/bin;C:/Miniforge3/bin;$PATH"
 INCLUDE = "C:/ffmpeg_build/include;C:/Miniforge3/Library/include;$INCLUDE"
 LIB = "C:/ffmpeg_build/lib;C:/Miniforge3/Library/lib;$LIB"
 
