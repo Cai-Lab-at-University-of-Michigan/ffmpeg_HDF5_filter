@@ -94,9 +94,44 @@ if not exist "configure" (
     exit /b 1
 )
 
-:: Build FFmpeg
-echo Building FFmpeg...
-%HOME%\miniconda3\Library\usr\bin\bash.exe -c "export PATH='%HOME%/miniconda3/Library/bin:%FFMPEG_ROOT%/bin' && export PKG_CONFIG_PATH='%HOME%/miniconda3/Library/lib/pkgconfig:%FFMPEG_ROOT%/lib/pkgconfig' && export CFLAGS='-I%HOME%/miniconda3/Library/include -I%FFMPEG_ROOT%/include' && export LDFLAGS='-L%HOME%/miniconda3/Library/lib -L%FFMPEG_ROOT%/lib' && ./configure --prefix='%FFMPEG_ROOT%' --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl --enable-cuda-nvcc --enable-libnpp --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug && make -j 4 && make install"
+:: Convert Windows path to MSYS path
+for /f %%i in ('C:\msys64\usr\bin\bash -c "cygpath '%FFMPEG_ROOT%'"') do set "FFMPEG_ROOT_UNIX=%%i"
+
+C:\msys64\usr\bin\bash.exe -lc " \
+export PATH='/mingw64/bin:$PATH'; \
+export PKG_CONFIG_PATH='/mingw64/lib/pkgconfig:%FFMPEG_ROOT_UNIX%/lib/pkgconfig'; \
+export CFLAGS='-I/mingw64/include -I%FFMPEG_ROOT_UNIX%/include'; \
+export LDFLAGS='-L/mingw64/lib -L%FFMPEG_ROOT_UNIX%/lib'; \
+cd ffmpeg && \
+./configure \
+  --prefix='%FFMPEG_ROOT_UNIX%' \
+  --enable-shared \
+  --disable-static \
+  --enable-pic \
+  --enable-gpl \
+  --enable-nonfree \
+  --enable-version3 \
+  --enable-libx264 \
+  --enable-libx265 \
+  --enable-libaom \
+  --enable-libdav1d \
+  --enable-librav1e \
+  --enable-libsvtav1 \
+  --enable-libvpx \
+  --enable-libvpl \
+  --enable-cuda-nvcc \
+  --enable-libnpp \
+  --enable-openssl \
+  --enable-lzma \
+  --enable-bzlib \
+  --enable-zlib \
+  --enable-runtime-cpudetect \
+  --enable-hardcoded-tables \
+  --enable-optimizations \
+  --disable-doc \
+  --disable-ffplay \
+  --disable-debug && \
+make -j4 && make install"
 
 :: Verify installation
 echo Verifying FFmpeg installation...
