@@ -174,25 +174,6 @@ before-all = [
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
     
-    git clone --depth 1 https://github.com/oneapi-src/oneVPL.git oneVPL
-    cd oneVPL
-    mkdir build && cd build
-    cmake -G "Unix Makefiles" \
-        -DCMAKE_INSTALL_PREFIX="$HOME/ffmpeg" \
-        -DBUILD_SHARED_LIBS=ON \
-        -DCMAKE_POSITION_INDEPENDENT_CODE=ON \
-        -DBUILD_TOOLS=OFF \
-        -DBUILD_EXAMPLES=OFF \
-        -DBUILD_TESTS=OFF \
-        -DCMAKE_C_COMPILER=$CC \
-        -DCMAKE_CXX_COMPILER=$CXX \
-        -DCMAKE_OSX_ARCHITECTURES=arm64 \
-        -DCMAKE_OSX_DEPLOYMENT_TARGET=15.0 \
-        ..
-    make -j$(sysctl -n hw.ncpu)
-    make install
-    cd /tmp/hwaccel_src
-    
     git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
@@ -216,7 +197,6 @@ before-all = [
         --enable-librav1e \
         --enable-libsvtav1 \
         --enable-libvpx \
-        --enable-libvpl \
         --enable-videotoolbox \
         --enable-audiotoolbox \
         --enable-openssl \
