@@ -13,8 +13,8 @@ test-requires = "pytest numpy h5py"
 test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
 
 [tool.cibuildwheel.linux]
-manylinux-x86_64-image = "manylinux_x_y"
-manylinux-aarch64-image = "manylinux_x_y"
+manylinux-x86_64-image = "manylinux_2_34"
+manylinux-aarch64-image = "manylinux_2_34"
 
 before-all = [
     """
@@ -149,7 +149,7 @@ before-all = [
         echo "Building dav1d from source..."
         git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
         cd dav1d
-        meson setup build --prefix=/opt/miniconda --libdir=lib
+        meson setup build --prefix=$HOME/ffmpeg --libdir=lib
         ninja -C build
         ninja -C build install
         cd /tmp/hwaccel_src
