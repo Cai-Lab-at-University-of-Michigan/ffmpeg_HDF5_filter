@@ -20,7 +20,7 @@ def get_ffmpeg_root():
     # CI-appropriate fallback locations (matching pyproject.toml)
     system = platform.system().lower()
     if system == 'windows':
-        home = os.environ.get('HOME', '.')
+        home = os.environ.get('HOME', 'D:\\a')
         return os.path.join(home, 'ffmpeg_build')
     elif system == 'darwin':
         home = os.path.expanduser('~')
@@ -35,7 +35,7 @@ def get_hdf5_root():
     
     system = platform.system().lower()
     if system == 'windows':
-        home = os.environ.get('HOME', '.')
+        home = os.environ.get('HOME', 'D:\\a')
         conda_hdf5 = os.path.join(home, 'miniconda3', 'Library')
         
         if os.path.exists(os.path.join(conda_hdf5, 'include', 'hdf5.h')):

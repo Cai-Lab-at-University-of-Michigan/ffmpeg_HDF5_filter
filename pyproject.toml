@@ -172,10 +172,17 @@ before-all = [
     export CXX=/usr/bin/clang++
     export CFLAGS="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
     export LDFLAGS="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
-
-    echo 'int main() { return 0; }' | $CC $CFLAGS -o test && ./test && echo "Clang works"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
+    cd /tmp/hwaccel_src
+
+    echo "Building dav1d from source..."
+    rm -rf dav1d
+    git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
+    cd dav1d
+    meson setup build --prefix="$HOME/ffmpeg" --libdir=lib
+    ninja -C build
+    ninja -C build install
     cd /tmp/hwaccel_src
     
     /usr/bin/git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
