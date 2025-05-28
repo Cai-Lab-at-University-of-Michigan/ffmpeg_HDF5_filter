@@ -151,12 +151,55 @@ install(FILES src/ffmpeg_h5filter.h
 )
 
 install(CODE "
+    set(FFMPEG_ROOT \"${FFMPEG_ROOT}\")
+    set(HDF5_ROOT \"${HDF5_ROOT}\")
+    
     file(GLOB installed_dylibs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
     foreach(dylib \${installed_dylibs})
         get_filename_component(dylib_name \"\${dylib}\" NAME)
-        if(\"\${dylib_name}\" STREQUAL \"libh5ffmpeg_shared.dylib\")
+        if(\"\${dylib_name}\" MATCHES \"^libh5ffmpeg_shared[.]dylib\")
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundling dependencies for \${dylib}\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixing install names for \${dylib}\")
+            
+            # Get dependencies using otool
+            execute_process(
+                COMMAND otool -L \"\${dylib}\"
+                OUTPUT_VARIABLE deps_output
+                ERROR_QUIET
+            )
+            
+            # Extract dylib paths
+            string(REGEX MATCHALL \"[^\\r\\n\\t ]+[.]dylib\" dylib_list \"\${deps_output}\")
+            
+            foreach(dep \${dylib_list})
+                # Skip system libraries and self-reference
+                if(NOT \"\${dep}\" MATCHES \"^/System/\" AND 
+                   NOT \"\${dep}\" MATCHES \"^/usr/lib/\" AND
+                   NOT \"\${dep}\" MATCHES \"@loader_path\" AND
+                   NOT \"\${dep}\" MATCHES \"@rpath\")
+                    
+                    get_filename_component(dep_name \"\${dep}\" NAME)
+                    
+                    # Find the actual library file
+                    if(EXISTS \"\${dep}\")
+                        file(COPY \"\${dep}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
+                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled \${dep_name}\")
+                        
+                        # Fix the reference in main library
+                        execute_process(
+                            COMMAND install_name_tool -change \"\${dep}\" \"@loader_path/\${dep_name}\" \"\${dylib}\"
+                            ERROR_QUIET
+                        )
+                    endif()
+                endif()
+            endforeach()
+            
+            # Fix HDF5 rpath reference
+            execute_process(
+                COMMAND install_name_tool -change \"@rpath/libhdf5.310.dylib\" \"@loader_path/libhdf5.310.dylib\" \"\${dylib}\"
+                ERROR_QUIET
+            )
+            
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixed install names for \${dylib}\")
         endif()
     endforeach()
 ")

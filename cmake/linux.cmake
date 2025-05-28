@@ -157,12 +157,71 @@ install(FILES src/ffmpeg_h5filter.h
 )
 
 install(CODE "
+    set(FFMPEG_ROOT \"${FFMPEG_ROOT}\")
+    set(HDF5_ROOT \"${HDF5_ROOT}\")
+    
     file(GLOB installed_sos \"\${CMAKE_INSTALL_PREFIX}/lib/*.so*\")
     foreach(so \${installed_sos})
         get_filename_component(so_name \"\${so}\" NAME)
         if(\"\${so_name}\" MATCHES \"^libh5ffmpeg_shared[.]so\")
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundling dependencies for \${so}\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixing RPATH for \${so}\")
+            
+            # Get dependencies using ldd
+            execute_process(
+                COMMAND ldd \"\${so}\"
+                OUTPUT_VARIABLE deps_output
+                ERROR_QUIET
+            )
+            
+            # Extract .so paths
+            string(REGEX MATCHALL \"[^\\r\\n\\t ]+[.]so[^\\r\\n\\t ]*\" so_list \"\${deps_output}\")
+            
+            foreach(dep_line \${so_list})
+                # Extract actual path from ldd output (format: libname.so => /path/to/lib)
+                string(REGEX MATCH \"=> ([^ ]+)\" match_result \"\${dep_line}\")
+                if(CMAKE_MATCH_1)
+                    set(dep_path \"\${CMAKE_MATCH_1}\")
+                else()
+                    set(dep_path \"\${dep_line}\")
+                endif()
+                
+                # Skip system libraries
+                if(NOT \"\${dep_path}\" MATCHES \"^/lib/\" AND 
+                   NOT \"\${dep_path}\" MATCHES \"^/lib64/\" AND
+                   NOT \"\${dep_path}\" MATCHES \"^/usr/lib/\" AND
+                   NOT \"\${dep_path}\" MATCHES \"^/usr/lib64/\" AND
+                   NOT \"\${dep_path}\" MATCHES \"linux-vdso\" AND
+                   NOT \"\${dep_path}\" MATCHES \"ld-linux\" AND
+                   NOT \"\${dep_path}\" MATCHES \"libc[.]so\" AND
+                   NOT \"\${dep_path}\" MATCHES \"libm[.]so\" AND
+                   NOT \"\${dep_path}\" MATCHES \"libpthread[.]so\" AND
+                   NOT \"\${dep_path}\" MATCHES \"libdl[.]so\" AND
+                   NOT \"\${dep_path}\" MATCHES \"libgcc_s[.]so\" AND
+                   NOT \"\${dep_path}\" MATCHES \"libstdc\\\\+\\\\+[.]so\")
+                    
+                    if(EXISTS \"\${dep_path}\")
+                        get_filename_component(dep_name \"\${dep_path}\" NAME)
+                        file(COPY \"\${dep_path}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
+                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled \${dep_name}\")
+                    endif()
+                endif()
+            endforeach()
+            
+            # Fix RPATH for all libraries in the bundle
+            file(GLOB all_bundle_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.so*\")
+            foreach(lib \${all_bundle_libs})
+                if(NOT IS_SYMLINK \"\${lib}\")
+                    find_program(PATCHELF_EXECUTABLE patchelf)
+                    if(PATCHELF_EXECUTABLE)
+                        execute_process(
+                            COMMAND \"\${PATCHELF_EXECUTABLE}\" --set-rpath \"$ORIGIN\" \"\${lib}\"
+                            ERROR_QUIET
+                        )
+                    endif()
+                endif()
+            endforeach()
+            
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixed RPATH for all bundled libraries\")
         endif()
     endforeach()
 ")

@@ -1,9 +1,3 @@
-cmake_minimum_required(VERSION 3.16)
-project(h5ffmpeg_shared VERSION 1.0.0 LANGUAGES C CXX)
-
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
@@ -144,11 +138,49 @@ install(FILES src/ffmpeg_h5filter.h
 )
 
 install(CODE "
+    set(DEPS_ROOT \"${DEPS_ROOT}\")
+    
     file(GLOB installed_dlls \"\${CMAKE_INSTALL_PREFIX}/bin/*.dll\")
     foreach(dll \${installed_dlls})
         get_filename_component(dll_name \"\${dll}\" NAME)
         if(\"\${dll_name}\" STREQUAL \"h5ffmpeg_shared.dll\")
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundling dependencies for \${dll}\")
+            
+            # Find and copy all non-system DLLs from deps
+            file(GLOB_RECURSE all_dep_dlls \"\${DEPS_ROOT}/*.dll\")
+            
+            set(system_dlls 
+                \"kernel32.dll\" \"user32.dll\" \"gdi32.dll\" \"winspool.dll\" \"comdlg32.dll\"
+                \"advapi32.dll\" \"shell32.dll\" \"ole32.dll\" \"oleaut32.dll\" \"uuid.dll\"
+                \"odbc32.dll\" \"odbccp32.dll\" \"msvcrt.dll\" \"ntdll.dll\" \"ws2_32.dll\" 
+                \"secur32.dll\" \"bcrypt.dll\" \"shlwapi.dll\" \"comctl32.dll\" \"rpcrt4.dll\" \"winmm.dll\"
+            )
+            
+            foreach(dep_dll \${all_dep_dlls})
+                get_filename_component(dep_name \"\${dep_dll}\" NAME)
+                string(TOLOWER \"\${dep_name}\" dep_name_lower)
+                
+                # Check if it's a system DLL
+                set(is_system FALSE)
+                foreach(sys_dll \${system_dlls})
+                    string(TOLOWER \"\${sys_dll}\" sys_dll_lower)
+                    if(\"\${dep_name_lower}\" MATCHES \"\${sys_dll_lower}\" OR 
+                       \"\${dep_name_lower}\" MATCHES \"msvcp.*[.]dll\" OR
+                       \"\${dep_name_lower}\" MATCHES \"vcruntime.*[.]dll\" OR
+                       \"\${dep_name_lower}\" MATCHES \"api-ms-.*[.]dll\")
+                        set(is_system TRUE)
+                        break()
+                    endif()
+                endforeach()
+                
+                # Copy non-system DLLs
+                if(NOT is_system)
+                    file(COPY \"\${dep_dll}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled \${dep_name}\")
+                endif()
+            endforeach()
+            
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"All dependencies bundled for Windows\")
         endif()
     endforeach()
 ")
