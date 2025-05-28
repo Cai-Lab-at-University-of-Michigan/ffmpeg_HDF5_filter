@@ -22,10 +22,11 @@ curl -L --retry 3 --retry-delay 5 ^
 :: First unzip: outer archive
 7z x hdf5-msvc.zip -ohdf5_outer
 
+:: Cd hdf5_outer
+cd /D hdf5_outer
+
 :: Second unzip: nested HDF5 zip file
-for %%F in (hdf5_outer\*.zip) do (
-    7z x "%%F" -ohdf5_msvc
-)
+7z x HDF5-1.14.6-win64.zip -ohdf5_msvc
 
 :: Copy headers, libs, DLLs
 for /D %%D in (hdf5_msvc\HDF5-*-win64) do (
