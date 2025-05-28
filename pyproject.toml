@@ -260,7 +260,7 @@ repair-wheel-command = [
 
 [tool.cibuildwheel.windows]
 before-all = '''
-call scripts\build_windows_vcpkg.bat
+call scripts\build_windows.bat
 '''
 
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
