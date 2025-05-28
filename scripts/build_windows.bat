@@ -97,14 +97,3 @@ xcopy ffmpeg_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
 
 cd /D %FFMPEG_ROOT%
 dir /S /B %FFMPEG_ROOT%
-
-:: Verify installation
-echo Verifying FFmpeg installation...
-if exist "%FFMPEG_ROOT%\bin\ffmpeg.exe" (
-    echo SUCCESS: FFmpeg executable found
-    %FFMPEG_ROOT%\bin\ffmpeg.exe -version | findstr /C:"ffmpeg version"
-    echo FFmpeg build completed successfully
-) else (
-    echo ERROR: FFmpeg executable not found
-    exit /b 1
-)

@@ -164,23 +164,16 @@ before-all = [
     export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
     export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
     export CFLAGS="-I$HOME/miniconda/include"
-    export CXXFLAGS="-I$HOME/miniconda/include"
-    export LDFLAGS="-L$HOME/miniconda/lib"
-    export MACOSX_DEPLOYMENT_TARGET="15.0"
     export ARCHFLAGS="-arch arm64"
     
+    export MACOSX_DEPLOYMENT_TARGET=12.0
+    export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
     export CC=/usr/bin/clang
     export CXX=/usr/bin/clang++
-    export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
+    export CFLAGS="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
+    export LDFLAGS="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
 
-    OLD_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
-    OLD_DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH
-
-    unset LD_LIBRARY_PATH
-    unset DYLD_LIBRARY_PATH
-
-    $CC -v
-    $CC -x c - -o /dev/null <<< 'int main() { return 0; }'
+    echo 'int main() { return 0; }' | $CC $CFLAGS -o test && ./test && echo "Clang works"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
@@ -228,24 +221,12 @@ before-all = [
     
     $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
     $HOME/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
-
-    export LD_LIBRARY_PATH=$OLD_LD_LIBRARY_PATH
-    export DYLD_LIBRARY_PATH=$OLD_DYLD_LIBRARY_PATH
     """
 ]
 
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "$HOME/ffmpeg"
 HDF5_ROOT = "$HOME/miniconda"
-CC = "/usr/bin/clang"
-CXX = "/usr/bin/clang++"
-PKG_CONFIG_PATH = "$HOME/ffmpeg/lib/pkgconfig:$HOME/miniconda/lib/pkgconfig"
-DYLD_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
-MACOSX_DEPLOYMENT_TARGET = "15.0"
-ARCHFLAGS = "-arch arm64"
-CFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
-CXXFLAGS = "-I$HOME/miniconda/include -I$HOME/ffmpeg/include -fno-lto"
-LDFLAGS = "-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-headerpad_max_install_names -fno-lto"
 
 repair-wheel-command = [
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-listdeps {wheel}",
