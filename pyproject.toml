@@ -116,6 +116,8 @@ LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib"
 CPPFLAGS = "-I/opt/miniconda/include -I/opt/ffmpeg/include"
 LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
 
+repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
+
 [tool.cibuildwheel.macos]
 before-all = [
     """
@@ -261,14 +263,4 @@ before-all = '''
 call scripts\build_windows_vcpkg.bat
 '''
 
-environment = { 
-    VCPKG_ROOT = "D:\\a\\vcpkg",
-    CMAKE_TOOLCHAIN_FILE = "D:\\a\\vcpkg\\scripts\\buildsystems\\vcpkg.cmake",
-    FFMPEG_ROOT = "D:\\a\\ffmpeg_build",
-    HDF5_ROOT = "D:\\a\\ffmpeg_build",
-    INCLUDE = "D:\\a\\ffmpeg_build\\include",
-    LIB = "D:\\a\\ffmpeg_build\\lib",
-    PATH = "D:\\a\\ffmpeg_build\\bin;$PATH"
-}
-
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel} --add-path D:\\a\\ffmpeg_build\\bin"
+repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
