@@ -175,19 +175,13 @@ before-all = [
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
-
-    echo "Building dav1d from source..."
-    rm -rf dav1d
-    git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
-    cd dav1d
-    meson setup build --prefix="$HOME/ffmpeg" --libdir=lib
-    ninja -C build
-    ninja -C build install
-    cd /tmp/hwaccel_src
     
     /usr/bin/git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
+    which pkg-config
+    export PATH="$HOME/miniconda/bin:$PATH"
+
     ./configure \
         --prefix="$HOME/ffmpeg" \
         --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
