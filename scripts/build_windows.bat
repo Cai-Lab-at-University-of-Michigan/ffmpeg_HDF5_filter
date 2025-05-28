@@ -19,11 +19,13 @@ curl -L --retry 3 --retry-delay 5 ^
   https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6-win-vs2022_cl.zip ^
   -o hdf5-msvc.zip
 
-7z x hdf5-msvc.zip -ohdf5_msvc_extracted
+7z x hdf5-msvc.zip -ohdf5-msvc
 
-xcopy hdf5_msvc_extracted\include\* %FFMPEG_ROOT%\include\ /E /I /Q
-xcopy hdf5_msvc_extracted\lib\* %FFMPEG_ROOT%\lib\ /E /I /Q
-xcopy hdf5_msvc_extracted\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
+for /D %%D in (hdf5-msvc\hdf5-*-win-vs2022_cl) do (
+    xcopy "%%D\include\*" %FFMPEG_ROOT%\include\ /E /I /Q
+    xcopy "%%D\lib\*" %FFMPEG_ROOT%\lib\ /E /I /Q
+    xcopy "%%D\bin\*.dll" %FFMPEG_ROOT%\bin\ /E /I /Q
+)
 
 :: ----------------------------------------------------------------------------
 :: Download and extract FFmpeg (MSVC-compatible)
