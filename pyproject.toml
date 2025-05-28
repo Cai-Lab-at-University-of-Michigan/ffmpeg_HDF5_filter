@@ -242,6 +242,46 @@ before-all = [
     make -j$(sysctl -n hw.ncpu)
     make install
     
+    echo "Fixing library paths with install_name_tool..."
+    
+    fix_library_paths() {
+        local lib_path="$1"
+        echo "Fixing paths for: $lib_path"
+        
+        local deps=$(otool -L "$lib_path" | grep '@rpath' | awk '{print $1}')
+        
+        for dep in $deps; do
+            local lib_name=$(basename "$dep")
+            
+            local found_lib=""
+            for search_path in "$HOME/miniconda/lib" "$HOME/ffmpeg/lib" "/usr/lib" "/System/Library/Frameworks/"; do
+                if [ -f "$search_path/$lib_name" ]; then
+                    found_lib="$search_path/$lib_name"
+                    break
+                fi
+            done
+            
+            if [ -n "$found_lib" ]; then
+                echo "  Changing $dep to $found_lib"
+                install_name_tool -change "$dep" "$found_lib" "$lib_path" 2>/dev/null || true
+            else
+                echo "  Warning: Could not find $lib_name"
+            fi
+        done
+    }
+
+    for lib in "$HOME/ffmpeg/lib"/*.dylib; do
+        if [ -f "$lib" ]; then
+            fix_library_paths "$lib"
+        fi
+    done
+    
+    for lib in "$HOME/miniconda/lib"/*.dylib; do
+        if [ -f "$lib" ]; then
+            fix_library_paths "$lib"
+        fi
+    done
+    
     $HOME/ffmpeg/bin/ffmpeg -version
     
     $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"

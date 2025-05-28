@@ -26,7 +26,7 @@ if errorlevel 1 (
 :: Download and extract HDF5 (MSVC-compatible)
 echo 📥 Downloading HDF5 for MSVC...
 curl -L --retry 3 --retry-delay 5 ^
-  https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6-win-vs2022_cl.zip ^
+  https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.4.2/hdf5-1.14.4-2-win-vs2022_cl.zip ^
   -o hdf5-msvc.zip
 
 echo 📦 Extracting outer HDF5 zip...
