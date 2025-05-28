@@ -304,10 +304,7 @@ before-all = '''
 call scripts\build_windows.bat
 '''
 
-before-build = [
-    "pip install delvewheel",
-    "delvewheel --version"
-]
+before-build = "pip install delvewheel"
 
 repair-wheel-command = [
     "echo Showing wheel dependencies...",
