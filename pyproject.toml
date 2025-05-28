@@ -109,8 +109,14 @@ before-all = [
 ]
 
 repair-wheel-command = [
+    "echo 'Before repair:'",
     "auditwheel show {wheel}",
-    "LD_LIBRARY_PATH=/opt/ffmpeg/lib:/opt/miniconda/lib auditwheel repair --add-path /opt/ffmpeg/lib --add-path /opt/miniconda/lib -w {dest_dir} {wheel}"
+    "echo 'Available libraries:'",
+    "ls -la /opt/ffmpeg/lib/*.so* /opt/miniconda/lib/libhdf5*.so* || true",
+    "echo 'Repairing with LD_LIBRARY_PATH:'",
+    "LD_LIBRARY_PATH=/opt/ffmpeg/lib:/opt/miniconda/lib:/usr/local/lib:/usr/lib auditwheel repair --plat manylinux_2_34_x86_64 -w {dest_dir} {wheel}",
+    "echo 'After repair:'",
+    "auditwheel show {dest_dir}/*.whl"
 ]
 
 [tool.cibuildwheel.linux.environment]
@@ -293,7 +299,7 @@ before-all = [
 ]
 
 repair-wheel-command = [
-    "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-listdeps {wheel}",
+    "export PATH='/usr/bin:/bin'",
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}"
 ]
 
