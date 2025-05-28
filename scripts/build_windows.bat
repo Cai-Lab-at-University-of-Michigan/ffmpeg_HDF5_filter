@@ -29,7 +29,7 @@ xcopy hdf5_msvc_extracted\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
 :: Download and extract FFmpeg (MSVC-compatible)
 echo Downloading FFmpeg for MSVC...
 curl -L --retry 3 --retry-delay 5 ^
-  https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-full-shared.zip ^
+  https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-full_build-shared.zip ^
   -o ffmpeg-msvc.zip
 
 7z x ffmpeg-msvc.zip -offmpeg_msvc
