@@ -300,10 +300,20 @@ else:
         print(f"Checked in directories: {library_dirs}")
         print("Continuing build - libraries may be found at runtime")
 
-    libraries = ['avcodec', 'avutil', 'avformat', 'swscale', 'hdf5']
-
+    # Base libraries for all platforms
+    libraries = ['avcodec', 'avutil', 'avformat', 'swscale']
+    
+    # Add HDF5 libraries - Windows needs multiple HDF5 libs
     if system == 'windows':
-        libraries.extend(['shlwapi'])
+        libraries.extend([
+            'hdf5',           # Main HDF5 library
+            'hdf5_hl',        # High-level HDF5 APIs
+            'szip',           # Compression library used by HDF5
+            'zlib',           # Another compression library
+            'shlwapi'         # Windows system library
+        ])
+    else:
+        libraries.extend(['hdf5'])
 
     extra_compile_args = ['-DFFMPEG_H5_FILTER_EXPORTS']
     extra_link_args = []
@@ -322,7 +332,10 @@ else:
         for dir_path in library_dirs:
             extra_link_args.append(f'-Wl,-rpath,{dir_path}')
     elif system == 'windows':
-        extra_compile_args.extend(['/std:c11'])
+        extra_compile_args.extend([
+            '/std:c11',
+            '-D_CRT_SECURE_NO_WARNINGS'
+        ])
 
     ffmpeg_module = Extension(
         'h5ffmpeg._ffmpeg_filter',

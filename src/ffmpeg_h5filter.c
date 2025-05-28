@@ -20,6 +20,14 @@
 
 #include "ffmpeg_h5filter.h"
 
+#ifdef _WIN32
+// Windows doesn't have stpcpy, so we provide our own implementation
+char* stpcpy(char* dest, const char* src) {
+    while ((*dest++ = *src++));
+    return dest - 1;
+}
+#endif
+
 #define EXPECTED_CS_RATIO 30
 
 #define PUSH_ERR(func, minor, str) \

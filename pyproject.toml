@@ -292,6 +292,7 @@ before-all = [
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "$HOME/ffmpeg"
 HDF5_ROOT = "$HOME/miniconda"
+MACOSX_DEPLOYMENT_TARGET = "12.0"
 
 repair-wheel-command = [
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-listdeps {wheel}",
