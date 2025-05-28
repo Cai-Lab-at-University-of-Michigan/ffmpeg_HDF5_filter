@@ -690,9 +690,6 @@ main() {
     print_info "FFmpeg libraries: ${BUILD_DIR}/lib"
     print_info "FFmpeg headers: ${BUILD_DIR}/include"
     print_info "======================================="
-    
-    # Create a marker file for the build process
-    touch "${BUILD_DIR}/.build_completed"
 }
 
 # Execute main
