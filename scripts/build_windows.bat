@@ -30,11 +30,9 @@ echo Setting up conda...
 
 :: Install dependencies
 echo Installing build dependencies...
-%HOME%\miniconda3\Scripts\conda.exe install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
-%HOME%\miniconda3\Scripts\conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
+%HOME%\miniconda3\Scripts\conda.exe install -y pkg-config cmake ninja nasm yasm git msys2-conda-epoch m2-base m2-autoconf m2-automake m2-libtool m2-make -c conda-forge
+%HOME%\miniconda3\Scripts\conda.exe install -y wget x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
 %HOME%\miniconda3\Scripts\conda.exe install -y openssl -c conda-forge
-
-dir /s /b %HOME%\miniconda3\Library\include\hdf5.h
 
 :: Install CUDA if available
 pip install nvidia-cuda-nvcc || echo CUDA libs not available
@@ -82,6 +80,19 @@ xcopy libvpl_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
 xcopy libvpl_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
 cd /D %HOME%\temp_build
 
+:: Download ffmpeg package manually
+echo Downloading hdf5...
+curl -L --retry 3 --retry-delay 5 https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-hdf5-1.14.6-3-any.pkg.tar.zst -o hdf5.pkg.tar.zst
+
+:: 7-Zip two-step extraction
+7z x hdf5.pkg.tar.zst -ohdf5_extracted_zst
+7z x hdf5_extracted_zst\*.tar -ohdf5_extracted_tar
+dir /S /B hdf5_extracted_tar
+
+:: Copy libraries, headers, DLLs, and pkg-config files
+xcopy hdf5_extracted_tar\mingw64\lib\* %FFMPEG_ROOT%\lib\ /E /I /Q
+xcopy hdf5_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
+xcopy hdf5_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
 
 :: Download ffmpeg package manually
 echo Downloading ffmpeg...

@@ -178,7 +178,7 @@ before-all = [
 
     echo "Building dav1d from source..."
     rm -rf dav1d
-    git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
+    /usr/bin/git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
     mkdir -p dav1d/build
     cd dav1d/build
 

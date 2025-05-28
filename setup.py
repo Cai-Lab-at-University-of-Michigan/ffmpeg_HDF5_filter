@@ -36,10 +36,10 @@ def get_hdf5_root():
     system = platform.system().lower()
     if system == 'windows':
         home = os.environ.get('HOME', 'D:\\a')
-        conda_hdf5 = os.path.join(home, 'miniconda3', 'Library')
+        hdf5_dir = os.path.join(home, 'ffmpeg_build')
         
-        if os.path.exists(os.path.join(conda_hdf5, 'include', 'hdf5.h')):
-            return conda_hdf5
+        if os.path.exists(os.path.join(hdf5_dir, 'include', 'hdf5.h')):
+            return hdf5_dir
     elif system == 'darwin':
         # Check common macOS locations
         possible_paths = [
