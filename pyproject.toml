@@ -183,7 +183,7 @@ before-all = [
     cd dav1d/build
 
     MESON_ARGS=(
-        "--prefix=${BUILD_DIR}"
+        "--prefix=$HOME/ffmpeg"
         "--libdir=lib"
         "--default-library=shared"
         "-Db_pgo=generate"
@@ -191,9 +191,9 @@ before-all = [
         "-Dcpp_args=-march=native"
     )
     
-    meson setup "${MESON_ARGS[@]}" ..
-    ninja
-    ninja install
+    $HOME/miniconda/bin/meson setup "${MESON_ARGS[@]}" ..
+    $HOME/miniconda/bin/ninja
+    $HOME/miniconda/bin/ninja install
     cd /tmp/hwaccel_src
     
     /usr/bin/git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
