@@ -18,7 +18,7 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 180
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -33,56 +33,24 @@ jobs:
         with:
           platforms: all
 
-      - name: Debug Environment
-        shell: bash
-        run: |
-          echo "=== System Information ==="
-          echo "OS: ${{ matrix.os }}"
-          echo "Runner OS: ${{ runner.os }}"
-          echo "Architecture: $(uname -m)"
-          echo "Python version: ${{ env.PYTHON_VERSION }}"
-          echo "=== Available disk space ==="
-          df -h
-          echo "=== Current directory ==="
-          pwd
-          ls -la
-
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.23.3
 
       - name: Package libraries for shared lib build
+        if: runner.os != 'Linux'
         shell: bash
         run: |
-          echo "=== Packaging complete build environment for shared library build ==="
           mkdir -p shared_lib_package
           
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            echo "Packaging Windows complete build environment..."
             if [[ -d "D:/a/ffmpeg_build" ]]; then
               cp -r D:/a/ffmpeg_build/* shared_lib_package/ 2>/dev/null || echo "Error copying Windows build"
-            else
-              echo "WARNING: D:/a/ffmpeg_build not found"
             fi
             
-            echo "Windows package structure:"
-            find shared_lib_package/ -type d | head -10 || echo "Error listing directories" 
-            echo "Key files:"
-            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.dll" -o -name "*.lib" 2>/dev/null | head -20 || echo "No key files found"
-            
           elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            echo "Packaging macOS complete build environment..."
-            
-            echo "=== Checking macOS directories ==="
-            ls -la ~/ | grep -E "(ffmpeg|miniconda)" || echo "No ffmpeg/miniconda dirs in home"
-            ls -la ~/ffmpeg/ || echo "~/ffmpeg not found"
-            ls -la ~/miniconda/ || echo "~/miniconda not found"
-            
             if [[ -d "$HOME/ffmpeg" ]]; then
               mkdir -p shared_lib_package/ffmpeg
               cp -r ~/ffmpeg/* shared_lib_package/ffmpeg/ 2>/dev/null || echo "Error copying FFmpeg"
-              echo "Copied FFmpeg from ~/ffmpeg"
-            else
-              echo "WARNING: ~/ffmpeg not found"
             fi
             
             if [[ -d "$HOME/miniconda" ]]; then
@@ -91,88 +59,10 @@ jobs:
               cp -r ~/miniconda/include shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda include"
               cp -r ~/miniconda/share shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda share"
               cp -r ~/miniconda/bin shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda bin"
-              echo "Copied conda from ~/miniconda"
-            else
-              echo "WARNING: ~/miniconda not found"
             fi
-            
-            echo "macOS package structure:"
-            find shared_lib_package/ -type d 2>/dev/null | head -10 || echo "Error listing directories"
-            echo "Key files:"
-            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.dylib" 2>/dev/null | head -20 || echo "No key files found"
-            
-          else
-            echo "Packaging Linux libraries from copied build archive..."
-            
-            if [[ -f "./build_deps.tar.gz" ]]; then
-              echo "Found build archive, extracting..."
-              tar -xzf ./build_deps.tar.gz
-              
-              if [[ -d "./ffmpeg" ]]; then
-                mkdir -p shared_lib_package/ffmpeg
-                cp -r ./ffmpeg/* shared_lib_package/ffmpeg/ 2>/dev/null || echo "Error copying FFmpeg"
-                echo "Copied FFmpeg from archive"
-              fi
-              
-              if [[ -d "./miniconda" ]]; then
-                mkdir -p shared_lib_package/miniconda
-                cp -r ./miniconda/* shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda"
-                echo "Copied conda from archive"
-              fi
-              
-            else
-              echo "No build archive found, extracting from wheel as fallback..."
-              wheel_file=$(find ./wheelhouse/ -name "*.whl" | head -1)
-              if [[ -n "$wheel_file" ]]; then
-                echo "Extracting from wheel: $wheel_file"
-                mkdir -p wheel_extracted
-                python -m zipfile -e "$wheel_file" wheel_extracted/
-                cp -r wheel_extracted/* shared_lib_package/ 2>/dev/null || echo "Error copying wheel contents"
-                echo "Copied entire wheel structure"
-              else
-                echo "ERROR: No wheel file found for extraction"
-              fi
-            fi
-            
-            echo "Linux package structure:"
-            find shared_lib_package/ -type d | head -10 || echo "Error listing directories"
-            echo "Key files:"
-            find shared_lib_package/ -name "*.pc" -o -name "*.so*" 2>/dev/null | head -20 || echo "No key files found"
           fi
           
           tar -czf shared_lib_deps_${{ matrix.os }}.tar.gz -C shared_lib_package .
-          
-          echo "=== Package created ==="
-          ls -la shared_lib_deps_${{ matrix.os }}.tar.gz
-
-      - name: Debug Build Results
-        shell: bash
-        run: |
-          echo "=== Build Results ==="
-          ls -la ./wheelhouse/ || echo "No wheelhouse directory"
-          echo "=== FFmpeg Installation Check ==="
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            ls -la D:/a/ffmpeg_build/ || echo "No Windows FFmpeg build"
-            if [[ -f "D:/a/ffmpeg_build/bin/ffmpeg.exe" ]]; then
-              echo "FFmpeg found on Windows"
-            else
-              echo "FFmpeg NOT found on Windows"
-            fi
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
-            ls -la ~/ffmpeg/ || echo "No macOS FFmpeg build"
-            if [[ -f "$HOME/ffmpeg/bin/ffmpeg" ]]; then
-              echo "FFmpeg found on macOS"
-            else
-              echo "FFmpeg NOT found on macOS"
-            fi
-          else
-            ls -la /opt/ffmpeg/ || echo "No Linux FFmpeg build"
-            if [[ -f "/opt/ffmpeg/bin/ffmpeg" ]]; then
-              echo "FFmpeg found on Linux"
-            else
-              echo "FFmpeg NOT found on Linux"
-            fi
-          fi
 
       - name: Upload wheels
         uses: actions/upload-artifact@v4
@@ -182,13 +72,14 @@ jobs:
           retention-days: 7
 
       - name: Upload shared lib dependencies
+        if: runner.os != 'Linux'
         uses: actions/upload-artifact@v4
         with:
           name: shared-lib-deps-${{ matrix.os }}-${{ strategy.job-index }}
           path: shared_lib_deps_${{ matrix.os }}.tar.gz
           retention-days: 7
 
-  build_shared_libs:
+  build_shared_libs_windows_macos:
     name: Build shared libraries on ${{ matrix.os }}
     needs: [build_wheels]
     runs-on: ${{ matrix.os }}
@@ -196,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15]
+        os: [windows-latest, macos-15]
 
     steps:
       - uses: actions/checkout@v4
@@ -204,10 +95,7 @@ jobs:
       - name: Install build tools
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Linux" ]]; then
-            sudo apt-get update
-            sudo apt-get install -y cmake build-essential patchelf
-          elif [[ "${{ runner.os }}" == "macOS" ]]; then
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
             brew install cmake
           elif [[ "${{ runner.os }}" == "Windows" ]]; then
             choco install cmake --installargs 'ADD_CMAKE_TO_PATH=System'
@@ -222,21 +110,13 @@ jobs:
       - name: Extract dependencies
         shell: bash
         run: |
-          echo "=== Extracting dependencies ==="
           mkdir -p deps
           cd deps_archive
           tar -xzf shared_lib_deps_${{ matrix.os }}.tar.gz -C ../deps/
-          
-          echo "=== Available libraries ==="
-          find ../deps/ -name "*.so*" -o -name "*.dylib" -o -name "*.dll" -o -name "*.lib" | head -20
-          
-          echo "=== Available headers ==="
-          find ../deps/ -name "*.h" | head -10
 
       - name: Build shared library
         shell: bash
         run: |
-          echo "=== Building shared library ==="
           mkdir build
           cd build
           
@@ -249,25 +129,17 @@ jobs:
             cmake --build . --target bundle_all
             cmake --install . --prefix ../install
           fi
-          
-          echo "=== Build completed ==="
-          find ../install/ -type f | head -20
 
       - name: Package shared library bundle
         shell: bash
         run: |
-          echo "=== Creating final package ==="
           cd install
           
           if [[ "${{ runner.os }}" == "Windows" ]]; then
-            7z a -tzip "../h5ffmpeg_shared_bundle_Windows.zip" .
+            7z a -tzip "../h5ffmpeg_shared_bundle_${{ matrix.os }}.zip" .
           else
-            tar -czf "../h5ffmpeg_shared_bundle_${{ runner.os }}.tar.gz" .
+            tar -czf "../h5ffmpeg_shared_bundle_${{ matrix.os }}.tar.gz" .
           fi
-          
-          cd ..
-          echo "=== Package created ==="
-          ls -la h5ffmpeg_shared_bundle_*
 
       - name: Upload shared library bundle
         uses: actions/upload-artifact@v4
@@ -276,6 +148,42 @@ jobs:
           path: |
             h5ffmpeg_shared_bundle_*.zip
             h5ffmpeg_shared_bundle_*.tar.gz
+          retention-days: 7
+
+  build_shared_libs_linux:
+    name: Build shared libraries on ubuntu-latest
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build dependencies and shared library
+        shell: bash
+        run: |
+          chmod +x scripts/build_ubuntu_pkg.sh
+          ./scripts/build_ubuntu_pkg.sh
+
+      - name: Build shared library
+        shell: bash
+        run: |
+          mkdir build
+          cd build
+          cmake .. -DCMAKE_BUILD_TYPE=Release
+          cmake --build . --target bundle_all
+          cmake --install . --prefix ../install
+
+      - name: Package shared library bundle
+        shell: bash
+        run: |
+          cd install
+          tar -czf "../h5ffmpeg_shared_bundle_ubuntu-latest.tar.gz" .
+
+      - name: Upload shared library bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: shared-lib-bundle-ubuntu-latest
+          path: h5ffmpeg_shared_bundle_ubuntu-latest.tar.gz
           retention-days: 7
 
   build_sdist:
@@ -321,8 +229,6 @@ jobs:
         run: |
           if [[ ! -d "imagej-hdf5-wrapper" ]]; then
             echo "ERROR: imagej-hdf5-wrapper directory not found"
-            echo "Available directories:"
-            ls -la
             exit 1
           fi
 
@@ -333,22 +239,6 @@ jobs:
         working-directory: imagej-hdf5-wrapper
         run: ./gradlew packJar --no-daemon
 
-      - name: Verify JAR contents
-        run: |
-          echo "=== Verifying JAR contents ==="
-          JAR_FILE=$(find imagej-hdf5-wrapper/build/libs -name "HDF5-ffmpeg-*.jar" | head -1)
-          
-          if [[ -f "$JAR_FILE" ]]; then
-            echo "JAR file: $JAR_FILE"
-            echo "JAR size: $(du -h "$JAR_FILE" | cut -f1)"
-            echo "=== JAR structure ==="
-            unzip -l "$JAR_FILE" | head -20
-          else
-            echo "ERROR: JAR file not found"
-            find imagej-hdf5-wrapper/build -name "*.jar" || echo "No JAR files found"
-            exit 1
-          fi
-
       - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
@@ -357,7 +247,7 @@ jobs:
 
   publish:
     name: Publish to PyPI and GitHub Releases
-    needs: [build_wheels, build_sdist, assemble_java, build_shared_libs]
+    needs: [build_wheels, build_sdist, assemble_java, build_shared_libs_windows_macos, build_shared_libs_linux]
     runs-on: ubuntu-latest
     if: github.event_name == 'push' && (startsWith(github.ref, 'refs/tags/v') || contains(fromJSON('["refs/heads/main", "refs/heads/master"]'), github.ref)) || github.event_name == 'workflow_dispatch'
     timeout-minutes: 15
@@ -376,28 +266,20 @@ jobs:
           python -m pip install --upgrade pip twine
           mkdir -p dist java-dist shared-libs-dist
 
-      - name: Download all wheel artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts/
 
-      - name: Collect wheels and sdist
+      - name: Collect all distributions
         run: |
           find artifacts/ -name "*.whl" -exec cp {} dist/ \;
           find artifacts/sdist/ -name "*.tar.gz" -exec cp {} dist/ \; 2>/dev/null || true
           find artifacts/hdf5-ffmpeg-jar/ -name "*.jar" -exec cp {} java-dist/ \; 2>/dev/null || true
           find artifacts/shared-lib-bundle-*/ -name "h5ffmpeg_shared_bundle_*" -exec cp {} shared-libs-dist/ \; 2>/dev/null || true
-          
-          echo "=== Distribution files ==="
-          ls -la dist/
-          echo "=== Java files ==="
-          ls -la java-dist/
-          echo "=== Shared library bundles ==="
-          ls -la shared-libs-dist/
 
       - name: Verify distribution files
         run: |
-          echo "=== Checking wheel and sdist integrity ==="
           python -m twine check dist/*.whl dist/*.tar.gz
 
       - name: Publish to TestPyPI
@@ -406,7 +288,6 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.TESTPYPI_API_TOKEN }}
         run: |
-          echo "Publishing to TestPyPI..."
           python -m twine upload --repository testpypi dist/*.whl dist/*.tar.gz --verbose
 
       - name: Publish to PyPI
@@ -415,7 +296,6 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          echo "Publishing to PyPI..."
           python -m twine upload dist/*.whl dist/*.tar.gz --verbose
 
       - name: Delete previous snapshot release
@@ -459,8 +339,8 @@ jobs:
             - **Source Distribution** (.tar.gz) - Build from source
             - **Java JAR** - ImageJ/Fiji plugin
             - **Shared Library Bundles** - Self-contained C libraries:
-              - `h5ffmpeg_shared_bundle_windows.zip` - Windows bundle
-              - `h5ffmpeg_shared_bundle_macOS.tar.gz` - macOS bundle  
-              - `h5ffmpeg_shared_bundle_Linux.tar.gz` - Linux bundle
+              - `h5ffmpeg_shared_bundle_windows-latest.zip` - Windows bundle
+              - `h5ffmpeg_shared_bundle_macos-15.tar.gz` - macOS bundle  
+              - `h5ffmpeg_shared_bundle_ubuntu-latest.tar.gz` - Linux bundle
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

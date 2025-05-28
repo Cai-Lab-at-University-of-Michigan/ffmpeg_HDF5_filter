@@ -105,10 +105,6 @@ before-all = [
     
     echo "Verifying FFmpeg installation..."
     /opt/ffmpeg/bin/ffmpeg -version
-
-    echo "Creating build archive for shared library build..."
-    tar -czf /output/build_deps.tar.gz -C /opt ffmpeg miniconda 2>/dev/null || echo "Failed to create build archive"
-    echo "Build archive created"
     """
 ]
 

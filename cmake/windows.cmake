@@ -151,37 +151,4 @@ install(CODE "
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundling dependencies for \${dll}\")
         endif()
     endforeach()
-")_CURRENT_SOURCE_DIR}/src>
-        $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${FFMPEG_INCLUDE_DIR}
-        ${HDF5_INCLUDE_DIR}
-)
-
-target_compile_definitions(h5ffmpeg_shared PRIVATE
-    FFMPEG_H5_FILTER_EXPORTS
-    _CRT_SECURE_NO_WARNINGS
-    H5_BUILT_AS_DYNAMIC_LIB
-    _HDF5USEDLL_
-)
-
-target_link_libraries(h5ffmpeg_shared
-    PRIVATE
-        ${FFMPEG_LIBRARIES}
-        ${HDF5_C_LIBRARY}
-        ${HDF5_HL_LIBRARY}
-        ws2_32
-        secur32
-        bcrypt
-        shlwapi
-)
-
-install(TARGETS h5ffmpeg_shared
-    LIBRARY DESTINATION lib
-    ARCHIVE DESTINATION lib
-    RUNTIME DESTINATION bin
-)
-
-install(FILES src/ffmpeg_h5filter.h
-    DESTINATION include
-)
+")

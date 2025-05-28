@@ -1,10 +1,3 @@
-cmake_minimum_required(VERSION 3.16)
-project(h5ffmpeg_shared VERSION 1.0.0 LANGUAGES C CXX)
-
-set(CMAKE_C_STANDARD 11)
-set(CMAKE_CXX_STANDARD 14)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
-
 set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
 set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg")
 set(HDF5_ROOT "${DEPS_ROOT}/miniconda")
