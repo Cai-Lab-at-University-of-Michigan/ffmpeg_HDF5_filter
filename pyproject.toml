@@ -310,8 +310,6 @@ before-build = [
 ]
 
 repair-wheel-command = [
-    "echo Checking delvewheel installation...",
-    "delvewheel --version", 
     "echo Showing wheel dependencies...",
     "delvewheel show {wheel}",
     "echo Repairing wheel with explicit paths...",
