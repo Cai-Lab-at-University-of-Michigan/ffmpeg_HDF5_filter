@@ -7,17 +7,13 @@ import subprocess
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-# Check if we're building sdist (source distribution)
 def is_building_sdist():
-    """Check if we're building a source distribution"""
     return 'sdist' in sys.argv or 'egg_info' in sys.argv
 
 def get_ffmpeg_root():
-    """Get FFmpeg root directory with proper fallbacks for CI"""
     if 'FFMPEG_ROOT' in os.environ:
         return os.environ['FFMPEG_ROOT']
     
-    # CI-appropriate fallback locations (matching pyproject.toml)
     system = platform.system().lower()
     if system == 'windows':
         home = os.environ.get('HOME', 'D:\\a')
@@ -25,11 +21,10 @@ def get_ffmpeg_root():
     elif system == 'darwin':
         home = os.path.expanduser('~')
         return os.path.join(home, 'ffmpeg')
-    else:  # Linux
+    else:
         return '/opt/ffmpeg'
 
 def get_hdf5_root():
-    """Get HDF5 root directory with CI-aware fallbacks"""
     if 'HDF5_ROOT' in os.environ:
         return os.environ['HDF5_ROOT']
     
@@ -41,16 +36,15 @@ def get_hdf5_root():
         if os.path.exists(os.path.join(hdf5_dir, 'include', 'hdf5.h')):
             return hdf5_dir
     elif system == 'darwin':
-        # Check common macOS locations
         possible_paths = [
             '/opt/homebrew/opt/hdf5',
             '/usr/local/opt/hdf5', 
-            os.path.expanduser('~/miniconda3/lib'),  # Conda
+            os.path.expanduser('~/miniconda3/lib'),
         ]
         for path in possible_paths:
             if os.path.exists(os.path.join(path, 'include', 'hdf5.h')):
                 return path
-    else:  # Linux
+    else:
         possible_paths = [
             '/usr/include/hdf5',
             '/usr/local/include/hdf5',
@@ -58,15 +52,13 @@ def get_hdf5_root():
         ]
         for path in possible_paths:
             if os.path.exists(os.path.join(path, 'hdf5.h')):
-                return os.path.dirname(path)  # Return parent directory
+                return os.path.dirname(path)
     
     return None
 
-# Skip dependency checks for sdist builds
 if is_building_sdist():
     print("Building source distribution - skipping FFmpeg/HDF5 dependency checks")
     
-    # Create minimal extension for sdist (won't be compiled)
     ffmpeg_module = Extension(
         'h5ffmpeg._ffmpeg_filter',
         sources=[
@@ -76,25 +68,19 @@ if is_building_sdist():
         ]
     )
     
-    # Simple build_ext class for sdist
     class CustomBuildExt(build_ext):
         pass
         
 else:
-    # Full dependency checking and configuration for wheel builds
-    
-    # Configuration
     FFMPEG_ROOT = get_ffmpeg_root()
     HDF5_ROOT = get_hdf5_root()
 
-    # Debug information
     src_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
     print(f"Source directory: {src_dir}")
     print(f"FFMPEG_ROOT: {FFMPEG_ROOT}")
     print(f"HDF5_ROOT: {HDF5_ROOT}")
     print(f"Building for: {platform.system()} {platform.machine()}")
 
-    # Check for important C source files
     required_files = [
         os.path.join(src_dir, 'ffmpeg_h5filter.h'),
         os.path.join(src_dir, 'ffmpeg_h5filter.c'),
@@ -108,7 +94,6 @@ else:
             print(f"ERROR: Required file not found: {file_path}")
             sys.exit(1)
 
-    # Verify FFmpeg installation
     if not os.path.exists(FFMPEG_ROOT):
         print(f"ERROR: FFmpeg directory not found: {FFMPEG_ROOT}")
         print("Make sure FFMPEG_ROOT environment variable is set correctly or FFmpeg is built.")
@@ -127,11 +112,9 @@ else:
         print(f"Contents of FFMPEG_ROOT: {os.listdir(FFMPEG_ROOT) if os.path.exists(FFMPEG_ROOT) else 'Directory does not exist'}")
         sys.exit(1)
 
-    # Detect platform specifics
     system = platform.system().lower()
     machine = platform.machine().lower()
 
-    # Base directories
     include_dirs = [
         src_dir,
         ffmpeg_include
@@ -141,23 +124,23 @@ else:
         ffmpeg_lib
     ]
 
-    # Platform-specific library extensions
     if system == 'windows':
         shared_lib_ext = '.dll'
         static_lib_ext = '.lib'
         lib_prefix = ''
-    elif system == 'darwin':  # macOS
+        ffmpeg_bin = os.path.join(FFMPEG_ROOT, 'bin')
+        if os.path.exists(ffmpeg_bin):
+            library_dirs.append(ffmpeg_bin)
+    elif system == 'darwin':
         shared_lib_ext = '.dylib'
         static_lib_ext = '.a'
         lib_prefix = 'lib'
-    else:  # Linux and others
+    else:
         shared_lib_ext = '.so'
         static_lib_ext = '.a'
         lib_prefix = 'lib'
 
-    # Function to find libraries
     def find_library(lib_name, search_dirs, prefix=lib_prefix, extensions=[shared_lib_ext, static_lib_ext]):
-        """Find a library in the given search directories."""
         for dir_path in search_dirs:
             if not os.path.exists(dir_path):
                 continue
@@ -167,13 +150,22 @@ else:
                 if os.path.exists(lib_path):
                     print(f"Found library: {lib_path}")
                     return dir_path
+                    
+            if system == 'windows':
+                dll_patterns = [
+                    f"{lib_name}*.dll",
+                    f"lib{lib_name}*.dll"
+                ]
+                
+                for pattern in dll_patterns:
+                    dll_files = glob.glob(os.path.join(dir_path, pattern))
+                    if dll_files:
+                        print(f"Found Windows DLL: {dll_files[0]}")
+                        return dir_path
+                        
         return None
 
-    # HDF5 Configuration with improved CI support
     def configure_hdf5():
-        """Configure HDF5 include and library paths with CI-aware detection"""
-        
-        # First try explicit HDF5_ROOT
         if HDF5_ROOT:
             hdf5_include_dir = os.path.join(HDF5_ROOT, 'include')
             hdf5_library_dir = os.path.join(HDF5_ROOT, 'lib')
@@ -189,7 +181,6 @@ else:
             else:
                 print(f"WARNING: HDF5_ROOT directories don't exist: include={hdf5_include_dir}, lib={hdf5_library_dir}")
         
-        # Try pkg-config (works well in Linux CI)
         try:
             hdf5_cflags = subprocess.check_output(['pkg-config', '--cflags', 'hdf5'], 
                                                 universal_newlines=True, stderr=subprocess.DEVNULL).strip()
@@ -199,7 +190,6 @@ else:
             print(f"pkg-config HDF5 cflags: {hdf5_cflags}")
             print(f"pkg-config HDF5 libs: {hdf5_libs}")
             
-            # Extract include dirs from cflags
             hdf5_found = False
             for flag in hdf5_cflags.split():
                 if flag.startswith('-I'):
@@ -209,7 +199,6 @@ else:
                         hdf5_found = True
                         print(f"Added HDF5 include dir from pkg-config: {include_dir}")
             
-            # Extract library dirs from libs
             for flag in hdf5_libs.split():
                 if flag.startswith('-L'):
                     lib_dir = flag[2:]
@@ -224,7 +213,6 @@ else:
         except (subprocess.CalledProcessError, FileNotFoundError):
             print("pkg-config not available or could not find HDF5")
         
-        # Platform-specific fallback locations
         potential_include_dirs = []
         potential_library_dirs = []
         
@@ -254,7 +242,6 @@ else:
                 '/usr/local/opt/hdf5/lib'
             ]
         elif system == 'windows':
-            # Windows fallbacks (if conda installation failed)
             potential_include_dirs = [
                 'C:\\Program Files\\HDF5\\include',
                 'C:\\HDF5\\include'
@@ -264,7 +251,6 @@ else:
                 'C:\\HDF5\\lib'
             ]
         
-        # Search for HDF5 header
         hdf5_include_found = False
         for dir_path in potential_include_dirs:
             if os.path.exists(os.path.join(dir_path, 'hdf5.h')):
@@ -273,7 +259,6 @@ else:
                 print(f"Found HDF5 header at: {os.path.join(dir_path, 'hdf5.h')}")
                 break
         
-        # Search for HDF5 library
         hdf5_lib_found = False
         hdf5_library_dir = find_library('hdf5', potential_library_dirs)
         if hdf5_library_dir:
@@ -290,14 +275,11 @@ else:
         
         return True
 
-    # Configure HDF5
     configure_hdf5()
 
-    # Find FFmpeg include and libraries
     ffmpeg_libs = ['avcodec', 'avutil', 'avformat', 'swscale']
     missing_ffmpeg_libs = []
 
-    # Check for FFmpeg headers
     print("Checking FFmpeg headers...")
     for lib in ffmpeg_libs:
         header_path = os.path.join(FFMPEG_ROOT, 'include', f'lib{lib}', f'{lib}.h')
@@ -306,50 +288,33 @@ else:
         else:
             print(f"WARNING: FFmpeg header not found: {header_path}")
 
-    # Check for FFmpeg libraries
     print("Checking FFmpeg libraries...")
     for lib in ffmpeg_libs:
-        lib_found = False
-        for dir_path in library_dirs:
-            for ext in [shared_lib_ext, static_lib_ext]:
-                lib_path = os.path.join(dir_path, f"{lib_prefix}{lib}{ext}")
-                if os.path.exists(lib_path):
-                    print(f"Found FFmpeg library: {lib_path}")
-                    lib_found = True
-                    break
-            if lib_found:
-                break
-        
+        lib_found = find_library(lib, library_dirs)
         if not lib_found:
             missing_ffmpeg_libs.append(lib)
             print(f"WARNING: FFmpeg library not found: {lib}")
 
     if missing_ffmpeg_libs:
-        print(f"ERROR: Missing FFmpeg libraries: {', '.join(missing_ffmpeg_libs)}")
+        print(f"WARNING: Missing FFmpeg libraries: {', '.join(missing_ffmpeg_libs)}")
         print(f"Checked in directories: {library_dirs}")
-        print("Make sure FFmpeg is properly built and installed.")
-        # Continue anyway, as libraries might be in system paths
+        print("Continuing build - libraries may be found at runtime")
 
-    # Define libraries
     libraries = ['avcodec', 'avutil', 'avformat', 'swscale', 'hdf5']
 
-    # Windows-specific libraries
     if system == 'windows':
         libraries.extend(['shlwapi'])
 
-    # Platform-specific compile and link arguments
     extra_compile_args = ['-DFFMPEG_H5_FILTER_EXPORTS']
     extra_link_args = []
 
     if system == 'linux':
         extra_compile_args.extend(['-std=c99', '-fPIC', '-D_POSIX_C_SOURCE=200809L'])
         extra_link_args.extend(['-Wl,--no-as-needed'])
-        # Add runtime path to find shared libraries
         for dir_path in library_dirs:
             extra_link_args.append(f'-Wl,-rpath,{dir_path}')
-    elif system == 'darwin':  # macOS
+    elif system == 'darwin':
         extra_compile_args.extend(['-std=c99', '-fPIC'])
-        # Handle macOS rpath
         extra_link_args.extend([
             '-Wl,-rpath,@loader_path',
             '-Wl,-rpath,@loader_path/../../',
@@ -357,10 +322,8 @@ else:
         for dir_path in library_dirs:
             extra_link_args.append(f'-Wl,-rpath,{dir_path}')
     elif system == 'windows':
-        # Windows MSVC compiler settings
         extra_compile_args.extend(['/std:c11'])
 
-    # Define the extension module
     ffmpeg_module = Extension(
         'h5ffmpeg._ffmpeg_filter',
         sources=[
@@ -375,11 +338,9 @@ else:
         extra_link_args=extra_link_args,
     )
 
-    # Custom build_ext command that adds numpy include directory
     class CustomBuildExt(build_ext):
         def finalize_options(self):
             build_ext.finalize_options(self)
-            # Prevent numpy from thinking it is still in its setup process
             import builtins
             builtins.__NUMPY_SETUP__ = False
             import numpy
@@ -387,7 +348,6 @@ else:
             print(f"Added numpy include directory: {numpy.get_include()}")
             
         def build_extension(self, ext):
-            # Print comprehensive debug info before building
             print(f"\n{'='*50}")
             print(f"Building extension: {ext.name}")
             print(f"{'='*50}")
@@ -399,14 +359,11 @@ else:
             print(f"Extra link args: {ext.extra_link_args}")
             print(f"{'='*50}\n")
             
-            # Continue with standard build
             super().build_extension(ext)
             
-            # Print output location
             output_dir = os.path.abspath(os.path.dirname(self.get_ext_fullpath(ext.name)))
             print(f"Extension built and saved to: {output_dir}")
             
-            # On Unix platforms, ensure library is executable
             system = platform.system().lower()
             if system != 'windows':
                 lib_file = self.get_ext_fullpath(ext.name)
@@ -414,7 +371,6 @@ else:
                     os.chmod(lib_file, 0o755)
                     print(f"Set executable permission on {lib_file}")
 
-# Get long description from README
 try:
     with open('README.md', 'r', encoding='utf-8') as f:
         long_description = f.read()
@@ -422,7 +378,6 @@ except FileNotFoundError:
     long_description = "HDF5 filter plugin for FFMPEG video codec compression"
     print("WARNING: README.md not found, using default description")
 
-# Setup package
 setup(
     name="h5ffmpeg",
     version="1.0.0",
@@ -443,8 +398,8 @@ setup(
         "scikit-image>=0.25.2",
     ],
     extras_require={
-        'nvidia': ['cupy-cuda11x'],  # For NVIDIA GPU support
-        'intel': ['intel-openmp'],   # For Intel QSV support
+        'nvidia': ['cupy-cuda11x'],
+        'intel': ['intel-openmp'],
     },
     python_requires=">=3.11",
     cmdclass={'build_ext': CustomBuildExt},
@@ -463,5 +418,5 @@ setup(
         'h5ffmpeg': ['*.so', '*.dll', '*.dylib', '*.pyd'],
     },
     include_package_data=True,
-    zip_safe=False,  # Ensure extension modules can be properly loaded
+    zip_safe=False,
 )

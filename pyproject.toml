@@ -203,6 +203,7 @@ before-all = [
     export PATH="$HOME/miniconda/bin:$PATH"
     which pkg-config
 
+    export PKG_CONFIG_PATH="$HOME/ffmpeg/lib/lib/pkgconfig:$PKG_CONFIG_PATH"
     ./configure \
         --prefix="$HOME/ffmpeg" \
         --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
