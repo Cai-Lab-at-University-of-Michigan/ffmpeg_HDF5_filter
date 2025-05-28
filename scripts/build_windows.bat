@@ -5,6 +5,7 @@ setlocal enabledelayedexpansion
 :: Set up directories
 set "HOME=D:\a"
 set "FFMPEG_ROOT=%HOME%\ffmpeg_build"
+set "HDF5_ROOT=%HOME%\ffmpeg_build"
 set "TEMP_BUILD=%HOME%\temp_build"
 
 :: Create required directories
