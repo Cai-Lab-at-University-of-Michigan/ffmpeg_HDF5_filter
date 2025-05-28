@@ -175,12 +175,33 @@ before-all = [
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
+
+    echo "Building dav1d from source..."
+    rm -rf dav1d
+    git clone --depth 1 https://code.videolan.org/videolan/dav1d.git
+    mkdir -p dav1d/build
+    cd dav1d/build
+
+    MESON_ARGS=(
+        "--prefix=${BUILD_DIR}"
+        "--libdir=lib"
+        "--default-library=shared"
+        "-Db_pgo=generate"
+        "-Dc_args=-march=native"
+        "-Dcpp_args=-march=native"
+    )
+    
+    meson setup "${MESON_ARGS[@]}" ..
+    ninja
+    ninja install
+    cd /tmp/hwaccel_src
     
     /usr/bin/git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
     which pkg-config
     export PATH="$HOME/miniconda/bin:$PATH"
+    which pkg-config
 
     ./configure \
         --prefix="$HOME/ffmpeg" \

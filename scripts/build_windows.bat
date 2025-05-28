@@ -34,6 +34,8 @@ echo Installing build dependencies...
 %HOME%\miniconda3\Scripts\conda.exe install -y wget x264 x265 libaom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
 %HOME%\miniconda3\Scripts\conda.exe install -y openssl -c conda-forge
 
+dir /s /b %HOME%\miniconda3\Library\include\hdf5.h
+
 :: Install CUDA if available
 pip install nvidia-cuda-nvcc || echo CUDA libs not available
 
