@@ -15,7 +15,7 @@ skip = [
     "*-macosx_x86_64"
 ]
 test-requires = "pytest numpy h5py"
-test-command = "python -c 'import h5ffmpeg; print(\"Import successful\")'"
+test-command = "python -c \"import h5ffmpeg; print('Import successful')\""
 
 [tool.cibuildwheel.linux]
 manylinux-x86_64-image = "dockcross/manylinux_2_34-x64"
