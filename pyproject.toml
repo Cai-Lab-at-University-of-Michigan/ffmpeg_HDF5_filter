@@ -317,7 +317,3 @@ repair-wheel-command = [
     "echo Repairing wheel with explicit paths...",
     "delvewheel repair --add-path D:\\a\\ffmpeg_build\\bin --add-path D:\\a\\ffmpeg_build\\lib -w {dest_dir} {wheel} -v"
 ]
-
-[tool.cibuildwheel.windows.environment]
-PATH = "D:\\a\\ffmpeg_build\\bin;D:\\a\\ffmpeg_build\\lib;%PATH%"
-FFMPEG_ROOT = "D:\\a\\ffmpeg_build"
