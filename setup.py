@@ -56,6 +56,33 @@ def get_hdf5_root():
     
     return None
 
+def check_hdf5_installation():
+    """Check what HDF5 files are actually available"""
+    if HDF5_ROOT:
+        lib_dir = os.path.join(HDF5_ROOT, 'lib')
+        bin_dir = os.path.join(HDF5_ROOT, 'bin')
+        
+        print(f"\n=== HDF5 Installation Check ===")
+        print(f"HDF5_ROOT: {HDF5_ROOT}")
+        
+        if os.path.exists(lib_dir):
+            print(f"\nLibrary files in {lib_dir}:")
+            lib_files = [f for f in os.listdir(lib_dir) if f.endswith('.lib')]
+            for lib_file in sorted(lib_files):
+                print(f"  {lib_file}")
+        else:
+            print(f"Library directory not found: {lib_dir}")
+            
+        if os.path.exists(bin_dir):
+            print(f"\nDLL files in {bin_dir}:")
+            dll_files = [f for f in os.listdir(bin_dir) if f.endswith('.dll')]
+            for dll_file in sorted(dll_files):
+                print(f"  {dll_file}")
+        else:
+            print(f"Binary directory not found: {bin_dir}")
+            
+        print("=================================\n")
+
 if is_building_sdist():
     print("Building source distribution - skipping FFmpeg/HDF5 dependency checks")
     
@@ -276,6 +303,7 @@ else:
         return True
 
     configure_hdf5()
+    check_hdf5_installation()
 
     ffmpeg_libs = ['avcodec', 'avutil', 'avformat', 'swscale']
     missing_ffmpeg_libs = []
@@ -332,7 +360,9 @@ else:
     elif system == 'windows':
         extra_compile_args.extend([
             '/std:c11',
-            '-D_CRT_SECURE_NO_WARNINGS'
+            '-D_CRT_SECURE_NO_WARNINGS',
+            '-DH5_BUILT_AS_DYNAMIC_LIB',
+            '-D_HDF5USEDLL_'
         ])
 
     ffmpeg_module = Extension(
