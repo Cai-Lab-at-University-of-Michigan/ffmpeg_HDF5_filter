@@ -160,7 +160,7 @@ install(CODE "
     file(GLOB installed_sos \"\${CMAKE_INSTALL_PREFIX}/lib/*.so*\")
     foreach(so \${installed_sos})
         get_filename_component(so_name \"\${so}\" NAME)
-        if(\"\${so_name}\" MATCHES \"^libh5ffmpeg_shared\\.so\")
+        if(\"\${so_name}\" MATCHES \"^libh5ffmpeg_shared[.]so\")
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundling dependencies for \${so}\")
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixing RPATH for \${so}\")
         endif()
