@@ -301,9 +301,9 @@ repair-wheel-command = [
 
 [tool.cibuildwheel.windows]
 before-all = '''
-pip install delvewheel
-
 call scripts\build_windows.bat
 '''
+
+before-build = "pip install delvewheel"
 
 repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
