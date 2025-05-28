@@ -421,7 +421,7 @@ except FileNotFoundError:
 
 setup(
     name="h5ffmpeg",
-    version="1.4.0",
+    version="1.6.0",
     description="HDF5 filter plugin for FFMPEG video codec compression",
     long_description=long_description,
     long_description_content_type="text/markdown",

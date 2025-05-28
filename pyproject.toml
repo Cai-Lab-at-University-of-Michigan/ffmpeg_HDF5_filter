@@ -108,6 +108,11 @@ before-all = [
     """
 ]
 
+repair-wheel-command = [
+    "auditwheel show {wheel}",
+    "LD_LIBRARY_PATH=/opt/ffmpeg/lib:/opt/miniconda/lib auditwheel repair --add-path /opt/ffmpeg/lib --add-path /opt/miniconda/lib -w {dest_dir} {wheel}"
+]
+
 [tool.cibuildwheel.linux.environment]
 FFMPEG_ROOT = "/opt/ffmpeg"
 HDF5_ROOT = "/opt/miniconda"
@@ -115,8 +120,6 @@ PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/m
 LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib"
 CPPFLAGS = "-I/opt/miniconda/include -I/opt/ffmpeg/include"
 LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
-
-repair-wheel-command = "auditwheel repair -w {dest_dir} {wheel}"
 
 [tool.cibuildwheel.macos]
 before-all = [
@@ -289,15 +292,15 @@ before-all = [
     """
 ]
 
-[tool.cibuildwheel.macos.environment]
-FFMPEG_ROOT = "$HOME/ffmpeg"
-HDF5_ROOT = "$HOME/miniconda"
-MACOSX_DEPLOYMENT_TARGET = "12.0"
-
 repair-wheel-command = [
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-listdeps {wheel}",
     "DYLD_LIBRARY_PATH=$HOME/ffmpeg/lib:$HOME/miniconda/lib delocate-wheel --require-archs arm64 -w {dest_dir} {wheel}"
 ]
+
+[tool.cibuildwheel.macos.environment]
+FFMPEG_ROOT = "$HOME/ffmpeg"
+HDF5_ROOT = "$HOME/miniconda"
+MACOSX_DEPLOYMENT_TARGET = "12.0"
 
 [tool.cibuildwheel.windows]
 before-all = '''
