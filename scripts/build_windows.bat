@@ -32,7 +32,8 @@ curl -L --retry 3 --retry-delay 5 ^
 echo 📦 Extracting outer HDF5 zip...
 7z x hdf5-msvc.zip -ohdf5_outer
 
-pushd hdf5_outer
+:: Go into nested hdf5 folder
+pushd hdf5_outer\hdf5
 
 :: ----------------------------------------------------------------------------
 :: Extract inner HDF5 zip
@@ -47,7 +48,7 @@ for %%F in (*.zip) do (
 
 :after_hdf5_unzip
 if not !found_zip! == true (
-    echo ❌ No inner zip file found inside hdf5_outer!
+    echo ❌ No inner zip file found inside hdf5_outer\hdf5!
     dir /B
     exit /b 1
 )
