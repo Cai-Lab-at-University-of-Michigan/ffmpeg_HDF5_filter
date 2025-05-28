@@ -306,4 +306,8 @@ call scripts\build_windows.bat
 
 before-build = "pip install delvewheel"
 
-repair-wheel-command = "delvewheel repair -w {dest_dir} {wheel}"
+[tool.cibuildwheel.windows.environment]
+repair-wheel-command = [
+    "set PATH=D:\\a\\ffmpeg_build\\bin;D:\\a\\ffmpeg_build\\lib;%PATH% && delvewheel show {wheel}",
+    "set PATH=D:\\a\\ffmpeg_build\\bin;D:\\a\\ffmpeg_build\\lib;%PATH% && delvewheel repair -w {dest_dir} {wheel}"
+]
