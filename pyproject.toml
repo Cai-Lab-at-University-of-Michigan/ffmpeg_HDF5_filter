@@ -298,7 +298,7 @@ before-all = [
     """
 ]
 
-repair_command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
+repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "$HOME/ffmpeg"
