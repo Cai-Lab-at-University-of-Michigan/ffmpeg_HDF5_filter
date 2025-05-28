@@ -130,8 +130,6 @@ before-all = [
         hdf5 \
         hdf5-external-filter-plugins \
         pkg-config \
-        clang_osx-arm64 \
-        clangxx_osx-arm64 \
         cmake \
         ninja \
         meson \
@@ -170,14 +168,19 @@ before-all = [
     export LDFLAGS="-L$HOME/miniconda/lib"
     export MACOSX_DEPLOYMENT_TARGET="15.0"
     export ARCHFLAGS="-arch arm64"
-    export CC="$HOME/miniconda/bin/clang"
-    export CXX="$HOME/miniconda/bin/clang++"
+    
+    export CC=/usr/bin/clang
+    export CXX=/usr/bin/clang++
+    export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
 
     OLD_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
     OLD_DYLD_LIBRARY_PATH=$DYLD_LIBRARY_PATH
 
     unset LD_LIBRARY_PATH
     unset DYLD_LIBRARY_PATH
+
+    $CC -v
+    $CC -x c - -o /dev/null <<< 'int main() { return 0; }'
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src

@@ -88,12 +88,15 @@ curl -L --retry 3 --retry-delay 5 https://mirror.msys2.org/mingw/mingw64/mingw-w
 :: 7-Zip two-step extraction
 7z x ffmpeg.pkg.tar.zst -offmpeg_extracted_zst
 7z x ffmpeg_extracted_zst\*.tar -offmpeg_extracted_tar
+dir /S /B ffmpeg_extracted_tar
 
 :: Copy libraries, headers, DLLs, and pkg-config files
 xcopy ffmpeg_extracted_tar\mingw64\lib\* %FFMPEG_ROOT%\lib\ /E /I /Q
 xcopy ffmpeg_extracted_tar\mingw64\include\* %FFMPEG_ROOT%\include\ /E /I /Q
 xcopy ffmpeg_extracted_tar\mingw64\bin\*.dll %FFMPEG_ROOT%\bin\ /I /Q
-cd /D %HOME%\temp_build
+
+cd /D %FFMPEG_ROOT%
+dir /S /B %FFMPEG_ROOT%
 
 :: Verify installation
 echo Verifying FFmpeg installation...
