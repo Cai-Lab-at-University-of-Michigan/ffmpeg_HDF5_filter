@@ -67,7 +67,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          name: cibw-wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
           retention-days: 7
 
@@ -75,7 +75,7 @@ jobs:
         if: runner.os != 'Linux'
         uses: actions/upload-artifact@v4
         with:
-          name: shared-lib-deps-${{ matrix.os }}-${{ strategy.job-index }}
+          name: shared-lib-deps-${{ matrix.os }}
           path: shared_lib_deps_${{ matrix.os }}.tar.gz
           retention-days: 7
 
@@ -104,7 +104,7 @@ jobs:
       - name: Download shared lib dependencies
         uses: actions/download-artifact@v4
         with:
-          name: shared-lib-deps-${{ matrix.os }}-${{ strategy.job-index }}
+          name: shared-lib-deps-${{ matrix.os }}
           path: ./deps_archive/
 
       - name: Extract dependencies

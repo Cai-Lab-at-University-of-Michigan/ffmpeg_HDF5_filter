@@ -55,7 +55,7 @@ fi
 cd ffmpeg
 
 if command -v nvcc &> /dev/null; then
-    CUDA_FLAGS="--enable-cuda-nvcc --enable-libnpp"
+    CUDA_FLAGS="--enable-cuda-nvcc --enable-libnpp --enable-nvenc --enable-nvdec"
 else
     CUDA_FLAGS=""
 fi
@@ -65,9 +65,25 @@ fi
 make -j$(nproc)
 make install
 
+export LD_LIBRARY_PATH="$HOME/ffmpeg/lib:$HOME/miniconda/lib:$LD_LIBRARY_PATH"
+
+echo "Verifying FFmpeg installation..."
+$HOME/ffmpeg/bin/ffmpeg -version
+
+cd $GITHUB_WORKSPACE
 mkdir -p deps/ffmpeg deps/miniconda
 cp -r $HOME/ffmpeg/* deps/ffmpeg/
 cp -r $HOME/miniconda/lib deps/miniconda/
 cp -r $HOME/miniconda/include deps/miniconda/
 cp -r $HOME/miniconda/share deps/miniconda/
 cp -r $HOME/miniconda/bin deps/miniconda/
+echo "=== Current directory ==="
+pwd
+echo "=== Directory contents ==="
+ls -la
+echo "=== deps directory contents ==="
+ls -la deps/ || echo "deps directory not found"
+echo "=== deps/ffmpeg contents ==="
+ls -la deps/ffmpeg/ | head -10 || echo "deps/ffmpeg not found"
+echo "=== deps/miniconda contents ==="
+ls -la deps/miniconda/ | head -10 || echo "deps/miniconda not found"
