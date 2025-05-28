@@ -19,9 +19,16 @@ curl -L --retry 3 --retry-delay 5 ^
   https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6-win-vs2022_cl.zip ^
   -o hdf5-msvc.zip
 
-7z x hdf5-msvc.zip -ohdf5-msvc
+:: First unzip: outer archive
+7z x hdf5-msvc.zip -ohdf5_outer
 
-for /D %%D in (hdf5-msvc\hdf5-*-win-vs2022_cl) do (
+:: Second unzip: nested HDF5 zip file
+for %%F in (hdf5_outer\*.zip) do (
+    7z x "%%F" -ohdf5_msvc
+)
+
+:: Copy headers, libs, DLLs
+for /D %%D in (hdf5_msvc\HDF5-*-win64) do (
     xcopy "%%D\include\*" %FFMPEG_ROOT%\include\ /E /I /Q
     xcopy "%%D\lib\*" %FFMPEG_ROOT%\lib\ /E /I /Q
     xcopy "%%D\bin\*.dll" %FFMPEG_ROOT%\bin\ /E /I /Q
