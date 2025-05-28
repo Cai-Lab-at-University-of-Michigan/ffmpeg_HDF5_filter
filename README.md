@@ -1,6 +1,4 @@
-# FFMPEG HDF5 Filter
-
-## High-Ratio Image Compression for Scientific Data
+# FFMPEG HDF5 Filter Enables High-Ratio Image Compression for Faithful Scientific Analysis
 
 The FFMPEG HDF5 filter enables high-ratio compression of scientific datasets in HDF5 files using video codec technology. It supports a wide range of codecs (H.264, H.265/HEVC, AV1, etc.) with hardware acceleration options for NVIDIA GPUs and Intel QuickSync.
 
@@ -19,21 +17,24 @@ The FFMPEG HDF5 filter enables high-ratio compression of scientific datasets in 
 ### Via pip (recommended)
 
 ```bash
-# Basic installation
 pip install h5ffmpeg
 ```
 
 ### Using pre-built binaries for ImageJ/Fiji
 
-We recommend using our imageJ update sites.
+We recommend using our imageJ update sites. 
 
-### From source
+**Note:** Due to the limitation of static built ffmpeg to comply with Java, some codecs are not supported. We **strongly recommend** using our python package. If working with large-scale dataset, [SISF_CDN](https://github.com/Cai-Lab-at-University-of-Michigan/SISF_CDN) with [neuroglancer](https://github.com/google/neuroglancer) is recommended.
+
+### From source (not recommended)
 
 ```bash
 git clone https://github.com/Cai-Lab-at-University-of-Michigan/ffmpeg_HDF5_filter.git
 cd ffmpeg_HDF5_filter
 pip install -e .
 ```
+
+**This is not recommended since it requires compiling FFmpeg from source with HDF5 support, which is complex and error-prone. Our pip package includes pre-built, tested binaries.**
 
 ## Quick Start
 
@@ -76,7 +77,7 @@ compression_options = hf.ffmpeg(
     tune="film",            # Content-specific optimization
     crf=23,                 # Quality level (lower = higher quality)
     bit_mode=hf.BitMode.BIT_10,  # 8, 10, or 12-bit encoding
-    film_grain=50,          # Film grain synthesis (0-100)
+    film_grain=50,          # Film grain synthesis (0-50)
     gpu_id=0                # GPU ID (Default: 0)
 )
 ```
@@ -97,16 +98,6 @@ compression_options = hf.ffmpeg(
 )
 ```
 
-## ImageJ/Fiji Integration
-
-The FFMPEG HDF5 filter can be used directly within ImageJ/Fiji:
-
-1. Install the plugin from our pre-built binaries
-2. Open your HDF5 files with compressed datasets
-3. The plugin will automatically handle decompression for visualization
-
-Check the `examples` folder in the repository for Jupyter notebook examples showing various use cases.
-
 ## Available Codecs
 
 | Codec | Implementation | Description | Typical Use Case |
@@ -123,10 +114,10 @@ Check the `examples` folder in the repository for Jupyter notebook examples show
 
 ## Compatibility
 
-- **Python**: 3.10+
-- **Operating Systems**: Linux, macOS, Windows
-- **HDF5**: 1.10+
-- **H5Py**: 3.0+
+- **Python**: 3.11+
+- **Operating Systems**: Linux-x86_64, macOS Apple Silicon, and Windows-AMD64
+- **hdf5**: 1.14+
+- **h5py**: 3.8+
 
 ## License
 
@@ -152,6 +143,8 @@ This work was funded by the United States National Institutes of Health (NIH) gr
 
 ## Related Projects
 
-Check out other tools from the Cai Lab:
+Feel free to check out other tools from the Cai Lab:)
 - [nGauge](https://github.com/Cai-Lab-at-University-of-Michigan/nGauge): Python library for neuron morphology analysis
 - [nTracer2](https://github.com/Cai-Lab-at-University-of-Michigan/nTracer2): Browser-based tool for neuron tracing
+- [pySISF](https://github.com/Cai-Lab-at-University-of-Michigan/pySISF): Python wrapper for SISF format
+- [SISF_CDN](https://github.com/Cai-Lab-at-University-of-Michigan/SISF_CDN):Scalable Image Storage Format CDN
