@@ -308,8 +308,6 @@ else:
         libraries.extend([
             'hdf5',           # Main HDF5 library
             'hdf5_hl',        # High-level HDF5 APIs
-            'szip',           # Compression library used by HDF5
-            'zlib',           # Another compression library
             'shlwapi'         # Windows system library
         ])
     else:
