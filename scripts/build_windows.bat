@@ -15,25 +15,47 @@ for %%D in ("%FFMPEG_ROOT%" "%FFMPEG_ROOT%\bin" "%FFMPEG_ROOT%\lib" "%FFMPEG_ROO
 cd /D "%TEMP_BUILD%"
 
 :: ----------------------------------------------------------------------------
+:: Check if 7-Zip is available
+7z | find "7-Zip" >nul
+if errorlevel 1 (
+    echo ❌ 7-Zip not found in PATH.
+    exit /b 1
+)
+
+:: ----------------------------------------------------------------------------
 :: Download and extract HDF5 (MSVC-compatible)
-echo Downloading HDF5 for MSVC...
+echo 📥 Downloading HDF5 for MSVC...
 curl -L --retry 3 --retry-delay 5 ^
   https://github.com/HDFGroup/hdf5/releases/download/hdf5_1.14.6/hdf5-1.14.6-win-vs2022_cl.zip ^
   -o hdf5-msvc.zip
 
+echo 📦 Extracting outer HDF5 zip...
 7z x hdf5-msvc.zip -ohdf5_outer
 
 pushd hdf5_outer
 
-:: Extract nested zip (wildcard in case of version variation)
+:: ----------------------------------------------------------------------------
+:: Extract inner HDF5 zip
+echo 🔍 Looking for inner zip file...
+set "found_zip=false"
 for %%F in (*.zip) do (
+    echo 📦 Extracting inner zip: %%F
     7z x "%%F" -ohdf5_msvc
-    goto :hdf5_unzipped
+    set found_zip=true
+    goto :after_hdf5_unzip
 )
-:hdf5_unzipped
 
+:after_hdf5_unzip
+if not !found_zip! == true (
+    echo ❌ No inner zip file found inside hdf5_outer!
+    dir /B
+    exit /b 1
+)
+
+:: ----------------------------------------------------------------------------
+:: Copy headers, libs, DLLs
 for /D %%D in (hdf5_msvc\HDF5-*-win64) do (
-    echo Copying HDF5 files from %%D...
+    echo 📁 Copying HDF5 files from %%D...
     xcopy /E /I /Q /Y "%%D\include\*" "%FFMPEG_ROOT%\include\"
     xcopy /E /I /Q /Y "%%D\lib\*" "%FFMPEG_ROOT%\lib\"
     xcopy /E /I /Q /Y "%%D\bin\*.dll" "%FFMPEG_ROOT%\bin\"
@@ -43,15 +65,18 @@ popd
 
 :: ----------------------------------------------------------------------------
 :: Download and extract FFmpeg (MSVC-compatible)
-echo Downloading FFmpeg for MSVC...
+echo 📥 Downloading FFmpeg for MSVC...
 curl -L --retry 3 --retry-delay 5 ^
   https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-full_build-shared.zip ^
   -o ffmpeg-msvc.zip
 
+echo 📦 Extracting FFmpeg...
 7z x ffmpeg-msvc.zip -offmpeg_msvc
 
+:: ----------------------------------------------------------------------------
+:: Copy FFmpeg headers, libs, DLLs
 for /D %%D in (ffmpeg_msvc\ffmpeg-*-full_build-shared) do (
-    echo Copying FFmpeg files from %%D...
+    echo 📁 Copying FFmpeg files from %%D...
     xcopy /E /I /Q /Y "%%D\include\*" "%FFMPEG_ROOT%\include\"
     xcopy /E /I /Q /Y "%%D\lib\*" "%FFMPEG_ROOT%\lib\"
     xcopy /E /I /Q /Y "%%D\bin\*.dll" "%FFMPEG_ROOT%\bin\"
