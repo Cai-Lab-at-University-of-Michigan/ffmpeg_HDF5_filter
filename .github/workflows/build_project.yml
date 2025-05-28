@@ -65,16 +65,24 @@ jobs:
             fi
             
             echo "Windows package structure:"
-            find shared_lib_package/ -type d | head -10
+            find shared_lib_package/ -type d | head -10 || echo "Error listing directories" 
             echo "Key files:"
-            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.dll" -o -name "*.lib" | head -20
+            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.dll" -o -name "*.lib" 2>/dev/null | head -20 || echo "No key files found"
             
           elif [[ "${{ runner.os }}" == "macOS" ]]; then
             echo "Packaging macOS complete build environment..."
             
+            echo "=== Checking macOS directories ==="
+            ls -la ~/ | grep -E "(ffmpeg|miniconda)" || echo "No ffmpeg/miniconda dirs in home"
+            ls -la ~/ffmpeg/ || echo "~/ffmpeg not found"
+            ls -la ~/miniconda/ || echo "~/miniconda not found"
+            
             if [[ -d "$HOME/ffmpeg" ]]; then
               mkdir -p shared_lib_package/ffmpeg
               cp -r ~/ffmpeg/* shared_lib_package/ffmpeg/ 2>/dev/null || echo "Error copying FFmpeg"
+              echo "Copied FFmpeg from ~/ffmpeg"
+            else
+              echo "WARNING: ~/ffmpeg not found"
             fi
             
             if [[ -d "$HOME/miniconda" ]]; then
@@ -83,33 +91,53 @@ jobs:
               cp -r ~/miniconda/include shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda include"
               cp -r ~/miniconda/share shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda share"
               cp -r ~/miniconda/bin shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda bin"
+              echo "Copied conda from ~/miniconda"
+            else
+              echo "WARNING: ~/miniconda not found"
             fi
             
             echo "macOS package structure:"
-            find shared_lib_package/ -type d | head -10
+            find shared_lib_package/ -type d 2>/dev/null | head -10 || echo "Error listing directories"
             echo "Key files:"
-            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.dylib" | head -20
+            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.dylib" 2>/dev/null | head -20 || echo "No key files found"
             
           else
-            echo "Packaging Linux complete build environment..."
+            echo "Packaging Linux libraries from copied build archive..."
             
-            if [[ -d "/opt/ffmpeg" ]]; then
-              mkdir -p shared_lib_package/ffmpeg
-              cp -r /opt/ffmpeg/* shared_lib_package/ffmpeg/ 2>/dev/null || echo "Error copying FFmpeg"
-            fi
-            
-            if [[ -d "/opt/miniconda" ]]; then
-              mkdir -p shared_lib_package/miniconda
-              cp -r /opt/miniconda/lib shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda lib"
-              cp -r /opt/miniconda/include shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda include"
-              cp -r /opt/miniconda/share shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda share"
-              cp -r /opt/miniconda/bin shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda bin"
+            if [[ -f "./build_deps.tar.gz" ]]; then
+              echo "Found build archive, extracting..."
+              tar -xzf ./build_deps.tar.gz
+              
+              if [[ -d "./ffmpeg" ]]; then
+                mkdir -p shared_lib_package/ffmpeg
+                cp -r ./ffmpeg/* shared_lib_package/ffmpeg/ 2>/dev/null || echo "Error copying FFmpeg"
+                echo "Copied FFmpeg from archive"
+              fi
+              
+              if [[ -d "./miniconda" ]]; then
+                mkdir -p shared_lib_package/miniconda
+                cp -r ./miniconda/* shared_lib_package/miniconda/ 2>/dev/null || echo "Error copying conda"
+                echo "Copied conda from archive"
+              fi
+              
+            else
+              echo "No build archive found, extracting from wheel as fallback..."
+              wheel_file=$(find ./wheelhouse/ -name "*.whl" | head -1)
+              if [[ -n "$wheel_file" ]]; then
+                echo "Extracting from wheel: $wheel_file"
+                mkdir -p wheel_extracted
+                python -m zipfile -e "$wheel_file" wheel_extracted/
+                cp -r wheel_extracted/* shared_lib_package/ 2>/dev/null || echo "Error copying wheel contents"
+                echo "Copied entire wheel structure"
+              else
+                echo "ERROR: No wheel file found for extraction"
+              fi
             fi
             
             echo "Linux package structure:"
-            find shared_lib_package/ -type d | head -10
+            find shared_lib_package/ -type d | head -10 || echo "Error listing directories"
             echo "Key files:"
-            find shared_lib_package/ -name "*.pc" -o -name "*.cmake" -o -name "*.so*" | head -20
+            find shared_lib_package/ -name "*.pc" -o -name "*.so*" 2>/dev/null | head -20 || echo "No key files found"
           fi
           
           tar -czf shared_lib_deps_${{ matrix.os }}.tar.gz -C shared_lib_package .
