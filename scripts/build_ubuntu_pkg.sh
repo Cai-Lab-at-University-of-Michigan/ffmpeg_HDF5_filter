@@ -11,7 +11,7 @@ $HOME/miniconda/bin/conda config --add channels conda-forge
 $HOME/miniconda/bin/conda config --set channel_priority strict
 $HOME/miniconda/bin/conda update -y conda
 
-$HOME/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd openssl -c conda-forge
+$HOME/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd openssl libiconv -c conda-forge
 $HOME/miniconda/bin/conda install -y libva libdrm libvpl -c conda-forge || echo "Hardware acceleration libs not available"
 
 pip install nvidia-cuda-nvcc
