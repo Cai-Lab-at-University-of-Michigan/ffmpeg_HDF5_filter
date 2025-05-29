@@ -1,4 +1,4 @@
-set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+set(DEPS_ROOT "${HOME}")
 set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg")
 set(HDF5_ROOT "${DEPS_ROOT}/miniconda")
 
@@ -114,7 +114,7 @@ install(CODE "
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Current dependencies:\")
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${current_deps}\")
         
-        string(REGEX MATCHALL \"([^\\r\\n\\t ]+\\.so[^\\r\\n\\t ]*)\" matches \"\${current_deps}\")
+        string(REGEX MATCHALL \"([^\\r\\n\\t ]+[.]so[^\\r\\n\\t ]*)\" matches \"\${current_deps}\")
         
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nParsed dependencies:\")
         foreach(match \${matches})
@@ -124,7 +124,7 @@ install(CODE "
             if(CMAKE_MATCH_1 AND NOT CMAKE_MATCH_1 STREQUAL \"(0x\")
                 set(dep_path \"\${CMAKE_MATCH_1}\")
             else()
-                string(REGEX MATCH \"(/[^ ]+\\.so[^ ]*)\" abs_match \"\${match}\")
+                string(REGEX MATCH \"(/[^ ]+[.]so[^ ]*)\" abs_match \"\${match}\")
                 if(CMAKE_MATCH_1)
                     set(dep_path \"\${CMAKE_MATCH_1}\")
                 endif()

@@ -1,9 +1,20 @@
-set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+set(DEPS_ROOT "${HOME}")
 set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg")
 set(HDF5_ROOT "${DEPS_ROOT}/miniconda")
 
-message(STATUS "FFMPEG_ROOT: ${FFMPEG_ROOT}")
-message(STATUS "HDF5_ROOT: ${HDF5_ROOT}")
+message(STATUS "Looking for dependencies in:")
+message(STATUS "  DEPS_ROOT: ${DEPS_ROOT}")
+message(STATUS "  FFMPEG_ROOT: ${FFMPEG_ROOT}")  
+message(STATUS "  HDF5_ROOT: ${HDF5_ROOT}")
+
+# Debug: Show what's actually in the deps directory
+if(EXISTS "${DEPS_ROOT}")
+    execute_process(COMMAND find "${DEPS_ROOT}" -name "*.dylib" -type f OUTPUT_VARIABLE FOUND_DYLIBS)
+    message(STATUS "Found .dylib files in deps:")
+    message(STATUS "${FOUND_DYLIBS}")
+else()
+    message(WARNING "DEPS_ROOT directory does not exist: ${DEPS_ROOT}")
+endif()
 
 find_path(FFMPEG_INCLUDE_DIR 
     NAMES libavcodec/avcodec.h
@@ -17,18 +28,19 @@ find_path(HDF5_INCLUDE_DIR
     NO_DEFAULT_PATH
 )
 
+# Fix: Separate FFmpeg and HDF5 library searches
 set(FFMPEG_LIBRARIES "")
 foreach(lib avcodec avformat avutil swscale swresample avfilter)
     find_library(FFMPEG_${lib}_LIBRARY
         NAMES ${lib}
-        PATHS ${FFMPEG_ROOT}/lib ${HDF5_ROOT}/lib
+        PATHS ${FFMPEG_ROOT}/lib  # Only FFmpeg path
         NO_DEFAULT_PATH
     )
     if(FFMPEG_${lib}_LIBRARY)
         list(APPEND FFMPEG_LIBRARIES ${FFMPEG_${lib}_LIBRARY})
         message(STATUS "Found FFmpeg ${lib}: ${FFMPEG_${lib}_LIBRARY}")
     else()
-        message(WARNING "FFmpeg ${lib} NOT FOUND!")
+        message(WARNING "FFmpeg ${lib} not found!")
     endif()
 endforeach()
 
@@ -42,6 +54,12 @@ if(HDF5_C_LIBRARY)
     message(STATUS "Found HDF5: ${HDF5_C_LIBRARY}")
 else()
     message(WARNING "HDF5 NOT FOUND!")
+endif()
+
+if(HDF5_C_LIBRARY)
+    message(STATUS "Found HDF5: ${HDF5_C_LIBRARY}")
+else()
+    message(WARNING "HDF5 not found!")
 endif()
 
 add_library(h5ffmpeg_shared SHARED
@@ -89,71 +107,40 @@ install(FILES src/ffmpeg_h5filter.h
     DESTINATION include
 )
 
-install(CODE "
-    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== INSTALL DEBUG INFO ===\")
-    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Install prefix: \${CMAKE_INSTALL_PREFIX}\")
-    
-    file(GLOB installed_files \"\${CMAKE_INSTALL_PREFIX}/lib/*\")
-    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Files in lib directory:\")
-    foreach(file \${installed_files})
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${file}\")
-    endforeach()
-    
-    set(MAIN_LIB \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\")
-    
-    if(EXISTS \"\${MAIN_LIB}\")
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFound main library: \${MAIN_LIB}\")
-        
-        execute_process(
-            COMMAND otool -L \"\${MAIN_LIB}\"
-            OUTPUT_VARIABLE current_deps
-            ERROR_QUIET
-        )
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Current dependencies:\")
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${current_deps}\")
-        
-        string(REGEX MATCHALL \"\\t([^\\t\\r\\n]+\\.dylib)\" matches \"\${current_deps}\")
-        
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nParsed dependencies:\")
-        foreach(match \${matches})
-            string(REGEX REPLACE \"\\t([^\\t\\r\\n]+\\.dylib).*\" \"\\\\1\" dep_path \"\${match}\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Dependency: \${dep_path}\")
+# Simpler approach: Bundle FFmpeg dependencies directly
+install(FILES 
+    ${FFMPEG_ROOT}/lib/libavcodec.62.dylib
+    ${FFMPEG_ROOT}/lib/libavformat.62.dylib  
+    ${FFMPEG_ROOT}/lib/libavutil.60.dylib
+    ${FFMPEG_ROOT}/lib/libswscale.9.dylib
+    ${FFMPEG_ROOT}/lib/libswresample.6.dylib
+    ${FFMPEG_ROOT}/lib/libavfilter.11.dylib
+    DESTINATION lib
+    OPTIONAL
+)
+
+COMMAND install_name_tool -change 
+            \"/Users/runner/ffmpeg/lib/libswscale.9.dylib\" 
+            \"@loader_path/libswscale.9.dylib\" 
+            \"\${MAIN_LIB}\" ERROR_QUIET)
             
-            if(NOT \"\${dep_path}\" MATCHES \"^/System/\" AND 
-               NOT \"\${dep_path}\" MATCHES \"^/usr/lib/\" AND
-               NOT \"\${dep_path}\" MATCHES \"^@loader_path\" AND
-               NOT \"\${dep_path}\" MATCHES \"^@rpath\" AND
-               NOT \"\${dep_path}\" MATCHES \"^@executable_path\")
-                
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Needs bundling: \${dep_path}\")
-                
-                if(EXISTS \"\${dep_path}\")
-                    get_filename_component(dep_name \"\${dep_path}\" NAME)
-                    file(COPY \"\${dep_path}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Copied \${dep_name}\")
-                    
-                    execute_process(
-                        COMMAND install_name_tool -change \"\${dep_path}\" \"@loader_path/\${dep_name}\" \"\${MAIN_LIB}\"
-                        ERROR_QUIET
-                    )
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Fixed reference to \${dep_name}\")
-                else()
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> ERROR: File does not exist: \${dep_path}\")
-                endif()
-            else()
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Skipping system library: \${dep_path}\")
-            endif()
-        endforeach()
+        execute_process(COMMAND install_name_tool -change 
+            \"/Users/runner/ffmpeg/lib/libswresample.6.dylib\" 
+            \"@loader_path/libswresample.6.dylib\" 
+            \"\${MAIN_LIB}\" ERROR_QUIET)
+            
+        execute_process(COMMAND install_name_tool -change 
+            \"/Users/runner/ffmpeg/lib/libavfilter.11.dylib\" 
+            \"@loader_path/libavfilter.11.dylib\" 
+            \"\${MAIN_LIB}\" ERROR_QUIET)
         
-        execute_process(
-            COMMAND otool -L \"\${MAIN_LIB}\"
-            OUTPUT_VARIABLE final_deps
-            ERROR_QUIET
-        )
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFinal dependencies:\")
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${final_deps}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Install name fixing completed\")
         
+        # Verify the result
+        execute_process(COMMAND otool -L \"\${MAIN_LIB}\" OUTPUT_VARIABLE OTOOL_OUTPUT)
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Final dependencies:\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${OTOOL_OUTPUT}\")
     else()
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"ERROR: Main library not found at \${MAIN_LIB}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"WARNING: Main library not found at \${MAIN_LIB}\")
     endif()
 ")

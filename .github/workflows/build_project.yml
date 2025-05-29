@@ -113,6 +113,27 @@ jobs:
           mkdir -p deps
           cd deps_archive
           tar -xzf shared_lib_deps_${{ matrix.os }}.tar.gz -C ../deps/
+          
+          if [[ "${{ runner.os }}" == "macOS" ]]; then
+            if [[ -d "../deps/ffmpeg" ]]; then
+              mkdir -p ~/ffmpeg
+              cp -r ../deps/ffmpeg/* ~/ffmpeg/
+              echo "Restored FFmpeg to ~/ffmpeg"
+            fi
+            
+            if [[ -d "../deps/miniconda" ]]; then
+              mkdir -p ~/miniconda
+              cp -r ../deps/miniconda/* ~/miniconda/
+              echo "Restored miniconda to ~/miniconda"
+            fi
+            
+          elif [[ "${{ runner.os }}" == "Windows" ]]; then
+            if [[ -d "../deps" ]]; then
+              mkdir -p D:/a/ffmpeg_build
+              cp -r ../deps/* D:/a/ffmpeg_build/
+              echo "Restored dependencies to D:/a/ffmpeg_build"
+            fi
+          fi
 
       - name: Build shared library
         shell: bash

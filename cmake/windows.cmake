@@ -1,6 +1,6 @@
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
+set(DEPS_ROOT "D:/a/ffmpeg_build/")
 set(FFMPEG_ROOT "${DEPS_ROOT}")
 set(HDF5_ROOT "${DEPS_ROOT}")
 
