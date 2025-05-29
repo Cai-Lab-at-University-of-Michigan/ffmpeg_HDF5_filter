@@ -2,6 +2,9 @@ set(DEPS_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/deps")
 set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg")
 set(HDF5_ROOT "${DEPS_ROOT}/miniconda")
 
+message(STATUS "FFMPEG_ROOT: ${FFMPEG_ROOT}")
+message(STATUS "HDF5_ROOT: ${HDF5_ROOT}")
+
 find_path(FFMPEG_INCLUDE_DIR 
     NAMES libavcodec/avcodec.h
     PATHS ${FFMPEG_ROOT}/include
@@ -23,6 +26,9 @@ foreach(lib avcodec avformat avutil swscale swresample avfilter)
     )
     if(FFMPEG_${lib}_LIBRARY)
         list(APPEND FFMPEG_LIBRARIES ${FFMPEG_${lib}_LIBRARY})
+        message(STATUS "Found FFmpeg ${lib}: ${FFMPEG_${lib}_LIBRARY}")
+    else()
+        message(WARNING "FFmpeg ${lib} NOT FOUND!")
     endif()
 endforeach()
 
@@ -31,6 +37,12 @@ find_library(HDF5_C_LIBRARY
     PATHS ${HDF5_ROOT}/lib
     NO_DEFAULT_PATH
 )
+
+if(HDF5_C_LIBRARY)
+    message(STATUS "Found HDF5: ${HDF5_C_LIBRARY}")
+else()
+    message(WARNING "HDF5 NOT FOUND!")
+endif()
 
 add_library(h5ffmpeg_shared SHARED
     src/ffmpeg_h5filter.c
@@ -67,79 +79,6 @@ set_target_properties(h5ffmpeg_shared PROPERTIES
     INSTALL_NAME_DIR "@loader_path"
 )
 
-function(get_dylib_dependencies dylib_path output_var)
-    execute_process(
-        COMMAND otool -L "${dylib_path}"
-        OUTPUT_VARIABLE deps_output
-        ERROR_QUIET
-    )
-    
-    string(REGEX MATCHALL "[^\r\n\t ]+\\.dylib" dylib_list "${deps_output}")
-    
-    set(system_paths
-        "/usr/lib/" "/System/Library/" "/Library/Frameworks/"
-        "@rpath/" "@loader_path/" "@executable_path/"
-    )
-    
-    set(filtered_deps "")
-    foreach(dep ${dylib_list})
-        set(is_system FALSE)
-        foreach(sys_path ${system_paths})
-            if("${dep}" MATCHES "^${sys_path}")
-                set(is_system TRUE)
-                break()
-            endif()
-        endforeach()
-        
-        if(NOT is_system)
-            list(APPEND filtered_deps "${dep}")
-        endif()
-    endforeach()
-    
-    set(${output_var} "${filtered_deps}" PARENT_SCOPE)
-endfunction()
-
-function(bundle_dependencies target_dylib)
-    get_dylib_dependencies("${target_dylib}" deps)
-    
-    foreach(dep ${deps})
-        get_filename_component(dylib_name "${dep}" NAME)
-        set(found_dylib "")
-        
-        file(GLOB_RECURSE dylib_candidates 
-            "${FFMPEG_ROOT}/lib/${dylib_name}"
-            "${HDF5_ROOT}/lib/${dylib_name}"
-        )
-        
-        if(dylib_candidates)
-            list(GET dylib_candidates 0 found_dylib)
-        endif()
-        
-        if(found_dylib AND EXISTS "${found_dylib}")
-            install(FILES "${found_dylib}" DESTINATION lib)
-            bundle_dependencies("${found_dylib}")
-        endif()
-    endforeach()
-endfunction()
-
-function(fix_install_names target_dylib)
-    execute_process(
-        COMMAND otool -L "${target_dylib}"
-        OUTPUT_VARIABLE deps_output
-        ERROR_QUIET
-    )
-    
-    string(REGEX MATCHALL "[^\r\n\t ]+\\.dylib" dylib_list "${deps_output}")
-    
-    foreach(dep ${dylib_list})
-        get_filename_component(dep_name "${dep}" NAME)
-        execute_process(
-            COMMAND install_name_tool -change "${dep}" "@loader_path/${dep_name}" "${target_dylib}"
-            ERROR_QUIET
-        )
-    endforeach()
-endfunction()
-
 install(TARGETS h5ffmpeg_shared
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -151,55 +90,70 @@ install(FILES src/ffmpeg_h5filter.h
 )
 
 install(CODE "
-    set(FFMPEG_ROOT \"${FFMPEG_ROOT}\")
-    set(HDF5_ROOT \"${HDF5_ROOT}\")
+    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== INSTALL DEBUG INFO ===\")
+    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Install prefix: \${CMAKE_INSTALL_PREFIX}\")
     
-    file(GLOB installed_dylibs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
-    foreach(dylib \${installed_dylibs})
-        get_filename_component(dylib_name \"\${dylib}\" NAME)
-        if(\"\${dylib_name}\" MATCHES \"^libh5ffmpeg_shared[.]dylib\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundling dependencies for \${dylib}\")
-            
-            # Get dependencies using otool
-            execute_process(
-                COMMAND otool -L \"\${dylib}\"
-                OUTPUT_VARIABLE deps_output
-                ERROR_QUIET
-            )
-            
-            # Extract dylib paths
-            string(REGEX MATCHALL \"[^\\r\\n\\t ]+[.]dylib\" dylib_list \"\${deps_output}\")
-            
-            foreach(dep \${dylib_list})
-                # Skip system libraries and self-reference
-                if(NOT \"\${dep}\" MATCHES \"^/System/\" AND 
-                   NOT \"\${dep}\" MATCHES \"^/usr/lib/\" AND
-                   NOT \"\${dep}\" MATCHES \"@loader_path\" AND
-                   NOT \"\${dep}\" MATCHES \"@rpath\")
-                    
-                    get_filename_component(dep_name \"\${dep}\" NAME)
-                    
-                    # Find the actual library file
-                    if(EXISTS \"\${dep}\")
-                        file(COPY \"\${dep}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
-                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled \${dep_name}\")
-                        
-                        # Fix the reference in main library
-                        execute_process(
-                            COMMAND install_name_tool -change \"\${dep}\" \"@loader_path/\${dep_name}\" \"\${dylib}\"
-                            ERROR_QUIET
-                        )
-                    endif()
-                endif()
-            endforeach()
-            
-            # Fix HDF5 rpath reference
-            execute_process(
-                COMMAND install_name_tool -change \"@rpath/libhdf5.310.dylib\" \"@loader_path/libhdf5.310.dylib\" \"\${dylib}\"
-                ERROR_QUIET
-            )
-            
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixed install names for \${dylib}\")
-        endif()
+    file(GLOB installed_files \"\${CMAKE_INSTALL_PREFIX}/lib/*\")
+    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Files in lib directory:\")
+    foreach(file \${installed_files})
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${file}\")
     endforeach()
+    
+    set(MAIN_LIB \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\")
+    
+    if(EXISTS \"\${MAIN_LIB}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFound main library: \${MAIN_LIB}\")
+        
+        execute_process(
+            COMMAND otool -L \"\${MAIN_LIB}\"
+            OUTPUT_VARIABLE current_deps
+            ERROR_QUIET
+        )
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Current dependencies:\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${current_deps}\")
+        
+        string(REGEX MATCHALL \"\\t([^\\t\\r\\n]+\\.dylib)\" matches \"\${current_deps}\")
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nParsed dependencies:\")
+        foreach(match \${matches})
+            string(REGEX REPLACE \"\\t([^\\t\\r\\n]+\\.dylib).*\" \"\\\\1\" dep_path \"\${match}\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Dependency: \${dep_path}\")
+            
+            if(NOT \"\${dep_path}\" MATCHES \"^/System/\" AND 
+               NOT \"\${dep_path}\" MATCHES \"^/usr/lib/\" AND
+               NOT \"\${dep_path}\" MATCHES \"^@loader_path\" AND
+               NOT \"\${dep_path}\" MATCHES \"^@rpath\" AND
+               NOT \"\${dep_path}\" MATCHES \"^@executable_path\")
+                
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Needs bundling: \${dep_path}\")
+                
+                if(EXISTS \"\${dep_path}\")
+                    get_filename_component(dep_name \"\${dep_path}\" NAME)
+                    file(COPY \"\${dep_path}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Copied \${dep_name}\")
+                    
+                    execute_process(
+                        COMMAND install_name_tool -change \"\${dep_path}\" \"@loader_path/\${dep_name}\" \"\${MAIN_LIB}\"
+                        ERROR_QUIET
+                    )
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Fixed reference to \${dep_name}\")
+                else()
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> ERROR: File does not exist: \${dep_path}\")
+                endif()
+            else()
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Skipping system library: \${dep_path}\")
+            endif()
+        endforeach()
+        
+        execute_process(
+            COMMAND otool -L \"\${MAIN_LIB}\"
+            OUTPUT_VARIABLE final_deps
+            ERROR_QUIET
+        )
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFinal dependencies:\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${final_deps}\")
+        
+    else()
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"ERROR: Main library not found at \${MAIN_LIB}\")
+    endif()
 ")
