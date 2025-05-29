@@ -1,62 +1,158 @@
+message(STATUS "=== WINDOWS CMAKE DEBUG START ===")
+
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-set(DEPS_ROOT "D:/a/ffmpeg_build/")
-set(FFMPEG_ROOT "${DEPS_ROOT}")
-set(HDF5_ROOT "${DEPS_ROOT}")
+execute_process(COMMAND whoami OUTPUT_VARIABLE CURRENT_USER OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+execute_process(COMMAND cd OUTPUT_VARIABLE CURRENT_DIR OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+message(STATUS "User: ${CURRENT_USER}, Dir: ${CURRENT_DIR}")
+
+set(DEPS_ROOT "$ENV{HOME}")
+set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg_build")
+set(HDF5_ROOT "${DEPS_ROOT}/ffmpeg_build")
 
 message(STATUS "DEPS_ROOT: ${DEPS_ROOT}")
 message(STATUS "FFMPEG_ROOT: ${FFMPEG_ROOT}")
 message(STATUS "HDF5_ROOT: ${HDF5_ROOT}")
 
+if(EXISTS "${DEPS_ROOT}")
+    message(STATUS "✓ DEPS_ROOT exists")
+    execute_process(COMMAND dir "${DEPS_ROOT}" OUTPUT_VARIABLE DEPS_LISTING ERROR_QUIET)
+    message(STATUS "DEPS_ROOT contents:\n${DEPS_LISTING}")
+    
+    execute_process(COMMAND dir "${DEPS_ROOT}\\*.dll" /s OUTPUT_VARIABLE FOUND_DLLS ERROR_QUIET)
+    if(FOUND_DLLS)
+        message(STATUS "Found DLLs:\n${FOUND_DLLS}")
+    else()
+        message(STATUS "No DLLs found")
+    endif()
+else()
+    message(WARNING "✗ DEPS_ROOT missing: ${DEPS_ROOT}")
+endif()
+
+if(EXISTS "${FFMPEG_ROOT}/lib")
+    execute_process(COMMAND dir "${FFMPEG_ROOT}\\lib" OUTPUT_VARIABLE FFMPEG_LIB_LISTING ERROR_QUIET)
+    message(STATUS "FFMPEG lib:\n${FFMPEG_LIB_LISTING}")
+else()
+    message(WARNING "✗ FFMPEG lib missing")
+endif()
+
+if(EXISTS "${FFMPEG_ROOT}/include")
+    execute_process(COMMAND dir "${FFMPEG_ROOT}\\include" OUTPUT_VARIABLE FFMPEG_INC_LISTING ERROR_QUIET)
+    message(STATUS "FFMPEG include:\n${FFMPEG_INC_LISTING}")
+else()
+    message(WARNING "✗ FFMPEG include missing")
+endif()
+
+if(EXISTS "${HDF5_ROOT}/lib")
+    execute_process(COMMAND dir "${HDF5_ROOT}\\lib" OUTPUT_VARIABLE HDF5_LIB_LISTING ERROR_QUIET)
+    message(STATUS "HDF5 lib:\n${HDF5_LIB_LISTING}")
+else()
+    message(WARNING "✗ HDF5 lib missing")
+endif()
+
+if(EXISTS "${HDF5_ROOT}/include")
+    execute_process(COMMAND dir "${HDF5_ROOT}\\include" OUTPUT_VARIABLE HDF5_INC_LISTING ERROR_QUIET)
+    message(STATUS "HDF5 include:\n${HDF5_INC_LISTING}")
+else()
+    message(WARNING "✗ HDF5 include missing")
+endif()
+
 find_path(FFMPEG_INCLUDE_DIR 
     NAMES libavcodec/avcodec.h
-    PATHS ${FFMPEG_ROOT}/include
-    NO_DEFAULT_PATH
+    PATHS 
+        ${FFMPEG_ROOT}/include
+        "C:/vcpkg/installed/x64-windows/include"
+    DOC "FFmpeg include"
 )
+
+if(FFMPEG_INCLUDE_DIR)
+    message(STATUS "✓ FFMPEG headers: ${FFMPEG_INCLUDE_DIR}")
+else()
+    message(WARNING "✗ FFMPEG headers not found")
+endif()
 
 find_path(HDF5_INCLUDE_DIR 
     NAMES hdf5.h
-    PATHS ${HDF5_ROOT}/include
-    NO_DEFAULT_PATH
+    PATHS 
+        ${HDF5_ROOT}/include
+        "C:/vcpkg/installed/x64-windows/include"
+    DOC "HDF5 include"
 )
+
+if(HDF5_INCLUDE_DIR)
+    message(STATUS "✓ HDF5 headers: ${HDF5_INCLUDE_DIR}")
+else()
+    message(WARNING "✗ HDF5 headers not found")
+endif()
 
 set(FFMPEG_LIBRARIES "")
 foreach(lib avcodec avformat avutil swscale swresample avfilter)
+    message(STATUS "Searching ${lib}...")
+    
     find_library(FFMPEG_${lib}_LIBRARY
-        NAMES ${lib}
-        PATHS ${FFMPEG_ROOT}/lib
-        NO_DEFAULT_PATH
+        NAMES ${lib} lib${lib}
+        PATHS 
+            ${FFMPEG_ROOT}/lib
+            "C:/vcpkg/installed/x64-windows/lib"
+        DOC "FFmpeg ${lib}"
     )
+    
     if(FFMPEG_${lib}_LIBRARY)
         list(APPEND FFMPEG_LIBRARIES ${FFMPEG_${lib}_LIBRARY})
-        message(STATUS "Found FFmpeg ${lib}: ${FFMPEG_${lib}_LIBRARY}")
+        message(STATUS "✓ ${lib}: ${FFMPEG_${lib}_LIBRARY}")
     else()
-        message(WARNING "FFmpeg ${lib} NOT FOUND!")
+        message(WARNING "✗ ${lib} NOT FOUND")
     endif()
 endforeach()
 
 find_library(HDF5_C_LIBRARY
     NAMES hdf5 libhdf5
-    PATHS ${HDF5_ROOT}/lib
-    NO_DEFAULT_PATH
+    PATHS 
+        ${HDF5_ROOT}/lib
+        "C:/vcpkg/installed/x64-windows/lib"
+    DOC "HDF5 C library"
 )
 
 find_library(HDF5_HL_LIBRARY
     NAMES hdf5_hl libhdf5_hl
-    PATHS ${HDF5_ROOT}/lib
-    NO_DEFAULT_PATH
+    PATHS 
+        ${HDF5_ROOT}/lib
+        "C:/vcpkg/installed/x64-windows/lib"
+    DOC "HDF5 HL library"
 )
 
 if(HDF5_C_LIBRARY)
-    message(STATUS "Found HDF5: ${HDF5_C_LIBRARY}")
+    message(STATUS "✓ HDF5: ${HDF5_C_LIBRARY}")
 else()
-    message(WARNING "HDF5 NOT FOUND!")
+    message(WARNING "✗ HDF5 NOT FOUND")
 endif()
 
 if(HDF5_HL_LIBRARY)
-    message(STATUS "Found HDF5 HL: ${HDF5_HL_LIBRARY}")
+    message(STATUS "✓ HDF5 HL: ${HDF5_HL_LIBRARY}")
 else()
-    message(WARNING "HDF5 HL NOT FOUND!")
+    message(WARNING "✗ HDF5 HL NOT FOUND")
+endif()
+
+message(STATUS "=== SUMMARY ===")
+message(STATUS "FFMPEG_INCLUDE_DIR: ${FFMPEG_INCLUDE_DIR}")
+message(STATUS "HDF5_INCLUDE_DIR: ${HDF5_INCLUDE_DIR}")
+message(STATUS "FFMPEG_LIBRARIES: ${FFMPEG_LIBRARIES}")
+message(STATUS "HDF5_C_LIBRARY: ${HDF5_C_LIBRARY}")
+
+if(NOT FFMPEG_INCLUDE_DIR)
+    message(FATAL_ERROR "FFMPEG headers required")
+endif()
+
+if(NOT HDF5_INCLUDE_DIR)
+    message(FATAL_ERROR "HDF5 headers required")
+endif()
+
+if(NOT HDF5_C_LIBRARY)
+    message(FATAL_ERROR "HDF5 library required")
+endif()
+
+if(NOT FFMPEG_LIBRARIES)
+    message(FATAL_ERROR "FFmpeg libraries required")
 endif()
 
 add_library(h5ffmpeg_shared SHARED
@@ -102,45 +198,16 @@ install(FILES src/ffmpeg_h5filter.h
 )
 
 install(CODE "
-    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== WINDOWS INSTALL DEBUG INFO ===\")
+    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== WINDOWS INSTALL DEBUG ===\")
     execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Install prefix: \${CMAKE_INSTALL_PREFIX}\")
-    
-    file(GLOB installed_files \"\${CMAKE_INSTALL_PREFIX}/bin/*\")
-    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Files in bin directory:\")
-    foreach(file \${installed_files})
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${file}\")
-    endforeach()
     
     set(MAIN_DLL \"\${CMAKE_INSTALL_PREFIX}/bin/h5ffmpeg_shared.dll\")
     set(DEPS_ROOT \"${DEPS_ROOT}\")
     
     if(EXISTS \"\${MAIN_DLL}\")
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFound main DLL: \${MAIN_DLL}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✓ Main DLL: \${MAIN_DLL}\")
         
-        # Try to get dependencies using dumpbin if available
-        find_program(DUMPBIN_EXECUTABLE dumpbin)
-        if(DUMPBIN_EXECUTABLE)
-            execute_process(
-                COMMAND \"\${DUMPBIN_EXECUTABLE}\" /dependents \"\${MAIN_DLL}\"
-                OUTPUT_VARIABLE current_deps
-                ERROR_QUIET
-            )
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Current dependencies (dumpbin):\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${current_deps}\")
-            
-            # Parse dumpbin output for DLL names
-            string(REGEX MATCHALL \"([^\\r\\n\\t ]+\\.dll)\" dll_matches \"\${current_deps}\")
-            
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nParsed DLL dependencies:\")
-            foreach(dll_match \${dll_matches})
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  DLL: \${dll_match}\")
-            endforeach()
-        else()
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"dumpbin not found, using file-based bundling approach\")
-        endif()
-        
-        # Bundle all non-system DLLs from deps directory
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nSearching for DLLs in deps directory...\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Searching for DLLs in: \${DEPS_ROOT}\")
         file(GLOB_RECURSE all_dep_dlls \"\${DEPS_ROOT}/*.dll\")
         
         set(system_dlls 
@@ -151,15 +218,13 @@ install(CODE "
             \"winmm.dll\" \"crypt32.dll\" \"wldap32.dll\" \"normaliz.dll\"
         )
         
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Found \${CMAKE_MATCH_COUNT} DLL files in deps\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Found DLLs to process:\")
         
+        set(bundled_count 0)
         foreach(dep_dll \${all_dep_dlls})
             get_filename_component(dep_name \"\${dep_dll}\" NAME)
             string(TOLOWER \"\${dep_name}\" dep_name_lower)
             
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Checking: \${dep_name}\")
-            
-            # Check if it's a system DLL
             set(is_system FALSE)
             foreach(sys_dll \${system_dlls})
                 string(TOLOWER \"\${sys_dll}\" sys_dll_lower)
@@ -169,35 +234,42 @@ install(CODE "
                    \"\${dep_name_lower}\" MATCHES \"api-ms-.*[.]dll\" OR
                    \"\${dep_name_lower}\" MATCHES \"ucrtbase.*[.]dll\")
                     set(is_system TRUE)
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Skipping system DLL: \${dep_name}\")
                     break()
                 endif()
             endforeach()
             
-            # Copy non-system DLLs that don't already exist
             if(NOT is_system)
                 set(dest_dll \"\${CMAKE_INSTALL_PREFIX}/bin/\${dep_name}\")
                 if(NOT EXISTS \"\${dest_dll}\")
                     file(COPY \"\${dep_dll}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/bin\")
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Bundled: \${dep_name}\")
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  ✓ Bundled: \${dep_name}\")
+                    math(EXPR bundled_count \"\${bundled_count} + 1\")
                 else()
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    -> Already exists: \${dep_name}\")
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  - Exists: \${dep_name}\")
                 endif()
             endif()
         endforeach()
         
-        # Show final bundle contents
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nBundled \${bundled_count} DLLs\")
+        
         file(GLOB final_dlls \"\${CMAKE_INSTALL_PREFIX}/bin/*.dll\")
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFinal DLL bundle contents:\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFinal bundle contents:\")
         foreach(final_dll \${final_dlls})
             get_filename_component(final_name \"\${final_dll}\" NAME)
             file(SIZE \"\${final_dll}\" dll_size)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${final_name} (\${dll_size} bytes)\")
+            math(EXPR dll_size_kb \"\${dll_size} / 1024\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${final_name} (\${dll_size_kb} KB)\")
         endforeach()
         
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nWindows dependency bundling completed\")
-        
     else()
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"ERROR: Main DLL not found at \${MAIN_DLL}\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✗ Main DLL not found: \${MAIN_DLL}\")
+        
+        file(GLOB actual_files \"\${CMAKE_INSTALL_PREFIX}/bin/*\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Actually installed:\")
+        foreach(file \${actual_files})
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${file}\")
+        endforeach()
     endif()
 ")
+
+message(STATUS "=== WINDOWS CMAKE DEBUG END ===")
