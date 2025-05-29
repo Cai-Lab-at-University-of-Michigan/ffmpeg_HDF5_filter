@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-15]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -87,7 +87,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-15]
+        os: [windows-latest, macos-latest]
 
     steps:
       - uses: actions/checkout@v4
@@ -361,7 +361,7 @@ jobs:
             - **Java JAR** - ImageJ/Fiji plugin
             - **Shared Library Bundles** - Self-contained C libraries:
               - `h5ffmpeg_shared_bundle_windows-latest.zip` - Windows bundle
-              - `h5ffmpeg_shared_bundle_macos-15.tar.gz` - macOS bundle  
+              - `h5ffmpeg_shared_bundle_macos-latest.tar.gz` - macOS bundle  
               - `h5ffmpeg_shared_bundle_ubuntu-latest.tar.gz` - Linux bundle
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

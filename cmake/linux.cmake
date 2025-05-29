@@ -58,6 +58,22 @@ else()
     message(FATAL_ERROR "HDF5 library required")
 endif()
 
+find_library(ICONV_LIBRARY
+    NAMES iconv
+    PATHS 
+        ${HDF5_ROOT}/lib
+        ${FFMPEG_ROOT}/lib
+        /usr/lib
+        /usr/local/lib
+        /usr/lib/x86_64-linux-gnu
+)
+
+if(ICONV_LIBRARY)
+    message(STATUS "Found libiconv: ${ICONV_LIBRARY}")
+else()
+    message(WARNING "libiconv not found - may cause runtime issues")
+endif()
+
 add_library(h5ffmpeg_shared SHARED
     src/ffmpeg_h5filter.c
     src/ffmpeg_h5plugin.c
@@ -85,6 +101,7 @@ target_link_libraries(h5ffmpeg_shared
     PRIVATE
         ${FFMPEG_LIBRARIES}
         ${HDF5_C_LIBRARY}
+        ${ICONV_LIBRARY}
         m
         pthread
         dl
@@ -116,6 +133,7 @@ install(CODE "
             \"libavcodec\" \"libavformat\" \"libavutil\" \"libswscale\" \"libswresample\" \"libavfilter\"
             \"libhdf5\"
             \"libx264\" \"libx265\" \"libvpx\" \"libdav1d\" \"libaom\" \"librav1e\" \"libSvtAv1Enc\"
+            \"libiconv\"
         )
         
         file(GLOB_RECURSE candidate_files 
