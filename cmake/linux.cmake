@@ -238,7 +238,7 @@ install(FILES src/ffmpeg_h5filter.h
 )
 
 install(CODE "
-    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== LINUX INSTALL DEBUG ===\")
+    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== ENHANCED LINUX INSTALL DEBUG ===\")
     execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Install prefix: \${CMAKE_INSTALL_PREFIX}\")
     
     set(MAIN_LIB \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.so\")
@@ -253,33 +253,120 @@ install(CODE "
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Size: \${LIB_SIZE}\")
         
         execute_process(COMMAND ldd \"\${MAIN_LIB}\" OUTPUT_VARIABLE current_deps ERROR_QUIET)
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Dependencies:\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nDependencies BEFORE bundling:\")
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${current_deps}\")
         
         execute_process(
             COMMAND sh -c \"ldd '\${MAIN_LIB}' | grep 'not found' | wc -l\"
-            OUTPUT_VARIABLE missing_count
+            OUTPUT_VARIABLE missing_count_before
             ERROR_QUIET
             OUTPUT_STRIP_TRAILING_WHITESPACE
         )
         
-        if(missing_count GREATER 0)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"⚠️  WARNING: \${missing_count} missing dependencies!\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\n=== BUNDLING DEPENDENCIES ===\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Missing before bundling: \${missing_count_before}\")
+        
+        set(FFMPEG_ROOT \"${FFMPEG_ROOT}\")
+        set(HDF5_ROOT \"${HDF5_ROOT}\")
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Searching in: \${FFMPEG_ROOT}/lib and \${HDF5_ROOT}/lib\")
+        
+        file(GLOB_RECURSE all_so_files 
+            \"\${FFMPEG_ROOT}/lib/*.so*\"
+            \"\${HDF5_ROOT}/lib/*.so*\"
+        )
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Found shared library files:\")
+        set(bundled_count 0)
+        foreach(so_file \${all_so_files})
+            get_filename_component(so_name \"\${so_file}\" NAME)
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Checking: \${so_name}\")
+            
+            if(EXISTS \"\${so_file}\" AND NOT IS_SYMLINK \"\${so_file}\")
+                set(dest_file \"\${CMAKE_INSTALL_PREFIX}/lib/\${so_name}\")
+                if(NOT EXISTS \"\${dest_file}\")
+                    file(COPY \"\${so_file}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    ✓ Bundled: \${so_name}\")
+                    math(EXPR bundled_count \"\${bundled_count} + 1\")
+                else()
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    - Already exists: \${so_name}\")
+                endif()
+            elseif(IS_SYMLINK \"\${so_file}\")
+                execute_process(COMMAND readlink -f \"\${so_file}\" OUTPUT_VARIABLE real_file OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+                if(EXISTS \"\${real_file}\")
+                    get_filename_component(real_name \"\${real_file}\" NAME)
+                    set(dest_file \"\${CMAKE_INSTALL_PREFIX}/lib/\${real_name}\")
+                    if(NOT EXISTS \"\${dest_file}\")
+                        file(COPY \"\${real_file}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
+                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    ✓ Bundled (resolved): \${real_name}\")
+                        math(EXPR bundled_count \"\${bundled_count} + 1\")
+                    endif()
+                    
+                    set(dest_symlink \"\${CMAKE_INSTALL_PREFIX}/lib/\${so_name}\")
+                    if(NOT EXISTS \"\${dest_symlink}\")
+                        execute_process(COMMAND ln -sf \"\${real_name}\" \"\${dest_symlink}\" ERROR_QUIET)
+                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    ✓ Created symlink: \${so_name} -> \${real_name}\")
+                    endif()
+                else()
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    ✗ Broken symlink: \${so_file}\")
+                endif()
+            else()
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    - Skipped: \${so_name}\")
+            endif()
+        endforeach()
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nBundled \${bundled_count} library files\")
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\n=== FIXING RPATH ===\")
+        find_program(PATCHELF_EXECUTABLE patchelf)
+        if(PATCHELF_EXECUTABLE)
+            file(GLOB all_bundle_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.so*\")
+            foreach(lib \${all_bundle_libs})
+                if(NOT IS_SYMLINK \"\${lib}\")
+                    execute_process(
+                        COMMAND \"\${PATCHELF_EXECUTABLE}\" --set-rpath \"$ORIGIN\" \"\${lib}\"
+                        ERROR_QUIET
+                    )
+                    get_filename_component(lib_name \"\${lib}\" NAME)
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    ✓ Fixed RPATH: \${lib_name}\")
+                endif()
+            endforeach()
+        else()
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"    ⚠️  patchelf not found, RPATH not fixed\")
+        endif()
+        
+        execute_process(COMMAND ldd \"\${MAIN_LIB}\" OUTPUT_VARIABLE final_deps ERROR_QUIET)
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\n=== FINAL RESULT ===\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Dependencies AFTER bundling:\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${final_deps}\")
+        
+        execute_process(
+            COMMAND sh -c \"ldd '\${MAIN_LIB}' | grep 'not found' | wc -l\"
+            OUTPUT_VARIABLE missing_count_after
+            ERROR_QUIET
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        
+        if(missing_count_after GREATER 0)
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\n⚠️  WARNING: \${missing_count_after} dependencies still missing!\")
             execute_process(
                 COMMAND sh -c \"ldd '\${MAIN_LIB}' | grep 'not found'\"
                 OUTPUT_VARIABLE missing_deps
                 ERROR_QUIET
             )
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Missing: \${missing_deps}\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Still missing: \${missing_deps}\")
         else()
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✓ All dependencies resolved\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\n✅ SUCCESS: All dependencies resolved!\")
         endif()
         
-        execute_process(COMMAND readelf -d \"\${MAIN_LIB}\" OUTPUT_VARIABLE RPATH_INFO ERROR_QUIET)
-        if(RPATH_INFO MATCHES \"RPATH\")
-            execute_process(COMMAND sh -c \"readelf -d '\${MAIN_LIB}' | grep RPATH\" OUTPUT_VARIABLE RPATH_LINE ERROR_QUIET)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"RPATH: \${RPATH_LINE}\")
-        endif()
+        file(GLOB final_bundle \"\${CMAKE_INSTALL_PREFIX}/lib/*\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\\nFinal bundle contents:\")
+        foreach(file \${final_bundle})
+            get_filename_component(file_name \"\${file}\" NAME)
+            file(SIZE \"\${file}\" file_size)
+            math(EXPR file_size_kb \"\${file_size} / 1024\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${file_name} (\${file_size_kb} KB)\")
+        endforeach()
         
     else()
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✗ Main lib not found: \${MAIN_LIB}\")
