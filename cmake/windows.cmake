@@ -1,8 +1,8 @@
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 set(DEPS_ROOT "$ENV{HOME}")
-set(FFMPEG_ROOT "${DEPS_ROOT}")
-set(HDF5_ROOT "${DEPS_ROOT}")
+set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg_build")
+set(HDF5_ROOT "${DEPS_ROOT}/ffmpeg_build")
 
 message(STATUS "DEPS_ROOT: ${DEPS_ROOT}")
 message(STATUS "FFMPEG_ROOT: ${FFMPEG_ROOT}")
@@ -12,14 +12,12 @@ find_path(FFMPEG_INCLUDE_DIR
     NAMES libavcodec/avcodec.h
     PATHS 
         ${FFMPEG_ROOT}/include
-        "C:/vcpkg/installed/x64-windows/include"
 )
 
 find_path(HDF5_INCLUDE_DIR 
     NAMES hdf5.h
     PATHS 
         ${HDF5_ROOT}/include
-        "C:/vcpkg/installed/x64-windows/include"
 )
 
 set(FFMPEG_LIBRARIES "")
@@ -28,7 +26,6 @@ foreach(lib avcodec avformat avutil swscale swresample avfilter)
         NAMES ${lib} lib${lib}
         PATHS 
             ${FFMPEG_ROOT}/lib
-            "C:/vcpkg/installed/x64-windows/lib"
     )
     
     if(FFMPEG_${lib}_LIBRARY)
@@ -43,14 +40,12 @@ find_library(HDF5_C_LIBRARY
     NAMES hdf5 libhdf5
     PATHS 
         ${HDF5_ROOT}/lib
-        "C:/vcpkg/installed/x64-windows/lib"
 )
 
 find_library(HDF5_HL_LIBRARY
     NAMES hdf5_hl libhdf5_hl
     PATHS 
         ${HDF5_ROOT}/lib
-        "C:/vcpkg/installed/x64-windows/lib"
 )
 
 if(HDF5_C_LIBRARY)
