@@ -264,7 +264,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: hdf5-ffmpeg-jar
-          path: imagej-hdf5-wrapper/build/libs/HDF5-ffmpeg-*.jar
+          path: imagej-hdf5-wrapper/build/libs/HDF5_ffmpeg-*.jar
 
   publish:
     name: Publish to PyPI and GitHub Releases
