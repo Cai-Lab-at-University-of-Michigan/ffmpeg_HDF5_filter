@@ -1,7 +1,7 @@
 apply plugin: 'java'
 
 group = 'com.cailab'
-version = '1.0.0'
+version = '1.8.6'
 
 description = """Combined HDF5-FFMPEG Compression and Viewer"""
 
@@ -36,7 +36,7 @@ dependencies {
 
 // Create combined fat JAR
 task packJar(type: Jar) {
-    archiveBaseName = 'HDF5-ffmpeg'
+    archiveBaseName = 'HDF5_ffmpeg'
     
     // Include compiled classes and resources
     from { (configurations.runtimeClasspath - configurations.provided).collect { it.isDirectory() ? it : zipTree(it) } }
