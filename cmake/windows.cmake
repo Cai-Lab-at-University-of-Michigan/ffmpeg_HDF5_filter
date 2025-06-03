@@ -120,7 +120,7 @@ install(CODE "
     
     if(EXISTS \"\${MAIN_DLL}\")
         # Convert DEPS_ROOT to CMAKE path format to avoid backslash issues
-        set(DEPS_ROOT_RAW \"${DEPS_ROOT}\")
+        set(DEPS_ROOT_RAW \"\${DEPS_ROOT}\")
         file(TO_CMAKE_PATH \"\${DEPS_ROOT_RAW}\" SEARCH_ROOT)
         
         set(target_dlls
