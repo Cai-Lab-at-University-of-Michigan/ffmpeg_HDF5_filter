@@ -586,11 +586,11 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
     if gpu_id >= 0:
         # For NVIDIA encoders, check if NVIDIA GPU is available
         if "nvenc" in codec and not has_nvidia_gpu():
-            logger.error(f"{codec} requested but NVIDIA GPU not detected. Continuing anyway, but may fail.")
+            raise RuntimeError(f"{codec} requested but NVIDIA GPU not detected.")
         
         # For Intel QSV encoders, check if Intel GPU is available
         if "qsv" in codec and not has_intel_gpu():
-            logger.error(f"{codec} requested but Intel GPU not detected. Continuing anyway, but may fail.")
+            raise RuntimeError(f"{codec} requested but Intel GPU not detected.")
     
     # Pack all parameters into the filter options
     filter_options = (enc_id, dec_id, width or 0, height or 0, depth or 0, 
