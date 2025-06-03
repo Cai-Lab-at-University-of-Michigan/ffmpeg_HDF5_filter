@@ -1,6 +1,5 @@
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
-# Use the same paths as your batch script
 set(DEPS_ROOT "$ENV{HOME}")
 set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg_build")
 set(HDF5_ROOT "${DEPS_ROOT}/ffmpeg_build")
@@ -9,7 +8,6 @@ message(STATUS "DEPS_ROOT: ${DEPS_ROOT}")
 message(STATUS "FFMPEG_ROOT: ${FFMPEG_ROOT}")
 message(STATUS "HDF5_ROOT: ${HDF5_ROOT}")
 
-# Manual FFmpeg detection
 find_path(FFMPEG_INCLUDE_DIR 
     NAMES libavcodec/avcodec.h
     PATHS ${FFMPEG_ROOT}/include
@@ -22,7 +20,6 @@ endif()
 
 message(STATUS "Found FFmpeg headers: ${FFMPEG_INCLUDE_DIR}")
 
-# Find FFmpeg libraries
 set(FFMPEG_LIBRARIES "")
 set(REQUIRED_FFMPEG_LIBS avcodec avformat avutil swscale swresample avfilter)
 
@@ -41,7 +38,6 @@ foreach(lib ${REQUIRED_FFMPEG_LIBS})
     endif()
 endforeach()
 
-# Manual HDF5 detection
 find_path(HDF5_INCLUDE_DIR 
     NAMES hdf5.h
     PATHS ${HDF5_ROOT}/include
@@ -54,7 +50,6 @@ endif()
 
 message(STATUS "Found HDF5 headers: ${HDF5_INCLUDE_DIR}")
 
-# Find HDF5 libraries
 find_library(HDF5_C_LIBRARY
     NAMES hdf5 libhdf5
     PATHS ${HDF5_ROOT}/lib
@@ -78,13 +73,11 @@ endif()
 message(STATUS "Found HDF5 C library: ${HDF5_C_LIBRARY}")
 message(STATUS "Found HDF5 HL library: ${HDF5_HL_LIBRARY}")
 
-# Create the shared library
 add_library(h5ffmpeg_shared SHARED
     src/ffmpeg_h5filter.c
     src/ffmpeg_h5plugin.c
 )
 
-# Set target properties
 target_include_directories(h5ffmpeg_shared
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src>
@@ -101,7 +94,6 @@ target_compile_definitions(h5ffmpeg_shared PRIVATE
     _HDF5USEDLL_
 )
 
-# Link libraries
 target_link_libraries(h5ffmpeg_shared
     PRIVATE
         ${FFMPEG_LIBRARIES}
@@ -113,7 +105,6 @@ target_link_libraries(h5ffmpeg_shared
         shlwapi
 )
 
-# Installation rules
 install(TARGETS h5ffmpeg_shared
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -124,12 +115,13 @@ install(FILES src/ffmpeg_h5filter.h
     DESTINATION include
 )
 
-# Simplified DLL bundling for Windows
 install(CODE "
     set(MAIN_DLL \"\${CMAKE_INSTALL_PREFIX}/bin/h5ffmpeg_shared.dll\")
     
     if(EXISTS \"\${MAIN_DLL}\")
-        file(TO_CMAKE_PATH \"${DEPS_ROOT}\" SEARCH_ROOT)
+        # Convert DEPS_ROOT to CMAKE path format to avoid backslash issues
+        set(DEPS_ROOT_RAW \"${DEPS_ROOT}\")
+        file(TO_CMAKE_PATH \"\${DEPS_ROOT_RAW}\" SEARCH_ROOT)
         
         set(target_dlls
             \"avcodec\" \"avformat\" \"avutil\" \"swscale\" \"swresample\" \"avfilter\"
