@@ -11,6 +11,7 @@ import h5py
 
 from h5ffmpeg.utils import *
 
+
 def generate_3d_data(width=512, height=512, depth=100, dtype=np.uint8, pattern="random", seed=None):
     """
     Generate 3D volume test data.
@@ -95,6 +96,7 @@ def test_codec_availability():
     
     # Test each codec
     for codec_name, codec_func in codec_functions.items():
+        print(f"Testing {codec_name}...")
         results[codec_name] = {
             'available': False,
             'error': None,

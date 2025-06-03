@@ -1,7 +1,7 @@
 set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 
 # Use the same paths as your batch script
-set(DEPS_ROOT "D:/a")
+set(DEPS_ROOT "$ENV{HOME}")
 set(FFMPEG_ROOT "${DEPS_ROOT}/ffmpeg_build")
 set(HDF5_ROOT "${DEPS_ROOT}/ffmpeg_build")
 
