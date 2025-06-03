@@ -36,6 +36,7 @@ before-all = [
     /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make -c conda-forge
     /opt/miniconda/bin/conda install -y x264 x265 aom libvpx dav1d rav1e svt-av1 zlib bzip2 xz lz4 zstd -c conda-forge
     /opt/miniconda/bin/conda install -y libva libdrm libvpl -c conda-forge || echo "Hardware acceleration libs not available"
+    /opt/miniconda/bin/conda install -y xvidcore -c dnachun
     /opt/miniconda/bin/conda install -y openssl -c conda-forge
 
     pip install nvidia-cuda-nvcc
@@ -91,7 +92,7 @@ before-all = [
     fi
     
     echo "Configuring FFmpeg..."
-    ./configure --prefix="/opt/ffmpeg" --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include -fPIC" --extra-ldflags="-L/opt/miniconda/lib" --extra-libs="-lm -lstdc++" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl ${CUDA_FLAGS} --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug
+    ./configure --prefix="/opt/ffmpeg" --extra-cflags="-I/opt/miniconda/include -I/opt/ffmpeg/include -fPIC" --extra-ldflags="-L/opt/miniconda/lib" --extra-libs="-lm -lstdc++" --enable-shared --disable-static --enable-pic --enable-gpl --enable-nonfree --enable-version3 --enable-pthreads --enable-libxvid --enable-libx264 --enable-libx265 --enable-libaom --enable-libdav1d --enable-librav1e --enable-libsvtav1 --enable-libvpx --enable-libvpl ${CUDA_FLAGS} --enable-openssl --enable-lzma --enable-bzlib --enable-zlib --enable-runtime-cpudetect --enable-hardcoded-tables --enable-optimizations --disable-doc --disable-ffplay --disable-debug
     
     echo "Building FFmpeg..."
     make -j$(nproc)
@@ -167,6 +168,8 @@ before-all = [
         lz4 \
         zstd \
         -c conda-forge
+
+    $HOME/miniconda/bin/conda install -y xvidcore -c dnachun
     
     $HOME/miniconda/bin/conda install -y \
         openssl \
@@ -228,6 +231,7 @@ before-all = [
         --enable-nonfree \
         --enable-version3 \
         --enable-pthreads \
+        --enable-libxvid \
         --enable-libx264 \
         --enable-libx265 \
         --enable-libaom \
