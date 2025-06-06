@@ -826,10 +826,12 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
                 strcat(tune, film_grain_buffer);
             }
             if (film_grain > 0)
-                stpcpy(tune, ":film-grain-denoise=1");
+                strcat(tune, ":film-grain-denoise=1");
             strcat(tune, ":enable-tf=0");
-            if (color_mode == 1)
-                strcat(tune, ":enable-hdr=1");
+
+            // removed in svt-av1 3.0+
+            // if (color_mode == 1)
+            //     strcat(tune, ":enable-hdr=1");
 
             av_opt_set(c->priv_data, "svtav1-params", tune, 0);
             if (crf < 64)
