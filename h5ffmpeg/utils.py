@@ -2,6 +2,7 @@ import os
 import tempfile
 import numpy as np
 import h5py
+import time 
 
 def create_temp_h5_file():
     """
@@ -114,21 +115,25 @@ def compress_and_decompress(data, compression_options, dataset_name="data"):
     
     try:
         # Write data with compression
+        start_time = time.time()
         with h5py.File(temp_file, 'w') as f:\
             f.create_dataset(dataset_name, data=data, **compression_options)
+        enc_time = time.time() - start_time
         
         # Get compressed file size
         compressed_size = get_file_size(temp_file)
         
         # Read back the data
+        start_time = time.time()
         with h5py.File(temp_file, 'r') as f:
             decompressed_data = f[dataset_name][:]
+        dec_time = time.time() - start_time
         
         # Calculate compression ratio
         original_size = data.nbytes
         compression_ratio = calculate_compression_ratio(original_size, compressed_size)
         
-        return decompressed_data, compression_ratio, compressed_size
+        return decompressed_data, compression_ratio, enc_time, dec_time
     except Exception as e:
         print(str(e))
     

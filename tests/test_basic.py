@@ -117,7 +117,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (default settings)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -135,7 +135,7 @@ class TestBasicFunctionality(unittest.TestCase):
             ("8-bit (H.264)", psnr, compression_ratio)
         ]
         self.print_result_table(results)
-        print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
         
         # Check that PSNR is above threshold
         self.assertGreater(psnr, self.min_psnr_8bit)
@@ -161,7 +161,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (10-bit mode)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -179,7 +179,7 @@ class TestBasicFunctionality(unittest.TestCase):
             ("16-bit (H.264 10-bit)", psnr, compression_ratio)
         ]
         self.print_result_table(results)
-        print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
         
         # Check that PSNR is above threshold
         self.assertGreater(psnr, self.min_psnr_16bit)
@@ -205,7 +205,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (CRF=23)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -217,7 +217,7 @@ class TestBasicFunctionality(unittest.TestCase):
             ("Gradient Data", psnr, compression_ratio)
         ]
         self.print_result_table(results)
-        print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
         
         # Gradient data should be more compressible than random data
         self.assertGreater(compression_ratio, self.min_compression_ratio * 2)
@@ -240,7 +240,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (CRF=23)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -252,7 +252,7 @@ class TestBasicFunctionality(unittest.TestCase):
             ("Striped Data", psnr, compression_ratio)
         ]
         self.print_result_table(results)
-        print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
         
         # Striped data should be highly compressible
         self.assertGreater(compression_ratio, self.min_compression_ratio * 3)
@@ -278,14 +278,14 @@ class TestBasicFunctionality(unittest.TestCase):
             compression_options = hf.x264(crf=crf)
             
             # Compress and decompress
-            decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+            decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
                 test_data, compression_options
             )
             
             # Calculate PSNR
             psnr = calculate_psnr(test_data, decompressed_data)
             results.append((f"CRF {crf}", psnr, compression_ratio))
-            print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
         
         # Print results table
         self.print_result_table(results)
@@ -316,7 +316,7 @@ class TestBasicFunctionality(unittest.TestCase):
             print(f"{Fore.BLUE}ℹ Compressing with H.265/HEVC codec (CRF=28)...{Style.RESET_ALL}")
             
             # Compress and decompress
-            decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+            decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
                 test_data, compression_options
             )
             
@@ -328,7 +328,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 ("H.265/HEVC", psnr, compression_ratio)
             ]
             self.print_result_table(results)
-            print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
             
             # H.265 should provide good quality
             self.assertGreater(psnr, self.min_psnr_8bit)
@@ -358,7 +358,7 @@ class TestBasicFunctionality(unittest.TestCase):
             print(f"{Fore.BLUE}ℹ Compressing with SVT-AV1 codec (CRF=30)...{Style.RESET_ALL}")
             
             # Compress and decompress
-            decompressed_data, compression_ratio, elapsed_time = compress_and_decompress(
+            decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
                 test_data, compression_options
             )
             
@@ -370,7 +370,7 @@ class TestBasicFunctionality(unittest.TestCase):
                 ("SVT-AV1", psnr, compression_ratio)
             ]
             self.print_result_table(results)
-            print(f"{Fore.BLUE}ℹ Processing time: {elapsed_time:.2f} seconds{Style.RESET_ALL}")
+            print(f"{Fore.BLUE}ℹ Processing time: {enc_time + dec_time:.2f} seconds{Style.RESET_ALL}")
             
             # AV1 should provide good quality
             self.assertGreater(psnr, self.min_psnr_8bit)

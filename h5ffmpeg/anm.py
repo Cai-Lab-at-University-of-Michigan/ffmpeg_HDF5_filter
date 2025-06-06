@@ -302,7 +302,7 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
     print("-" * 50)
     
     for i, param in enumerate(params):
-        decom_data, cs_ratio, _ = compress_and_decompress(img_patches, param)
+        decom_data, cs_ratio, _, _ = compress_and_decompress(img_patches, param)
         compression_ratios.append(cs_ratio)
         
         block_score = detect_blockiness(decom_data)

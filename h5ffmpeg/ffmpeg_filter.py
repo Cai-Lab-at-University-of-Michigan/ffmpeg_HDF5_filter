@@ -603,7 +603,7 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
 
 
 # Convenience functions for specific codecs
-def mpeg4(crf=3, tune=None, **kwargs):
+def mpeg4(crf=3, **kwargs):
     """Convenience function for H.264 compression"""
     return ffmpeg(codec="libxvid", crf=crf, **kwargs)
 
@@ -619,24 +619,24 @@ def rav1e(preset="6", crf=30, tune=None, **kwargs):
     """Convenience function for AV1 compression"""
     return ffmpeg(codec="librav1e", preset=preset, crf=crf, tune=tune, **kwargs)
 
-def svtav1(preset="6", crf=30, tune=None, **kwargs):
+def svtav1(preset="6", crf=30, tune="fastdecode", **kwargs):
     """Convenience function for AV1 compression"""
     return ffmpeg(codec="libsvtav1", preset=preset, crf=crf, tune=tune, **kwargs)
 
-def h264_nvenc(preset="p4", qp=23, **kwargs):
+def h264_nvenc(preset="p4", crf=23, **kwargs):
     """Convenience function for NVIDIA H.264 hardware compression"""
     gpu_id = kwargs.pop("gpu_id", 0)  # Default to first GPU
-    return ffmpeg(codec="h264_nvenc", preset=preset, crf=0, gpu_id=gpu_id, **kwargs)
+    return ffmpeg(codec="h264_nvenc", preset=preset, crf=crf, gpu_id=gpu_id, **kwargs)
 
-def hevc_nvenc(preset="p4", qp=23, **kwargs):
+def hevc_nvenc(preset="p4", crf=23, **kwargs):
     """Convenience function for NVIDIA H.265/HEVC hardware compression"""
     gpu_id = kwargs.pop("gpu_id", 0)  # Default to first GPU
-    return ffmpeg(codec="hevc_nvenc", preset=preset, crf=0, gpu_id=gpu_id, **kwargs)
+    return ffmpeg(codec="hevc_nvenc", preset=preset, crf=crf, gpu_id=gpu_id, **kwargs)
 
-def av1_nvenc(preset="p4", qp=23, **kwargs):
+def av1_nvenc(preset="p4", crf=23, **kwargs):
     """Convenience function for NVIDIA H.265/HEVC hardware compression"""
     gpu_id = kwargs.pop("gpu_id", 0)  # Default to first GPU
-    return ffmpeg(codec="av1_nvenc", preset=preset, crf=0, gpu_id=gpu_id, **kwargs)
+    return ffmpeg(codec="av1_nvenc", preset=preset, crf=crf, gpu_id=gpu_id, **kwargs)
 
 def av1_qsv(preset="medium", crf=30, tune=None, **kwargs):
     """Convenience function for Intel AV1 QSV hardware compression"""
