@@ -392,10 +392,11 @@ DEFAULT_DECODER = {
     EncoderCodec.H264_NVENC: DecoderCodec.H264,
     EncoderCodec.X265: DecoderCodec.HEVC,
     EncoderCodec.HEVC_NVENC: DecoderCodec.HEVC,
-    EncoderCodec.SVTAV1: DecoderCodec.AOMAV1,
-    EncoderCodec.RAV1E: DecoderCodec.AOMAV1,
-    EncoderCodec.AV1_NVENC: DecoderCodec.AOMAV1,
-    EncoderCodec.AV1_QSV: DecoderCodec.AOMAV1
+    # don't use AOMAV1 for decoding av1
+    EncoderCodec.SVTAV1: DecoderCodec.DAV1D,
+    EncoderCodec.RAV1E: DecoderCodec.DAV1D,
+    EncoderCodec.AV1_NVENC: DecoderCodec.DAV1D,
+    EncoderCodec.AV1_QSV: DecoderCodec.DAV1D
 }
 
 # Default decoder mapping for GPU-based encoders
