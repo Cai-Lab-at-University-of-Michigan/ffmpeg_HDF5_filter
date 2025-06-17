@@ -68,3 +68,4 @@ h5ffmpeg/*.so
 
 # gradle
 bak
+publish_conda.yml
