@@ -117,7 +117,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (default settings)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+        decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -161,7 +161,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (10-bit mode)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+        decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -205,7 +205,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (CRF=23)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+        decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -240,7 +240,7 @@ class TestBasicFunctionality(unittest.TestCase):
         print(f"{Fore.BLUE}ℹ Compressing with H.264 codec (CRF=23)...{Style.RESET_ALL}")
         
         # Compress and decompress
-        decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+        decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
             test_data, compression_options
         )
         
@@ -278,7 +278,7 @@ class TestBasicFunctionality(unittest.TestCase):
             compression_options = hf.x264(crf=crf)
             
             # Compress and decompress
-            decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+            decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
                 test_data, compression_options
             )
             
@@ -316,7 +316,7 @@ class TestBasicFunctionality(unittest.TestCase):
             print(f"{Fore.BLUE}ℹ Compressing with H.265/HEVC codec (CRF=28)...{Style.RESET_ALL}")
             
             # Compress and decompress
-            decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+            decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
                 test_data, compression_options
             )
             
@@ -358,7 +358,7 @@ class TestBasicFunctionality(unittest.TestCase):
             print(f"{Fore.BLUE}ℹ Compressing with SVT-AV1 codec (CRF=30)...{Style.RESET_ALL}")
             
             # Compress and decompress
-            decompressed_data, compression_ratio, enc_time, dec_time = compress_and_decompress(
+            decompressed_data, compression_ratio, compressed_size, enc_time, dec_time = compress_and_decompress(
                 test_data, compression_options
             )
             

@@ -109,7 +109,7 @@ def test_codec_availability():
             compression_options = codec_func()
             
             # Try to compress and decompress using the codec
-            decompressed_data, compression_ratio, _, _ = compress_and_decompress(
+            decompressed_data, compression_ratio, _, _, _ = compress_and_decompress(
                 test_data, compression_options
             )
             

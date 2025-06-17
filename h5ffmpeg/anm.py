@@ -3,9 +3,7 @@ import os
 import h5ffmpeg as hf
 from h5ffmpeg.utils import compress_and_decompress
 import matplotlib.pyplot as plt
-from skimage import feature, draw
-from PIL import Image, ImageChops
-from skimage.transform import probabilistic_hough_line
+from skimage import feature
 from skimage.filters import threshold_otsu, gaussian
 from skimage.metrics import structural_similarity as ssim
 from scipy.ndimage import gaussian_filter, generic_filter
@@ -17,12 +15,12 @@ warnings.filterwarnings("ignore")
 def normalize(img):
     return img / np.max(img)
 
-
 def analyze_content(img):
     img_norm = normalize(img)
     
-    if img_norm.ndim > 2:
-        img_analysis = img_norm[1] if img_norm.shape[0] >= 3 else np.mean(img_norm, axis=0)
+    if img_norm.ndim == 3:
+        mid_z = img_norm.shape[0] // 2
+        img_analysis = img_norm[mid_z]
     else:
         img_analysis = img_norm
     
@@ -49,26 +47,31 @@ def analyze_content(img):
         'detail_level': detail_level
     }
 
-
-def extract_patches(img, num_samples=5, patch_size=(128, 128)):
-    if img.ndim > 2:
-        channels, h, w = img.shape
-    else:
-        h, w = img.shape
-        channels = 1
-        img = img.reshape((1, h, w))
+def extract_patches(img, num_samples=5, patch_size=(32, 128, 128)):
+    z, h, w = img.shape
+    patch_z, patch_h, patch_w = patch_size
     
-    detail_map = np.zeros((h, w))
-    analysis_channel = img[1] if channels >= 3 else img[0]
+    patch_z = min(patch_z, z)
+    patch_h = min(patch_h, h)
+    patch_w = min(patch_w, w)
     
-    edges = feature.canny(analysis_channel, sigma=1.5)
-    detail_map += edges * 2
+    mid_z = z // 2
+    analysis_slice = img[mid_z]
     
-    texture = generic_filter(analysis_channel, np.std, size=7)
-    detail_map += texture / np.max(texture)
+    edges = feature.canny(analysis_slice, sigma=1.5)
+    texture = generic_filter(analysis_slice, np.std, size=7)
     
-    detail_map = detail_map / np.max(detail_map)
-    high_detail = detail_map > np.percentile(detail_map, 75)
+    detail_map_2d = edges * 2 + texture / np.max(texture)
+    detail_map_2d = detail_map_2d / np.max(detail_map_2d)
+    
+    z_gradient = np.abs(np.diff(img, axis=0))
+    z_variation = np.mean(z_gradient, axis=0)
+    z_variation = z_variation / np.max(z_variation)
+    
+    detail_map_3d = detail_map_2d + z_variation
+    detail_map_3d = detail_map_3d / np.max(detail_map_3d)
+    
+    high_detail = detail_map_3d > np.percentile(detail_map_3d, 75)
     
     patches = []
     high_detail_coords = np.argwhere(high_detail)
@@ -78,86 +81,127 @@ def extract_patches(img, num_samples=5, patch_size=(128, 128)):
     for i in range(high_detail_samples):
         if i < len(high_detail_coords):
             y, x = high_detail_coords[i]
-            y_start = min(max(0, y - patch_size[0]//2), h - patch_size[0])
-            x_start = min(max(0, x - patch_size[1]//2), w - patch_size[1])
             
-            patch = img[:, y_start:y_start+patch_size[0], x_start:x_start+patch_size[1]]
+            z_start = np.random.randint(0, max(1, z - patch_z + 1))
+            y_start = min(max(0, y - patch_h//2), h - patch_h)
+            x_start = min(max(0, x - patch_w//2), w - patch_w)
+            
+            patch = img[z_start:z_start+patch_z, y_start:y_start+patch_h, x_start:x_start+patch_w]
             patches.append(patch)
     
     remaining_samples = num_samples - len(patches)
     for _ in range(remaining_samples):
-        y_start = np.random.randint(0, h - patch_size[0] + 1)
-        x_start = np.random.randint(0, w - patch_size[1] + 1)
-        patch = img[:, y_start:y_start+patch_size[0], x_start:x_start+patch_size[1]]
+        z_start = np.random.randint(0, z - patch_z + 1)
+        y_start = np.random.randint(0, h - patch_h + 1)
+        x_start = np.random.randint(0, w - patch_w + 1)
+        patch = img[z_start:z_start+patch_z, y_start:y_start+patch_h, x_start:x_start+patch_w]
         patches.append(patch)
     
-    return np.concatenate(patches, axis=0)
-
+    return np.stack(patches, axis=0)
 
 def detect_blockiness(img, block_sizes=[8, 16]):
     img_norm = normalize(img)
-    channels = [img_norm[i] for i in range(img_norm.shape[0])] if img_norm.ndim > 2 else [img_norm]
-    total_score = 0
     
-    for channel in channels:
-        gx = np.abs(np.diff(channel, axis=1, prepend=channel[:, :1]))
-        gy = np.abs(np.diff(channel, axis=0, prepend=channel[:1, :]))
-        
-        block_score = 0
-        for block_size in block_sizes:
-            h_pattern = np.mean(gx[:, block_size-1::block_size])
-            h_non_pattern = np.mean(np.delete(gx, np.arange(block_size-1, gx.shape[1], block_size), axis=1))
-            h_ratio = h_pattern / (h_non_pattern + 1e-8)
-            
-            v_pattern = np.mean(gy[block_size-1::block_size, :])
-            v_non_pattern = np.mean(np.delete(gy, np.arange(block_size-1, gy.shape[0], block_size), axis=0))
-            v_ratio = v_pattern / (v_non_pattern + 1e-8)
-            
-            block_score += max(0, h_ratio - 1.2) + max(0, v_ratio - 1.2)
-        
-        def dct_blockiness(img, block_size=8):
-            h, w = img.shape
-            score = 0
-            
-            for i in range(0, h-block_size, block_size):
-                for j in range(0, w-block_size, block_size):
-                    block = img[i:i+block_size, j:j+block_size]
-                    dct_block = dct(dct(block.T, norm='ortho').T, norm='ortho')
-                    high_freq = np.abs(dct_block[4:, 4:])
-                    low_freq = np.abs(dct_block[:4, :4])
-                    
-                    if np.mean(high_freq) > 0.05 * np.mean(low_freq):
-                        score += 1
-            
-            blocks_analyzed = ((h // block_size) * (w // block_size))
-            return score / max(1, blocks_analyzed)
-        
-        dct_score = dct_blockiness(channel)
-        
-        smooth = gaussian(channel, sigma=0.5)
-        diff = np.abs(channel - smooth)
-        
-        h_disc = np.sum(np.mean(diff[:, block_sizes[0]-1::block_sizes[0]], axis=1))
-        v_disc = np.sum(np.mean(diff[block_sizes[0]-1::block_sizes[0], :], axis=0))
-        
-        h_disc /= channel.shape[0]
-        v_disc /= channel.shape[1]
-        
-        struct_score = (h_disc + v_disc) / 2
-        channel_score = 0.4 * block_score + 0.4 * dct_score + 0.2 * struct_score
-        total_score += channel_score
+    if img_norm.ndim == 4:
+        total_score = 0
+        for i in range(img_norm.shape[0]):
+            patch = img_norm[i]
+            mid_z = patch.shape[0] // 2
+            channel = patch[mid_z]
+            total_score += _detect_blockiness_single(channel, block_sizes)
+        return total_score / img_norm.shape[0]
     
-    return total_score / len(channels)
+    elif img_norm.ndim == 3:
+        mid_z = img_norm.shape[0] // 2
+        channel = img_norm[mid_z]
+    else:
+        channel = img_norm
+    
+    return _detect_blockiness_single(channel, block_sizes)
 
+def _detect_blockiness_single(channel, block_sizes):
+    gx = np.abs(np.diff(channel, axis=1, prepend=channel[:, :1]))
+    gy = np.abs(np.diff(channel, axis=0, prepend=channel[:1, :]))
+    
+    block_score = 0
+    for block_size in block_sizes:
+        h_pattern = np.mean(gx[:, block_size-1::block_size])
+        h_non_pattern = np.mean(np.delete(gx, np.arange(block_size-1, gx.shape[1], block_size), axis=1))
+        h_ratio = h_pattern / (h_non_pattern + 1e-8)
+        
+        v_pattern = np.mean(gy[block_size-1::block_size, :])
+        v_non_pattern = np.mean(np.delete(gy, np.arange(block_size-1, gy.shape[0], block_size), axis=0))
+        v_ratio = v_pattern / (v_non_pattern + 1e-8)
+        
+        block_score += max(0, h_ratio - 1.2) + max(0, v_ratio - 1.2)
+    
+    def dct_blockiness(img, block_size=8):
+        h, w = img.shape
+        score = 0
+        
+        for i in range(0, h-block_size, block_size):
+            for j in range(0, w-block_size, block_size):
+                block = img[i:i+block_size, j:j+block_size]
+                dct_block = dct(dct(block.T, norm='ortho').T, norm='ortho')
+                high_freq = np.abs(dct_block[4:, 4:])
+                low_freq = np.abs(dct_block[:4, :4])
+                
+                if np.mean(high_freq) > 0.05 * np.mean(low_freq):
+                    score += 1
+        
+        blocks_analyzed = ((h // block_size) * (w // block_size))
+        return score / max(1, blocks_analyzed)
+    
+    dct_score = dct_blockiness(channel)
+    
+    smooth = gaussian(channel, sigma=0.5)
+    diff = np.abs(channel - smooth)
+    
+    h_disc = np.sum(np.mean(diff[:, block_sizes[0]-1::block_sizes[0]], axis=1))
+    v_disc = np.sum(np.mean(diff[block_sizes[0]-1::block_sizes[0], :], axis=0))
+    
+    h_disc /= channel.shape[0]
+    v_disc /= channel.shape[1]
+    
+    struct_score = (h_disc + v_disc) / 2
+    return 0.4 * block_score + 0.4 * dct_score + 0.2 * struct_score
 
 def analyze_structure_preservation(original, compressed):
-    if original.ndim > 2:
-        orig_analysis = original[1] if original.shape[0] >= 3 else np.mean(original, axis=0)
-        comp_analysis = compressed[1] if compressed.shape[0] >= 3 else np.mean(compressed, axis=0)
+    if original.ndim == 4:
+        boundary_scores = []
+        detail_scores = []
+        intensity_scores = []
+        
+        for i in range(original.shape[0]):
+            orig_patch = original[i]
+            comp_patch = compressed[i]
+            mid_z = orig_patch.shape[0] // 2
+            orig_analysis = orig_patch[mid_z]
+            comp_analysis = comp_patch[mid_z]
+            
+            scores = _analyze_structure_single(orig_analysis, comp_analysis)
+            boundary_scores.append(scores['boundary_preservation'])
+            detail_scores.append(scores['detail_preservation'])
+            intensity_scores.append(scores['intensity_preservation'])
+        
+        return {
+            'boundary_preservation': np.mean(boundary_scores),
+            'detail_preservation': np.mean(detail_scores),
+            'intensity_preservation': np.mean(intensity_scores),
+            'overall_quality': (np.mean(boundary_scores) + np.mean(detail_scores) + np.mean(intensity_scores)) / 3
+        }
+    
+    if original.ndim == 3:
+        mid_z = original.shape[0] // 2
+        orig_analysis = original[mid_z]
+        comp_analysis = compressed[mid_z]
     else:
         orig_analysis = original
         comp_analysis = compressed
     
+    return _analyze_structure_single(orig_analysis, comp_analysis)
+
+def _analyze_structure_single(orig_analysis, comp_analysis):
     orig_norm = orig_analysis / np.max(orig_analysis)
     comp_norm = comp_analysis / np.max(comp_analysis)
     
@@ -178,7 +222,10 @@ def analyze_structure_preservation(original, compressed):
     orig_detail = orig_norm - orig_smooth
     comp_detail = comp_norm - comp_smooth
     
-    detail_ssim = ssim(orig_detail, comp_detail, data_range=np.max(orig_detail) - np.min(orig_detail))
+    data_range = np.max(orig_detail) - np.min(orig_detail)
+    if data_range <= 0:
+        data_range = 1.0
+    detail_ssim = ssim(orig_detail, comp_detail, data_range=data_range)
     
     try:
         thresh_orig = threshold_otsu(orig_norm)
@@ -196,8 +243,11 @@ def analyze_structure_preservation(original, compressed):
     hist_orig, bins = np.histogram(orig_norm[mask_orig], bins=50, density=True)
     hist_comp, _ = np.histogram(comp_norm[mask_orig], bins=bins, density=True)
     
-    kl_div = (kl_divergence(hist_orig, hist_comp) + kl_divergence(hist_comp, hist_orig)) / 2
-    intensity_similarity = np.exp(-kl_div)
+    if len(hist_orig) > 0 and len(hist_comp) > 0 and np.sum(hist_orig) > 0 and np.sum(hist_comp) > 0:
+        kl_div = (kl_divergence(hist_orig, hist_comp) + kl_divergence(hist_comp, hist_orig)) / 2
+        intensity_similarity = np.exp(-kl_div)
+    else:
+        intensity_similarity = 0.5
     
     return {
         'boundary_preservation': f1_boundary,
@@ -205,7 +255,6 @@ def analyze_structure_preservation(original, compressed):
         'intensity_preservation': intensity_similarity,
         'overall_quality': (f1_boundary + detail_ssim + intensity_similarity) / 3
     }
-
 
 def plot_results(grains, blockiness, perceptual, compression, combined, best_grain):
     plt.figure(figsize=(14, 10))
@@ -258,7 +307,6 @@ def plot_results(grains, blockiness, perceptual, compression, combined, best_gra
     plt.savefig('tmp/grain_optimization.png', dpi=150)
     plt.close()
 
-
 def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', plot=False):
     if img is None:
         raise ValueError("img must be provided")
@@ -302,17 +350,34 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
     print("-" * 50)
     
     for i, param in enumerate(params):
-        decom_data, cs_ratio, _, _ = compress_and_decompress(img_patches, param)
-        compression_ratios.append(cs_ratio)
+        all_decom_patches = []
+        total_cs_ratio = 0
+        
+        for j in range(img_patches.shape[0]):
+            patch = img_patches[j]
+            decom_patch, cs_ratio, _, _, _ = compress_and_decompress(patch, param)
+            all_decom_patches.append(decom_patch)
+            total_cs_ratio += cs_ratio
+        
+        decom_data = np.stack(all_decom_patches, axis=0)
+        avg_cs_ratio = total_cs_ratio / img_patches.shape[0]
+        compression_ratios.append(avg_cs_ratio)
         
         block_score = detect_blockiness(decom_data)
         blockiness_scores.append(block_score)
         
-        if original_patches.ndim > 2:
-            ssim_score = np.mean([
-                ssim(original_patches[c], decom_data[c], data_range=np.max(original_patches[c])) 
-                for c in range(original_patches.shape[0])
-            ])
+        if original_patches.ndim == 4:
+            ssim_scores = []
+            for j in range(original_patches.shape[0]):
+                orig_patch = original_patches[j]
+                comp_patch = decom_data[j]
+                mid_z = orig_patch.shape[0] // 2
+                ssim_score = ssim(orig_patch[mid_z], comp_patch[mid_z], data_range=np.max(orig_patch[mid_z]))
+                ssim_scores.append(ssim_score)
+            ssim_score = np.mean(ssim_scores)
+        elif original_patches.ndim == 3:
+            mid_z = original_patches.shape[0] // 2
+            ssim_score = ssim(original_patches[mid_z], decom_data[mid_z], data_range=np.max(original_patches[mid_z]))
         else:
             ssim_score = ssim(original_patches, decom_data, data_range=np.max(original_patches))
         
@@ -323,7 +388,7 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
         structure_scores.append(structure_score)
         
         print(f"{grain_range[i]:<6} {block_score:<12.4f} {ssim_score:<12.4f} "
-              f"{structure_score:<12.4f} {cs_ratio:<8.2f}")
+              f"{structure_score:<12.4f} {avg_cs_ratio:<8.2f}")
     
     norm_blockiness = [score/blockiness_scores[0] for score in blockiness_scores[1:]]
     
@@ -339,7 +404,8 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
     
     combined_scores = []
     for i in range(len(grain_range)):
-        score = (weights['blockiness'] * (1 - norm_blockiness[i]) + 
+        blockiness_component = weights['blockiness'] * (1 / (1 + abs(norm_blockiness[i] - 1)))
+        score = (blockiness_component + 
                  weights['perceptual'] * perceptual_scores[i] +
                  weights['structure'] * structure_scores[i])
         combined_scores.append(score)
