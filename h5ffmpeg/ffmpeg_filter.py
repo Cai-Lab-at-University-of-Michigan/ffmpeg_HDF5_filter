@@ -599,7 +599,9 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
     
     return {
         'compression': FFMPEG_ID,
-        'compression_opts': filter_options
+        'compression_opts': filter_options,
+        'norm': kwargs.pop('norm', True),
+        'beta': kwargs.pop('beta', 1.0)
     }
 
 

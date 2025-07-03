@@ -105,6 +105,7 @@ def _patched_create_dataset(self, name, shape=None, dtype=None, data=None, **kwa
 
     if compression == FFMPEG_ID:
         norm = kwargs.pop('norm', False)
+        beta = kwargs.pop('beta', 1.0)
         compression_opts = list(kwargs.get('compression_opts', ()))
         bit = {0: 8, 1: 10, 2: 12}.get(compression_opts[5] if len(compression_opts) > 5 else 0, 8)
         use_quant = False
@@ -154,7 +155,6 @@ def _patched_create_dataset(self, name, shape=None, dtype=None, data=None, **kwa
         kwargs['compression_opts'] = tuple(comp_opts)
     
         # Process data for quantization
-        beta = 1.0
         init_max = None
         init_min = None
         
@@ -167,22 +167,28 @@ def _patched_create_dataset(self, name, shape=None, dtype=None, data=None, **kwa
 
                 if norm:
                     data = data / init_max * max_bit_val
+                    data = np.power(data, beta)
                 else:
                     beta = math.log(max_bit_val, init_max) - np.finfo(float).eps
                     data = np.power(data, beta)
 
             elif data_dtype == np.float32: # MRI/CT has negative values
-                init_max, init_min = np.amax(data), np.amin(data)
+                init_min, init_max = np.amin(data), np.amax(data)
                 max_bit_val = (1 << bit) - 1
 
                 if norm:
                     data = (data - init_min) / (init_max - init_min) * max_bit_val
+                    data = np.power(data, beta)
                 else:
                     beta = math.log(max_bit_val, init_max - init_min) - np.finfo(float).eps
                     data = np.power(data - init_min, beta)
 
-            data = data.astype(np.uint16, copy=False)
-            dtype = np.uint16
+            if bit == 8:
+                data = data.astype(np.uint8, copy=False)
+                dtype = np.uint8
+            else:
+                data = data.astype(np.uint16, copy=False)
+                dtype = np.uint16
 
         # Create dataset and add attributes
         dset = _original_group_create_dataset(self, name, shape, dtype, data, **kwargs)

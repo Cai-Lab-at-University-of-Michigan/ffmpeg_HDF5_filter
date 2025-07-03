@@ -132,7 +132,7 @@ def compress_and_decompress(data, compression_options, dataset_name="data"):
         # Calculate compression ratio
         original_size = data.nbytes
         compression_ratio = calculate_compression_ratio(original_size, compressed_size)
-        
+
         return decompressed_data, compression_ratio, compressed_size, enc_time, dec_time
     except Exception as e:
         print(str(e))

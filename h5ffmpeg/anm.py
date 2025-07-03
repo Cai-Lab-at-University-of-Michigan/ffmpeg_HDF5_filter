@@ -307,7 +307,7 @@ def plot_results(grains, blockiness, perceptual, compression, combined, best_gra
     plt.savefig('tmp/grain_optimization.png', dpi=150)
     plt.close()
 
-def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', plot=False):
+def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', crf=10, plot=False):
     if img is None:
         raise ValueError("img must be provided")
     
@@ -334,7 +334,7 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
     print(f"Testing grain parameters: {list(grain_range)}")
     
     original_patches = img_patches.copy()
-    params = [hf.svtav1(grain=grain) for grain in grain_range]
+    params = [hf.svtav1(grain=grain, crf=crf) for grain in grain_range]
     
     blockiness_scores = []
     compression_ratios = []
@@ -365,6 +365,9 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
         
         block_score = detect_blockiness(decom_data)
         blockiness_scores.append(block_score)
+
+        original_patches = original_patches.astype(np.float32)
+        decom_data = decom_data.astype(np.float32)
         
         if original_patches.ndim == 4:
             ssim_scores = []
@@ -372,14 +375,14 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', pl
                 orig_patch = original_patches[j]
                 comp_patch = decom_data[j]
                 mid_z = orig_patch.shape[0] // 2
-                ssim_score = ssim(orig_patch[mid_z], comp_patch[mid_z], data_range=np.max(orig_patch[mid_z]))
+                ssim_score = ssim(orig_patch[mid_z], comp_patch[mid_z], data_range=np.amax(orig_patch[mid_z])-np.amin(orig_patch[mid_z]))
                 ssim_scores.append(ssim_score)
             ssim_score = np.mean(ssim_scores)
         elif original_patches.ndim == 3:
             mid_z = original_patches.shape[0] // 2
-            ssim_score = ssim(original_patches[mid_z], decom_data[mid_z], data_range=np.max(original_patches[mid_z]))
+            ssim_score = ssim(original_patches[mid_z], decom_data[mid_z], data_range=np.amax(original_patches[mid_z])-np.amin(original_patches[mid_z]))
         else:
-            ssim_score = ssim(original_patches, decom_data, data_range=np.max(original_patches))
+            ssim_score = ssim(original_patches, decom_data, data_range=np.amax(original_patches)-np.amin(original_patches))
         
         perceptual_scores.append(ssim_score)
         
