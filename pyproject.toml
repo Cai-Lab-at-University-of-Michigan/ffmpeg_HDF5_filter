@@ -29,9 +29,12 @@ before-all = [
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
     
-    /opt/miniconda/bin/conda config --remove channels defaults || true
+    /opt/miniconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
+    /opt/miniconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
+
     /opt/miniconda/bin/conda config --add channels conda-forge
     /opt/miniconda/bin/conda config --set channel_priority strict
+    /opt/miniconda/bin/conda update -y conda
     /opt/miniconda/bin/conda update -y conda
     
     /opt/miniconda/bin/conda install -y hdf5 hdf5-external-filter-plugins pkg-config cmake ninja meson nasm yasm git wget autoconf automake libtool make -c conda-forge
@@ -122,7 +125,6 @@ repair-wheel-command = [
 ]
 
 [tool.cibuildwheel.linux.environment]
-CONDA_ALWAYS_YES = "true"
 FFMPEG_ROOT = "/opt/ffmpeg"
 HDF5_ROOT = "/opt/miniconda"
 PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
@@ -136,7 +138,6 @@ before-all = [
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
     bash miniconda.sh -b -p $HOME/miniconda
     
-    $HOME/miniconda/bin/conda config --remove channels defaults || true
     $HOME/miniconda/bin/conda config --add channels conda-forge
     $HOME/miniconda/bin/conda config --set channel_priority strict
     $HOME/miniconda/bin/conda update -y conda
@@ -308,7 +309,6 @@ before-all = [
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.macos.environment]
-CONDA_ALWAYS_YES = "true"
 FFMPEG_ROOT = "$HOME/ffmpeg"
 HDF5_ROOT = "$HOME/miniconda"
 MACOSX_DEPLOYMENT_TARGET = "12.0"
