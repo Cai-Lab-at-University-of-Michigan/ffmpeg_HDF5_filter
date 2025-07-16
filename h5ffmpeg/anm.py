@@ -8,6 +8,7 @@ from skimage.filters import threshold_otsu, gaussian
 from skimage.metrics import structural_similarity as ssim
 from scipy.ndimage import gaussian_filter, generic_filter
 from scipy.fftpack import dct
+from scipy.optimize import curve_fit
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -307,7 +308,14 @@ def plot_results(grains, blockiness, perceptual, compression, combined, best_gra
     plt.savefig('tmp/grain_optimization.png', dpi=150)
     plt.close()
 
-def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', crf=10, plot=False):
+def film_grain_optimizer(img=None, num_samples=5, quality_focus='artifacts', crf=30, th=0.015, norm=False, plot=False):
+    def fn(x, a, b, c):
+        return a * np.exp(-b * x) + c
+    def fit_fn(x, popt):
+        return popt[0] * np.exp(-popt[1] * x) + popt[2]
+    def derivative(x, popt):
+        return -popt[0] * popt[1] * np.exp(-popt[1] * x)
+    
     if img is None:
         raise ValueError("img must be provided")
     
@@ -334,7 +342,7 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', cr
     print(f"Testing grain parameters: {list(grain_range)}")
     
     original_patches = img_patches.copy()
-    params = [hf.svtav1(grain=grain, crf=crf) for grain in grain_range]
+    params = [hf.svtav1(film_grain=grain, crf=crf, norm=norm) for grain in grain_range]
     
     blockiness_scores = []
     compression_ratios = []
@@ -344,9 +352,22 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', cr
     raw_blockiness = detect_blockiness(original_patches)
     blockiness_scores.append(raw_blockiness)
     print(f"Raw blockiness score: {raw_blockiness:.4f}")
+
+    if quality_focus == 'artifacts':
+        weights = {'blockiness': 0.9, 'perceptual': 0.05, 'structure': 0.05}
+        print("\nOptimizing for artifacts similarity")
+    elif quality_focus == 'structures':
+        weights = {'blockiness': 0.3, 'perceptual': 0.3, 'structure': 0.4}
+        print("\nOptimizing for structure preservation")
+    elif quality_focus == 'background':
+        weights = {'blockiness': 0.5, 'perceptual': 0.4, 'structure': 0.1}
+        print("\nOptimizing for artifact reduction")
+    else:
+        weights = {'blockiness': 0.4, 'perceptual': 0.3, 'structure': 0.3}
+        print("\nUsing balanced approach")
     
     print("\nTesting parameters:")
-    print(f"{'Grain':<6} {'Blockiness':<12} {'SSIM':<12} {'Structure':<12} {'Ratio':<8}")
+    print(f"{'Grain':<6} {'Score':<8} {'Blockiness':<12} {'SSIM':<12} {'Structure':<12} {'Ratio':<8}")
     print("-" * 50)
     
     for i, param in enumerate(params):
@@ -389,21 +410,8 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', cr
         structure_metrics = analyze_structure_preservation(original_patches, decom_data)
         structure_score = structure_metrics['overall_quality']
         structure_scores.append(structure_score)
-        
-        print(f"{grain_range[i]:<6} {block_score:<12.4f} {ssim_score:<12.4f} "
-              f"{structure_score:<12.4f} {avg_cs_ratio:<8.2f}")
     
     norm_blockiness = [score/blockiness_scores[0] for score in blockiness_scores[1:]]
-    
-    if quality_focus == 'structures':
-        weights = {'blockiness': 0.3, 'perceptual': 0.3, 'structure': 0.4}
-        print("\nOptimizing for structure preservation")
-    elif quality_focus == 'background':
-        weights = {'blockiness': 0.5, 'perceptual': 0.4, 'structure': 0.1}
-        print("\nOptimizing for artifact reduction")
-    else:
-        weights = {'blockiness': 0.4, 'perceptual': 0.3, 'structure': 0.3}
-        print("\nUsing balanced approach")
     
     combined_scores = []
     for i in range(len(grain_range)):
@@ -412,19 +420,22 @@ def film_grain_optimizer(img=None, num_samples=5, quality_focus='structures', cr
                  weights['perceptual'] * perceptual_scores[i] +
                  weights['structure'] * structure_scores[i])
         combined_scores.append(score)
+
+        print(f"{grain_range[i]:<6} {score:<8.2f} {blockiness_scores[i+1]:<12.4f} {perceptual_scores[i]:<12.4f} "
+              f"{structure_scores[i]:<12.4f} {compression_ratios[i]:<8.2f}")
     
-    best_idx = np.argmax(combined_scores)
-    best_grain = grain_range[best_idx]
+    popt, _ = curve_fit(fn, grain_range, 1 / np.array(combined_scores))
+    best_grain = np.argwhere(np.abs(derivative(range(51), popt)) < th)
+    if len(best_grain) > 0:
+        best_grain = best_grain[0][0]
+    else:
+        best_grain = 5
     
     if plot:
         plot_results(grain_range, blockiness_scores[1:], perceptual_scores, 
                     compression_ratios, combined_scores, best_grain)
     
     print(f"\nOptimal film grain parameter: {best_grain}")
-    print(f"  - Blockiness: {blockiness_scores[best_idx+1]:.4f}")
-    print(f"  - Perceptual quality: {perceptual_scores[best_idx]:.4f}")
-    print(f"  - Structure preservation: {structure_scores[best_idx]:.4f}")
-    print(f"  - Compression ratio: {compression_ratios[best_idx]:.2f}")
     
     return best_grain, {
         'content_analysis': content_info,
