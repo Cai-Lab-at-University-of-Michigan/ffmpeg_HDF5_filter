@@ -78,6 +78,7 @@ add_library(h5ffmpeg_shared SHARED
     src/ffmpeg_h5filter.c
     src/ffmpeg_h5plugin.c
     src/ffmpeg_native.c
+    src/ffmpeg_utils.c
 )
 
 target_include_directories(h5ffmpeg_shared

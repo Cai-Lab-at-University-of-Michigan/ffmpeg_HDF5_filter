@@ -92,6 +92,7 @@ if is_building_sdist():
             os.path.join('h5ffmpeg', '_ffmpeg_filter.c'), 
             os.path.join('src', 'ffmpeg_h5filter.c'),
             os.path.join('src', 'ffmpeg_native.c'),
+            os.path.join('src', 'ffmpeg_utils.c'),
             os.path.join('src', 'ffmpeg_h5plugin.c')
         ]
     )
@@ -111,9 +112,10 @@ else:
 
     required_files = [
         os.path.join(src_dir, 'ffmpeg_h5filter.h'),
+        os.path.join(src_dir, 'ffmpeg_utils.h'),
         os.path.join(src_dir, 'ffmpeg_h5filter.c'),
         os.path.join(src_dir, 'ffmpeg_h5plugin.c'),
-        os.path.join(src_dir, 'ffmpeg_utils.h'),
+        os.path.join(src_dir, 'ffmpeg_utils.c'),
         os.path.join(src_dir, 'ffmpeg_native.c')
     ]
 
@@ -375,7 +377,8 @@ else:
             os.path.join('h5ffmpeg', '_ffmpeg_filter.c'), 
             os.path.join('src', 'ffmpeg_h5filter.c'),
             os.path.join('src', 'ffmpeg_h5plugin.c'),
-            os.path.join('src', 'ffmpeg_native.c')
+            os.path.join('src', 'ffmpeg_native.c'),
+            os.path.join('src', 'ffmpeg_utils.c')
         ],
         include_dirs=include_dirs,
         library_dirs=library_dirs,
