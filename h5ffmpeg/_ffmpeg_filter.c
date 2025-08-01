@@ -81,8 +81,17 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
 
     // Get data and copy it
     if (flags == 0)
-    { // Compress
-        PyArrayObject *array = (PyArrayObject *)PyArray_GETCONTIGUOUS(input_data);
+    { 
+        // Compress
+        // First check if input_data is actually a NumPy array
+        if (!PyArray_Check(input_data)) {
+            PyErr_SetString(PyExc_TypeError, "Input data must be a numpy array for compression");
+            return NULL;
+        }
+        
+        // Cast to PyArrayObject* and get contiguous array
+        PyArrayObject *input_array = (PyArrayObject *)input_data;
+        PyArrayObject *array = (PyArrayObject *)PyArray_GETCONTIGUOUS(input_array);
         if (!array)
             return NULL;
 

@@ -37,6 +37,25 @@ char *stpcpy(char *dest, const char *src)
 
 #define FFMPEG_FLAG_COMPRESS 0x0000
 
+void raise_ffmpeg_error(const char *msg);
+
+static size_t read_from_buffer(uint8_t *buf, int buf_size, unsigned char **data, int *data_size);
+
+static void find_encoder_name(int c_id, char *codec_name);
+
+static void find_decoder_name(int c_id, char *codec_name);
+
+static void find_preset(int p_id, char *preset);
+
+static void find_tune(int t_id, char *tune);
+
+static void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
+                   size_t *out_size, uint8_t **out_data, size_t *expected_size);
+
+static void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
+                   struct SwsContext *sws_context, AVFrame *dst_frame,
+                   size_t *out_size, uint8_t *out_data, size_t frame_size); 
+
 /*
  * Function:  read_from_buffer
  * --------------------

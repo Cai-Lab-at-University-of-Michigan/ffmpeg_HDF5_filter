@@ -8,9 +8,6 @@
 
 #include "ffmpeg_utils.h"
 
-#define PUSH_ERR(func, minor, str) \
-    H5Epush2(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
-
 herr_t raise_ffmpeg_h5_error(const char *msg)
 {
     PUSH_ERR("HDF5_FILTER_FFMPEG", H5E_CALLBACK, msg);

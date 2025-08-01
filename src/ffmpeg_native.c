@@ -8,7 +8,7 @@
 
 #include "ffmpeg_utils.h"
 
-herr_t raise_ffmpeg_error(const char *msg)
+void raise_ffmpeg_error(const char *msg)
 {
     fprintf(stderr, "\e[96;40m[HDF5_FILTER_FFMPEG]\e[91;40m %s\e[0m", msg);
     fflush(stderr);

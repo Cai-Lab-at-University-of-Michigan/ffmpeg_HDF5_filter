@@ -15,6 +15,11 @@
 
 #define FFMPEG_H5FILTER 32030 /* filter id here */
 
+#define PUSH_ERR(func, minor, str) \
+    H5Epush2(H5E_DEFAULT, __FILE__, func, __LINE__, H5E_ERR_CLS, H5E_PLINE, minor, str)
+
+herr_t raise_ffmpeg_h5_error(const char *msg);
+
 H5_DLLVAR H5Z_class_t ffmpeg_H5Filter[1];
 
 /* ---- ffmpeg_register_h5filter ----
@@ -56,8 +61,8 @@ enum DecoderCodecEnum
 enum PresetIDEnum
 {
     /* no preset
-    /* means default preset is using depends on codecs
-    */
+     * means default preset is using depends on codecs
+     */
     FFH5_PRESET_NONE = 0,
     /* libx264 */
     FFH5_PRESET_X264_ULTRAFAST = 10,
@@ -142,8 +147,8 @@ enum PresetIDEnum
 enum TuneTypeEnum
 {
     /* no tune
-    /* means default tune is using depends on codecs
-    */
+     * means default tune is using depends on codecs
+     */
     FFH5_TUNE_NONE = 0,
     /* libx264 */
     FFH5_TUNE_X264_PSNR = 10,
