@@ -644,3 +644,139 @@ def av1_nvenc(preset="p4", crf=23, **kwargs):
 def av1_qsv(preset="medium", crf=30, tune=None, **kwargs):
     """Convenience function for Intel AV1 QSV hardware compression"""
     return ffmpeg(codec="av1_qsv", preset=preset, crf=crf, tune=tune, **kwargs)
+
+# native functions
+try:
+    from ._ffmpeg_filter import ffmpeg_native_c
+    
+    def read_metadata_from_compressed(compressed_data):
+        """Extract metadata from compressed data header"""
+        import struct
+        
+        if len(compressed_data) < 8:
+            raise ValueError("Invalid compressed data: too short")
+        
+        offset = 0
+        
+        # Read header: metadata size + version
+        metadata_size, version = struct.unpack('II', compressed_data[offset:offset+8])
+        offset += 8
+        
+        if len(compressed_data) < 8 + metadata_size:
+            raise ValueError("Invalid compressed data: metadata size mismatch")
+        
+        if version == 1:
+            # Read metadata fields (11 unsigned ints + 1 size_t)
+            metadata_values = struct.unpack('I' * 11, compressed_data[offset:offset+44])
+            offset += 44
+            
+            # Read compressed_size as size_t
+            import sys
+            if sys.maxsize > 2**32:  # 64-bit system
+                compressed_size = struct.unpack('Q', compressed_data[offset:offset+8])[0]
+                offset += 8
+            else:  # 32-bit system
+                compressed_size = struct.unpack('I', compressed_data[offset:offset+4])[0]
+                offset += 4
+                
+        elif version == 0:
+            # Version 0 (legacy): all fields as unsigned int
+            metadata_values = struct.unpack('I' * 12, compressed_data[offset:offset+48])
+            compressed_size = metadata_values[11]
+            metadata_values = metadata_values[:11]
+            offset += 48
+        else:
+            raise ValueError(f"Unsupported metadata version: {version}")
+        
+        enc_id, dec_id, width, height, depth, bit_mode, preset_id, tune_id, crf, film_grain, gpu_id = metadata_values
+        
+        return {
+            'enc_id': enc_id,
+            'dec_id': dec_id,
+            'preset_id': preset_id,
+            'tune_id': tune_id,
+            'width': width,
+            'height': height,
+            'depth': depth,
+            'bit_mode': bit_mode,
+            'crf': crf,
+            'film_grain': film_grain,
+            'gpu_id': gpu_id,
+            'compressed_size': compressed_size,
+            'data_offset': offset,
+            'version': version
+        }
+    
+    def ffmpeg_native(flags, data, codec="libx264", preset=None, tune=None, crf=23, 
+                     bit_mode=BitMode.BIT_8, film_grain=0, gpu_id=0):
+        """Single native function for compress (flags=0) and decompress (flags=1)"""
+        
+        if flags == 0:  # Compress
+            data = np.asarray(data)
+            if data.ndim != 3:
+                raise ValueError("Data must be 3D (depth, height, width)")
+            
+            depth, height, width = data.shape
+            enc_id = CODEC_TO_ENCODER[codec]
+            dec_id = DEFAULT_DECODER[enc_id]
+            
+            preset_id = PRESET_MAPPING.get(codec, {}).get(preset, Preset.NONE) if preset else Preset.NONE
+            tune_id = TUNE_MAPPING.get(codec, {}).get(tune, Tune.NONE) if tune else Tune.NONE
+            
+            # Ensure correct data type
+            if bit_mode == BitMode.BIT_8:
+                data = np.ascontiguousarray(data, dtype=np.uint8)
+            else:
+                data = np.ascontiguousarray(data, dtype=np.uint16)
+            
+            buf_size = data.nbytes
+                
+        else:  # Decompress (flags=1)
+            # Read metadata from the compressed bytes
+            metadata = read_metadata_from_compressed(data)
+            
+            # Extract values from metadata
+            width = metadata['width']
+            height = metadata['height'] 
+            depth = metadata['depth']
+            bit_mode = metadata['bit_mode']
+            enc_id = metadata['enc_id']
+            dec_id = metadata['dec_id']
+            preset_id = metadata['preset_id']
+            tune_id = metadata['tune_id']
+            crf = metadata['crf']
+            film_grain = metadata['film_grain']
+            gpu_id = metadata['gpu_id']
+            
+            # Extract only the compressed data (skip metadata)
+            data_offset = metadata['data_offset']
+            data = data[data_offset:]
+            buf_size = len(data)
+        
+        # Build cd_values tuple (exactly 11 elements as expected by C function)
+        cd_values = (enc_id, dec_id, width, height, depth, bit_mode, 
+                    preset_id, tune_id, crf, film_grain, gpu_id)
+        
+        # Call C function
+        return ffmpeg_native_c(flags, cd_values, buf_size, data)
+    
+    # Convenience functions
+    def compress_native(data, **kwargs):
+        """Compress data using native FFMPEG"""
+        return ffmpeg_native(0, data, **kwargs)
+    
+    def decompress_native(compressed_data, **kwargs):
+        """Decompress data using native FFMPEG"""
+        return ffmpeg_native(1, compressed_data, **kwargs)
+        
+    NATIVE_AVAILABLE = True
+        
+except ImportError:
+    def ffmpeg_native(*args, **kwargs):
+        raise RuntimeError("Native functions not available - C extension not compiled with native support")
+    def compress_native(*args, **kwargs):
+        raise RuntimeError("Native functions not available - C extension not compiled with native support")
+    def decompress_native(*args, **kwargs):
+        raise RuntimeError("Native functions not available - C extension not compiled with native support")
+    
+    NATIVE_AVAILABLE = False

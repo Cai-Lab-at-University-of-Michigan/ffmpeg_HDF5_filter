@@ -143,6 +143,9 @@ else:
 from .ffmpeg_filter import (
     # Main API functions
     ffmpeg, mpeg4, x264, x265, rav1e, svtav1, h264_nvenc, hevc_nvenc, av1_nvenc, av1_qsv,
+
+    # native ones
+    ffmpeg_native, compress_native, decompress_native, NATIVE_AVAILABLE,
     
     # Classes for constants and enum values
     EncoderCodec, DecoderCodec, Preset, Tune, BitMode,
@@ -153,10 +156,9 @@ from .ffmpeg_filter import (
 
 from .anm import film_grain_optimizer
 
-
-# Define what gets imported with "from h5ffmpeg import *"
 __all__ = [
     'ffmpeg', 'mpeg4', 'x264', 'x265', 'svtav1', 'rav1e', 'h264_nvenc', 'hevc_nvenc', 'av1_nvenc', 'av1_qsv',
     'EncoderCodec', 'DecoderCodec', 'Preset', 'Tune', 'BitMode', 'has_nvidia_gpu', 'has_intel_gpu', 
-    'FFMPEG_ID', 'film_grain_optimizer', 'FILTER_REGISTERED'
+    'FFMPEG_ID', 'film_grain_optimizer', 'FILTER_REGISTERED',
+    'ffmpeg_native', 'compress_native', 'decompress_native', 'NATIVE_AVAILABLE'
 ]

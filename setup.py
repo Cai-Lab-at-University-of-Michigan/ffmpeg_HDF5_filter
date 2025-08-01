@@ -91,6 +91,7 @@ if is_building_sdist():
         sources=[
             os.path.join('h5ffmpeg', '_ffmpeg_filter.c'), 
             os.path.join('src', 'ffmpeg_h5filter.c'),
+            os.path.join('src', 'ffmpeg_native.c'),
             os.path.join('src', 'ffmpeg_h5plugin.c')
         ]
     )
@@ -111,7 +112,9 @@ else:
     required_files = [
         os.path.join(src_dir, 'ffmpeg_h5filter.h'),
         os.path.join(src_dir, 'ffmpeg_h5filter.c'),
-        os.path.join(src_dir, 'ffmpeg_h5plugin.c')
+        os.path.join(src_dir, 'ffmpeg_h5plugin.c'),
+        os.path.join(src_dir, 'ffmpeg_utils.h'),
+        os.path.join(src_dir, 'ffmpeg_native.c')
     ]
 
     for file_path in required_files:
@@ -341,7 +344,8 @@ else:
     else:
         libraries.extend(['hdf5'])
 
-    extra_compile_args = ['-DFFMPEG_H5_FILTER_EXPORTS']
+    extra_compile_args = ['-DFFMPEG_H5_FILTER_EXPORTS',
+                          '-DFFMPEG_NATIVE_SUPPORT']
     extra_link_args = []
 
     if system == 'linux':
@@ -370,7 +374,8 @@ else:
         sources=[
             os.path.join('h5ffmpeg', '_ffmpeg_filter.c'), 
             os.path.join('src', 'ffmpeg_h5filter.c'),
-            os.path.join('src', 'ffmpeg_h5plugin.c')
+            os.path.join('src', 'ffmpeg_h5plugin.c'),
+            os.path.join('src', 'ffmpeg_native.c')
         ],
         include_dirs=include_dirs,
         library_dirs=library_dirs,
@@ -421,7 +426,7 @@ except FileNotFoundError:
 
 setup(
     name="h5ffmpeg",
-    version="2.2.2",
+    version="2.2.4",
     description="HDF5 filter plugin for FFMPEG video codec compression",
     long_description=long_description,
     long_description_content_type="text/markdown",

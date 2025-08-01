@@ -77,6 +77,7 @@ endif()
 add_library(h5ffmpeg_shared SHARED
     src/ffmpeg_h5filter.c
     src/ffmpeg_h5plugin.c
+    src/ffmpeg_native.c
 )
 
 target_include_directories(h5ffmpeg_shared
@@ -119,6 +120,10 @@ install(TARGETS h5ffmpeg_shared
 )
 
 install(FILES src/ffmpeg_h5filter.h
+    DESTINATION include
+)
+
+install(FILES src/ffmpeg_utils.h
     DESTINATION include
 )
 

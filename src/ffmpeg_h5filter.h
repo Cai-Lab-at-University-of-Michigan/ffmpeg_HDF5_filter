@@ -55,7 +55,7 @@ enum DecoderCodecEnum
 };
 enum PresetIDEnum
 {
-    /* no preset 
+    /* no preset
     /* means default preset is using depends on codecs
     */
     FFH5_PRESET_NONE = 0,
@@ -141,10 +141,10 @@ enum PresetIDEnum
 };
 enum TuneTypeEnum
 {
-    /* no tune 
+    /* no tune
     /* means default tune is using depends on codecs
     */
-    FFH5_TUNE_NONE = 0, 
+    FFH5_TUNE_NONE = 0,
     /* libx264 */
     FFH5_TUNE_X264_PSNR = 10,
     FFH5_TUNE_X264_SSIM = 11,
