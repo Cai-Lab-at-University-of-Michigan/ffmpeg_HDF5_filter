@@ -2,6 +2,7 @@ import h5py
 import numpy as np
 import math
 from collections.abc import Iterable
+from .ffmpeg_filter import modify_compression_opts
 
 FFMPEG_ID = 32030
 MAX_CHUNK_SIZE = 4 * 1024**3  # 4 GB
@@ -13,6 +14,12 @@ _original_dataset_setitem = h5py.Dataset.__setitem__
 
 # Define new getitem method
 def _patched_getitem(self, key):
+    compression = self.attrs.get("compression", 0)
+
+    if compression == FFMPEG_ID:
+        compression_opts = self.attrs.get("compression_opts", 0)
+        self.attrs.set("compression_opts", modify_compression_opts(compression_opts))
+
     data = _original_dataset_getitem(self, key)
 
     # Check if this dataset should be quantized

@@ -5,8 +5,6 @@ This package provides Python bindings for the FFMPEG HDF5 filter,
 enabling high-ratio compression of scientific datasets using video codecs.
 """
 
-__version__ = "1.0.0"
-
 import os
 import sys
 import warnings
@@ -14,19 +12,31 @@ import logging
 import traceback
 import ctypes
 
-# Set environment variable to hide svtav1 info logging
 os.environ["SVT_LOG"] = "1"
 
 logger = logging.getLogger(__name__)
 
+# Import version first
+try:
+    from ._version import __version__
+except ImportError:
+    __version__ = "unknown"
+
+# Import constants early (needed for FFMPEG_ID)
+from .constants import FFMPEG_ID
+
+# Try to import C extension
 try:
     from ._ffmpeg_filter import (
         register_filter,
         get_filter_id,
     )
 
-    FFMPEG_ID = get_filter_id()
-
+    # Verify the filter ID matches
+    extension_id = get_filter_id()
+    if extension_id != FFMPEG_ID:
+        logger.warning(f"Filter ID mismatch: constants={FFMPEG_ID}, extension={extension_id}")
+    
     # Initialize registration status
     HAS_EXTENSION = True
 except ImportError as e:
@@ -37,9 +47,7 @@ except ImportError as e:
         "This could be due to missing dependencies or incompatible platform. "
         "The filter will not be available for compression."
     )
-    FFMPEG_ID = 32030
     HAS_EXTENSION = False
-
 
 # Register the filter with HDF5 and h5py
 def _register_with_h5py():
@@ -138,7 +146,6 @@ def _register_with_h5py():
         logger.error(traceback.format_exc())
         return False
 
-
 # Attempt to register the filter
 if HAS_EXTENSION:
     FILTER_REGISTERED = _register_with_h5py()
@@ -148,14 +155,32 @@ if HAS_EXTENSION:
             "The filter may not be available for compression."
         )
     else:
-        from .patches import dummy
+        try:
+            from .patches import dummy
+        except ImportError:
+            logger.warning("Could not import patches module")
 else:
     FILTER_REGISTERED = False
 
-# Import the other modules
+# Import from the organized modules
+from .constants import (
+    EncoderCodec,
+    DecoderCodec, 
+    Preset,
+    Tune,
+    BitMode,
+)
+
+from .gpu_utils import (
+    has_nvidia_gpu,
+    has_intel_gpu,
+    detect_available_gpus,
+)
+
 from .ffmpeg_filter import (
     # Main API functions
     ffmpeg,
+    # Convenience functions
     mpeg4,
     x264,
     x265,
@@ -165,47 +190,58 @@ from .ffmpeg_filter import (
     hevc_nvenc,
     av1_nvenc,
     av1_qsv,
-    # native ones
+    # Native functions
     ffmpeg_native,
     compress_native,
     decompress_native,
     NATIVE_AVAILABLE,
-    # Classes for constants and enum values
-    EncoderCodec,
-    DecoderCodec,
-    Preset,
-    Tune,
-    BitMode,
-    # Helper functions for hardware detection
-    has_nvidia_gpu,
-    has_intel_gpu,
+    # Filter class
+    FFMPEG,
 )
 
-from .anm import film_grain_optimizer
+# Import additional modules
+try:
+    from .anm import film_grain_optimizer
+except ImportError:
+    logger.warning("Could not import film_grain_optimizer from anm module")
+    film_grain_optimizer = None
 
 __all__ = [
+    # Version and status
+    "__version__",
+    "FFMPEG_ID", 
+    "FILTER_REGISTERED",
+    "NATIVE_AVAILABLE",
+    # Main API functions
     "ffmpeg",
+    "FFMPEG",
+    # Convenience functions
     "mpeg4",
     "x264",
     "x265",
     "svtav1",
-    "rav1e",
+    "rav1e", 
     "h264_nvenc",
     "hevc_nvenc",
     "av1_nvenc",
     "av1_qsv",
-    "EncoderCodec",
-    "DecoderCodec",
-    "Preset",
-    "Tune",
-    "BitMode",
-    "has_nvidia_gpu",
-    "has_intel_gpu",
-    "FFMPEG_ID",
-    "film_grain_optimizer",
-    "FILTER_REGISTERED",
+    # Native functions
     "ffmpeg_native",
     "compress_native",
     "decompress_native",
-    "NATIVE_AVAILABLE",
+    # Constants and enums
+    "EncoderCodec",
+    "DecoderCodec",
+    "Preset", 
+    "Tune",
+    "BitMode",
+    # Hardware detection
+    "has_nvidia_gpu",
+    "has_intel_gpu",
+    "detect_available_gpus",
+    # Additional utilities
+    "film_grain_optimizer",
 ]
+
+# Remove None values from __all__ if imports failed
+__all__ = [item for item in __all__ if globals().get(item) is not None]

@@ -145,7 +145,14 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
     { 
         // Compression: Return metadata + compressed data
         // Create metadata structure with size_t for compressed_size
-        size_t metadata_size = 11 * sizeof(unsigned int) + sizeof(size_t); // 11 uint32 + 1 size_t
+
+        PyObject *module = PyImport_ImportModule("h5ffmpeg._ffmpeg_filter");
+        PyObject *version_obj = PyObject_GetAttrString(module, "HEADER_VERSION");
+        unsigned int header_version = version_obj ? (unsigned int)PyLong_AsUnsignedLong(version_obj) : 2;
+        Py_XDECREF(version_obj);
+        Py_XDECREF(module);
+
+        size_t metadata_size = 11 * sizeof(unsigned int) + sizeof(uint64_t); // 11 uint32 + 1 size_t
         size_t header_size = 8; // metadata_size(4) + version(4)
         size_t total_size = header_size + metadata_size + result_size;
         
@@ -161,7 +168,7 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         // Write header: metadata size + version
         *(unsigned int*)(output_buf + offset) = (unsigned int)metadata_size;
         offset += sizeof(unsigned int);
-        *(unsigned int*)(output_buf + offset) = 1; // Version 1 (supports size_t)
+        *(unsigned int*)(output_buf + offset) = header_version;
         offset += sizeof(unsigned int);
         
         // Write metadata fields (11 unsigned ints)
@@ -182,9 +189,9 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         memcpy(output_buf + offset, metadata, 11 * sizeof(unsigned int));
         offset += 11 * sizeof(unsigned int);
         
-        // Write compressed_size as size_t (8 bytes on 64-bit systems)
-        *(size_t*)(output_buf + offset) = result_size;
-        offset += sizeof(size_t);
+        // Write compressed_size as uint64_t
+        *(uint64_t*)(output_buf + offset) = (uint64_t)result_size;
+        offset += sizeof(uint64_t);
         
         // Write compressed data
         memcpy(output_buf + offset, buf, result_size);
@@ -252,5 +259,20 @@ PyMODINIT_FUNC PyInit__ffmpeg_filter(void)
     // Add the filter ID constant
     PyModule_AddIntConstant(m, "FFMPEG_ID", FFMPEG_FILTER_ID);
 
+    PyObject *constants_module = PyImport_ImportModule("h5ffmpeg.constants");
+    if (constants_module) {
+        PyObject *get_version_func = PyObject_GetAttrString(constants_module, "get_current_header_version");
+        if (get_version_func && PyCallable_Check(get_version_func)) {
+            PyObject *version_result = PyObject_CallObject(get_version_func, NULL);
+            if (version_result && PyLong_Check(version_result)) {
+                long header_version = PyLong_AsLong(version_result);
+                PyModule_AddIntConstant(m, "HEADER_VERSION", (int)header_version);
+            }
+            Py_XDECREF(version_result);
+        }
+        Py_XDECREF(get_version_func);
+        Py_DECREF(constants_module);
+    }
+    
     return m;
 }
