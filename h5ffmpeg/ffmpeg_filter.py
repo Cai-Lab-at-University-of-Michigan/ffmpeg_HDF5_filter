@@ -9,10 +9,7 @@ import os
 import subprocess
 import numpy as np
 import h5py
-import functools
-import io
 import sys
-import contextlib
 import logging
 
 logger = logging.getLogger(__name__)

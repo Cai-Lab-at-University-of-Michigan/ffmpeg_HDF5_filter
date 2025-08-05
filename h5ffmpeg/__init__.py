@@ -13,7 +13,6 @@ import warnings
 import logging
 import traceback
 import ctypes
-import functools
 
 # Set environment variable to hide svtav1 info logging
 os.environ["SVT_LOG"] = "1"
