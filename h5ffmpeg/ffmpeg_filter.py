@@ -712,23 +712,19 @@ try:
         """Single native function for compress (flags=0) and decompress (flags=1)"""
         
         if flags == 0:  # Compress
-            data = np.asarray(data)
-            if data.ndim != 3:
-                raise ValueError("Data must be 3D (depth, height, width)")
-            
-            depth, height, width = data.shape
             enc_id = CODEC_TO_ENCODER[codec]
             dec_id = DEFAULT_DECODER[enc_id]
             
             preset_id = PRESET_MAPPING.get(codec, {}).get(preset, Preset.NONE) if preset else Preset.NONE
             tune_id = TUNE_MAPPING.get(codec, {}).get(tune, Tune.NONE) if tune else Tune.NONE
+
+            data = np.ascontiguousarray(data, dtype=(np.uint8 if bit_mode == BitMode.BIT_8 else np.uint16))
             
-            # Ensure correct data type
-            if bit_mode == BitMode.BIT_8:
-                data = np.ascontiguousarray(data, dtype=np.uint8)
-            else:
-                data = np.ascontiguousarray(data, dtype=np.uint16)
-            
+            if data.ndim != 3:
+                raise ValueError("Data must be a 3D array (depth, height, width)")
+
+            depth, height, width = data.shape
+
             buf_size = data.nbytes
                 
         else:  # Decompress (flags=1)
