@@ -19,9 +19,11 @@ logger = logging.getLogger(__name__)
 
 FFMPEG_ID = 32030
 
+
 # Encoder codec IDs
 class EncoderCodec:
     """Encoder codec identifiers for FFMPEG HDF5 filter"""
+
     MPEG4 = 0
     XVID = 1
     X264 = 2
@@ -33,9 +35,11 @@ class EncoderCodec:
     AV1_NVENC = 8
     AV1_QSV = 9
 
+
 # Decoder codec IDs
 class DecoderCodec:
     """Decoder codec identifiers for FFMPEG HDF5 filter"""
+
     MPEG4 = 0
     H264 = 1
     H264_CUVID = 2
@@ -46,11 +50,13 @@ class DecoderCodec:
     AV1_CUVID = 7
     AV1_QSV = 8
 
+
 # Preset IDs
 class Preset:
     """Preset identifiers for FFMPEG HDF5 filter"""
+
     NONE = 0
-    
+
     # libx264 presets
     X264_ULTRAFAST = 10
     X264_SUPERFAST = 11
@@ -61,7 +67,7 @@ class Preset:
     X264_SLOW = 16
     X264_SLOWER = 17
     X264_VERYSLOW = 18
-    
+
     # h264_nvenc presets
     H264NV_FASTEST = 100
     H264NV_FASTER = 101
@@ -70,7 +76,7 @@ class Preset:
     H264NV_SLOW = 104
     H264NV_SLOWER = 105
     H264NV_SLOWEST = 106
-    
+
     # x265 presets
     X265_ULTRAFAST = 200
     X265_SUPERFAST = 201
@@ -81,7 +87,7 @@ class Preset:
     X265_SLOW = 206
     X265_SLOWER = 207
     X265_VERYSLOW = 208
-    
+
     # hevc_nvenc presets
     HEVCNV_FASTEST = 300
     HEVCNV_FASTER = 301
@@ -90,7 +96,7 @@ class Preset:
     HEVCNV_SLOW = 304
     HEVCNV_SLOWER = 305
     HEVCNV_SLOWEST = 306
-    
+
     # svtav1 presets
     SVTAV1_ULTRAFAST = 400
     SVTAV1_SUPERFAST = 401
@@ -106,7 +112,7 @@ class Preset:
     SVTAV1_MUCHSLOWER = 411
     SVTAV1_VERYSLOW = 412
     SVTAV1_SUPERSLOW = 413
-    
+
     # rav1e presets
     RAV1E_MUCHFASTER = 500
     RAV1E_FASTER = 501
@@ -119,7 +125,7 @@ class Preset:
     RAV1E_MUCHSLOWER = 508
     RAV1E_VERYSLOW = 509
     RAV1E_SUPERSLOW = 510
-    
+
     # av1_nvenc presets
     AV1NV_FASTEST = 600
     AV1NV_FASTER = 601
@@ -128,7 +134,7 @@ class Preset:
     AV1NV_SLOW = 604
     AV1NV_SLOWER = 605
     AV1NV_SLOWEST = 606
-    
+
     # av1_qsv presets
     AV1QSV_FASTEST = 700
     AV1QSV_FASTER = 701
@@ -138,11 +144,13 @@ class Preset:
     AV1QSV_SLOWER = 705
     AV1QSV_SLOWEST = 706
 
+
 # Tune IDs
 class Tune:
     """Tune identifiers for FFMPEG HDF5 filter"""
+
     NONE = 0
-    
+
     # libx264 tunes
     X264_PSNR = 10
     X264_SSIM = 11
@@ -152,13 +160,13 @@ class Tune:
     X264_ANIMATION = 15
     X264_FILM = 16
     X264_STILLIMAGE = 17
-    
+
     # h264_nvenc tunes
     H264NV_HQ = 100
     H264NV_LL = 101
     H264NV_ULL = 102
     H264NV_LOSSLESS = 103
-    
+
     # x265 tunes
     X265_PSNR = 200
     X265_SSIM = 201
@@ -166,28 +174,28 @@ class Tune:
     X265_FASTDECODE = 203
     X265_ZEROLATENCY = 204
     X265_ANIMATION = 205
-    
+
     # hevc_nvenc tunes
     HEVCNV_HQ = 300
     HEVCNV_LL = 301
     HEVCNV_ULL = 302
     HEVCNV_LOSSLESS = 303
-    
+
     # svtav1 tunes
     SVTAV1_VQ = 400
     SVTAV1_PSNR = 401
     SVTAV1_FASTDECODE = 402
-    
+
     # rav1e tunes
     RAV1E_PSNR = 500
     RAV1E_PSYCHOVISUAL = 501
-    
+
     # av1_nvenc tunes
     AV1NV_HQ = 600
     AV1NV_LL = 601
     AV1NV_ULL = 602
     AV1NV_LOSSLESS = 603
-    
+
     # av1_qsv tunes
     AV1QSV_UNKNOWN = 700
     AV1QSV_DISPLAYREMOTING = 701
@@ -199,12 +207,15 @@ class Tune:
     AV1QSV_GAMESTREAMING = 707
     AV1QSV_REMOTEGAMING = 708
 
+
 # Bit modes
 class BitMode:
     """Bit depth modes for FFMPEG HDF5 filter"""
+
     BIT_8 = 0
     BIT_10 = 1
     BIT_12 = 2
+
 
 # Mapping of codec names to encoder IDs
 CODEC_TO_ENCODER = {
@@ -217,7 +228,7 @@ CODEC_TO_ENCODER = {
     "libsvtav1": EncoderCodec.SVTAV1,
     "librav1e": EncoderCodec.RAV1E,
     "av1_nvenc": EncoderCodec.AV1_NVENC,
-    "av1_qsv": EncoderCodec.AV1_QSV
+    "av1_qsv": EncoderCodec.AV1_QSV,
 }
 
 # Mapping of codec names to decoder IDs
@@ -230,7 +241,7 @@ CODEC_TO_DECODER = {
     "libaom-av1": DecoderCodec.AOMAV1,
     "libdav1d": DecoderCodec.DAV1D,
     "av1_cuvid": DecoderCodec.AV1_CUVID,
-    "av1_qsv": DecoderCodec.AV1_QSV
+    "av1_qsv": DecoderCodec.AV1_QSV,
 }
 
 # Mapping of preset names to preset IDs for each codec
@@ -244,7 +255,7 @@ PRESET_MAPPING = {
         "medium": Preset.X264_MEDIUM,
         "slow": Preset.X264_SLOW,
         "slower": Preset.X264_SLOWER,
-        "veryslow": Preset.X264_VERYSLOW
+        "veryslow": Preset.X264_VERYSLOW,
     },
     "h264_nvenc": {
         "p1": Preset.H264NV_FASTEST,
@@ -253,7 +264,7 @@ PRESET_MAPPING = {
         "p4": Preset.H264NV_MEDIUM,
         "p5": Preset.H264NV_SLOW,
         "p6": Preset.H264NV_SLOWER,
-        "p7": Preset.H264NV_SLOWEST
+        "p7": Preset.H264NV_SLOWEST,
     },
     "libx265": {
         "ultrafast": Preset.X265_ULTRAFAST,
@@ -264,7 +275,7 @@ PRESET_MAPPING = {
         "medium": Preset.X265_MEDIUM,
         "slow": Preset.X265_SLOW,
         "slower": Preset.X265_SLOWER,
-        "veryslow": Preset.X265_VERYSLOW
+        "veryslow": Preset.X265_VERYSLOW,
     },
     "hevc_nvenc": {
         "p1": Preset.HEVCNV_FASTEST,
@@ -273,7 +284,7 @@ PRESET_MAPPING = {
         "p4": Preset.HEVCNV_MEDIUM,
         "p5": Preset.HEVCNV_SLOW,
         "p6": Preset.HEVCNV_SLOWER,
-        "p7": Preset.HEVCNV_SLOWEST
+        "p7": Preset.HEVCNV_SLOWEST,
     },
     "libsvtav1": {
         "0": Preset.SVTAV1_ULTRAFAST,
@@ -289,7 +300,7 @@ PRESET_MAPPING = {
         "10": Preset.SVTAV1_SLOWER,
         "11": Preset.SVTAV1_MUCHSLOWER,
         "12": Preset.SVTAV1_VERYSLOW,
-        "13": Preset.SVTAV1_SUPERSLOW
+        "13": Preset.SVTAV1_SUPERSLOW,
     },
     "librav1e": {
         "0": Preset.RAV1E_MUCHFASTER,
@@ -302,7 +313,7 @@ PRESET_MAPPING = {
         "7": Preset.RAV1E_SLOWER,
         "8": Preset.RAV1E_MUCHSLOWER,
         "9": Preset.RAV1E_VERYSLOW,
-        "10": Preset.RAV1E_SUPERSLOW
+        "10": Preset.RAV1E_SUPERSLOW,
     },
     "av1_nvenc": {
         "p1": Preset.AV1NV_FASTEST,
@@ -311,7 +322,7 @@ PRESET_MAPPING = {
         "p4": Preset.AV1NV_MEDIUM,
         "p5": Preset.AV1NV_SLOW,
         "p6": Preset.AV1NV_SLOWER,
-        "p7": Preset.AV1NV_SLOWEST
+        "p7": Preset.AV1NV_SLOWEST,
     },
     "av1_qsv": {
         "veryfast": Preset.AV1QSV_FASTEST,
@@ -320,8 +331,8 @@ PRESET_MAPPING = {
         "medium": Preset.AV1QSV_MEDIUM,
         "slow": Preset.AV1QSV_SLOW,
         "slower": Preset.AV1QSV_SLOWER,
-        "veryslow": Preset.AV1QSV_SLOWEST
-    }
+        "veryslow": Preset.AV1QSV_SLOWEST,
+    },
 }
 
 # Mapping of tune names to tune IDs for each codec
@@ -334,13 +345,13 @@ TUNE_MAPPING = {
         "zerolatency": Tune.X264_ZEROLATENCY,
         "animation": Tune.X264_ANIMATION,
         "film": Tune.X264_FILM,
-        "stillimage": Tune.X264_STILLIMAGE
+        "stillimage": Tune.X264_STILLIMAGE,
     },
     "h264_nvenc": {
         "hq": Tune.H264NV_HQ,
         "ll": Tune.H264NV_LL,
         "ull": Tune.H264NV_ULL,
-        "lossless": Tune.H264NV_LOSSLESS
+        "lossless": Tune.H264NV_LOSSLESS,
     },
     "libx265": {
         "psnr": Tune.X265_PSNR,
@@ -348,28 +359,25 @@ TUNE_MAPPING = {
         "grain": Tune.X265_GRAIN,
         "fastdecode": Tune.X265_FASTDECODE,
         "zerolatency": Tune.X265_ZEROLATENCY,
-        "animation": Tune.X265_ANIMATION
+        "animation": Tune.X265_ANIMATION,
     },
     "hevc_nvenc": {
         "hq": Tune.HEVCNV_HQ,
         "ll": Tune.HEVCNV_LL,
         "ull": Tune.HEVCNV_ULL,
-        "lossless": Tune.HEVCNV_LOSSLESS
+        "lossless": Tune.HEVCNV_LOSSLESS,
     },
     "libsvtav1": {
         "vq": Tune.SVTAV1_VQ,
         "psnr": Tune.SVTAV1_PSNR,
-        "fastdecode": Tune.SVTAV1_FASTDECODE
+        "fastdecode": Tune.SVTAV1_FASTDECODE,
     },
-    "librav1e": {
-        "psnr": Tune.RAV1E_PSNR,
-        "psychovisual": Tune.RAV1E_PSYCHOVISUAL
-    },
+    "librav1e": {"psnr": Tune.RAV1E_PSNR, "psychovisual": Tune.RAV1E_PSYCHOVISUAL},
     "av1_nvenc": {
         "hq": Tune.AV1NV_HQ,
         "ll": Tune.AV1NV_LL,
         "ull": Tune.AV1NV_ULL,
-        "lossless": Tune.AV1NV_LOSSLESS
+        "lossless": Tune.AV1NV_LOSSLESS,
     },
     "av1_qsv": {
         "unknown": Tune.AV1QSV_UNKNOWN,
@@ -380,8 +388,8 @@ TUNE_MAPPING = {
         "cameracapture": Tune.AV1QSV_CAMERACAPTURE,
         "videosurveillance": Tune.AV1QSV_VIDEOSURVEILLANCE,
         "gamestreaming": Tune.AV1QSV_GAMESTREAMING,
-        "remotegaming": Tune.AV1QSV_REMOTEGAMING
-    }
+        "remotegaming": Tune.AV1QSV_REMOTEGAMING,
+    },
 }
 
 # Default decoder mapping for encoders
@@ -396,7 +404,7 @@ DEFAULT_DECODER = {
     EncoderCodec.SVTAV1: DecoderCodec.DAV1D,
     EncoderCodec.RAV1E: DecoderCodec.DAV1D,
     EncoderCodec.AV1_NVENC: DecoderCodec.DAV1D,
-    EncoderCodec.AV1_QSV: DecoderCodec.DAV1D
+    EncoderCodec.AV1_QSV: DecoderCodec.DAV1D,
 }
 
 # Default decoder mapping for GPU-based encoders
@@ -404,14 +412,15 @@ DEFAULT_GPU_DECODER = {
     EncoderCodec.H264_NVENC: DecoderCodec.H264_CUVID,
     EncoderCodec.HEVC_NVENC: DecoderCodec.HEVC_CUVID,
     EncoderCodec.AV1_NVENC: DecoderCodec.AV1_CUVID,
-    EncoderCodec.AV1_QSV: DecoderCodec.AV1_QSV
+    EncoderCodec.AV1_QSV: DecoderCodec.AV1_QSV,
 }
+
 
 # Hardware detection functions
 def has_nvidia_gpu():
     """
     Detect if NVIDIA GPU is available for hardware acceleration.
-    
+
     Returns:
     --------
     bool
@@ -420,20 +429,18 @@ def has_nvidia_gpu():
     try:
         # Try to run nvidia-smi
         result = subprocess.run(
-            ["nvidia-smi"], 
-            stdout=subprocess.PIPE, 
-            stderr=subprocess.PIPE, 
-            timeout=2
+            ["nvidia-smi"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2
         )
         return result.returncode == 0
     except (subprocess.SubprocessError, FileNotFoundError):
         # Command failed or not found
         return False
 
+
 def has_intel_gpu():
     """
     Detect if Intel GPU with QuickSync support is available.
-    
+
     Returns:
     --------
     bool
@@ -441,21 +448,18 @@ def has_intel_gpu():
     """
     try:
         # Try to run vainfo (Linux) or check Intel GPU in Windows
-        if os.name == 'posix':
+        if os.name == "posix":
             result = subprocess.run(
-                ["vainfo"], 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
-                timeout=2
+                ["vainfo"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=2
             )
             return result.returncode == 0 and b"VA-API version" in result.stdout
-        elif os.name == 'nt':
+        elif os.name == "nt":
             # On Windows, check for Intel GPU in device manager (simplified)
             result = subprocess.run(
-                ["wmic", "path", "win32_VideoController", "get", "name"], 
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE, 
-                timeout=2
+                ["wmic", "path", "win32_VideoController", "get", "name"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=2,
             )
             return result.returncode == 0 and b"Intel" in result.stdout
         else:
@@ -464,20 +468,35 @@ def has_intel_gpu():
         # Command failed or not found
         return False
 
+
 class FFMPEG(h5py.filters.FilterRefBase):
     """
     FFMPEG HDF5 filter class for h5py
-    
+
     This class implements the FFMPEG HDF5 filter interface for h5py,
     allowing compression of HDF5 datasets using video codecs.
     """
+
     filter_name = "ffmpeg"
     filter_id = FFMPEG_ID
 
-    def __init__(self, enc_id, dec_id, depth, height, width, bit_mode, preset, tune, crf, film_grain, gpu_id):
+    def __init__(
+        self,
+        enc_id,
+        dec_id,
+        depth,
+        height,
+        width,
+        bit_mode,
+        preset,
+        tune,
+        crf,
+        film_grain,
+        gpu_id,
+    ):
         """
         Create an FFMPEG filter instance with the given parameters.
-        
+
         Parameters:
         -----------
         enc_id : int
@@ -504,15 +523,37 @@ class FFMPEG(h5py.filters.FilterRefBase):
             GPU ID for hardware acceleration
         """
         self.filter_options = (
-            int(enc_id), int(dec_id), int(width), int(height), int(depth), 
-            int(bit_mode), int(preset), int(tune), int(crf), int(film_grain), int(gpu_id)
+            int(enc_id),
+            int(dec_id),
+            int(width),
+            int(height),
+            int(depth),
+            int(bit_mode),
+            int(preset),
+            int(tune),
+            int(crf),
+            int(film_grain),
+            int(gpu_id),
         )
 
-def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None, 
-           bit_mode=BitMode.BIT_8, film_grain=0, gpu_id=0, width=None, height=None, depth=None, **kwargs):
+
+def ffmpeg(
+    codec="libx264",
+    decoder=None,
+    preset=None,
+    tune=None,
+    crf=None,
+    bit_mode=BitMode.BIT_8,
+    film_grain=0,
+    gpu_id=0,
+    width=None,
+    height=None,
+    depth=None,
+    **kwargs,
+):
     """
     Create HDF5 filter parameters for FFMPEG compression.
-    
+
     Parameters:
     -----------
     codec : str
@@ -539,19 +580,21 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
         Custom depth override (default: auto-detected from data)
     **kwargs : dict
         Additional parameters (reserved for future use)
-    
+
     Returns:
     --------
     dict
         Filter parameters for h5py.create_dataset
     """
-    
+
     # Get encoder ID for the codec
     if codec not in CODEC_TO_ENCODER:
-        raise ValueError(f"Unknown codec: {codec}. Available codecs: {', '.join(CODEC_TO_ENCODER.keys())}")
-    
+        raise ValueError(
+            f"Unknown codec: {codec}. Available codecs: {', '.join(CODEC_TO_ENCODER.keys())}"
+        )
+
     enc_id = CODEC_TO_ENCODER[codec]
-    
+
     # Select decoder
     if decoder is None:
         # Use GPU decoder if using GPU encoder and no specific decoder is requested
@@ -562,9 +605,11 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
             dec_id = DEFAULT_DECODER[enc_id]
     else:
         if decoder not in CODEC_TO_DECODER:
-            raise ValueError(f"Unknown decoder: {decoder}. Available decoders: {', '.join(CODEC_TO_DECODER.keys())}")
+            raise ValueError(
+                f"Unknown decoder: {decoder}. Available decoders: {', '.join(CODEC_TO_DECODER.keys())}"
+            )
         dec_id = CODEC_TO_DECODER[decoder]
-    
+
     # Get preset ID
     preset_id = Preset.NONE
     if preset is not None:
@@ -572,8 +617,10 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
             preset_id = PRESET_MAPPING[codec][preset]
         else:
             valid_presets = list(PRESET_MAPPING.get(codec, {}).keys())
-            raise ValueError(f"Invalid preset '{preset}' for codec '{codec}'. Valid presets: {', '.join(valid_presets)}")
-    
+            raise ValueError(
+                f"Invalid preset '{preset}' for codec '{codec}'. Valid presets: {', '.join(valid_presets)}"
+            )
+
     # Get tune ID
     tune_id = Tune.NONE
     if tune is not None:
@@ -581,27 +628,40 @@ def ffmpeg(codec="libx264", decoder=None, preset=None, tune=None, crf=None,
             tune_id = TUNE_MAPPING[codec][tune]
         else:
             valid_tunes = list(TUNE_MAPPING.get(codec, {}).keys())
-            raise ValueError(f"Invalid tune '{tune}' for codec '{codec}'. Valid tunes: {', '.join(valid_tunes)}")
-    
+            raise ValueError(
+                f"Invalid tune '{tune}' for codec '{codec}'. Valid tunes: {', '.join(valid_tunes)}"
+            )
+
     # Check for hardware acceleration conflicts
     if gpu_id >= 0:
         # For NVIDIA encoders, check if NVIDIA GPU is available
         if "nvenc" in codec and not has_nvidia_gpu():
             raise RuntimeError(f"{codec} requested but NVIDIA GPU not detected.")
-        
+
         # For Intel QSV encoders, check if Intel GPU is available
         if "qsv" in codec and not has_intel_gpu():
             raise RuntimeError(f"{codec} requested but Intel GPU not detected.")
-    
+
     # Pack all parameters into the filter options
-    filter_options = (enc_id, dec_id, width or 0, height or 0, depth or 0, 
-                     bit_mode, preset_id, tune_id, crf or 0, film_grain, gpu_id)
-    
+    filter_options = (
+        enc_id,
+        dec_id,
+        width or 0,
+        height or 0,
+        depth or 0,
+        bit_mode,
+        preset_id,
+        tune_id,
+        crf or 0,
+        film_grain,
+        gpu_id,
+    )
+
     return {
-        'compression': FFMPEG_ID,
-        'compression_opts': filter_options,
-        'norm': kwargs.pop('norm', True),
-        'beta': kwargs.pop('beta', 1.0)
+        "compression": FFMPEG_ID,
+        "compression_opts": filter_options,
+        "norm": kwargs.pop("norm", True),
+        "beta": kwargs.pop("beta", 1.0),
     }
 
 
@@ -610,169 +670,238 @@ def mpeg4(crf=3, **kwargs):
     """Convenience function for H.264 compression"""
     return ffmpeg(codec="libxvid", crf=crf, **kwargs)
 
+
 def x264(preset="medium", crf=23, tune=None, **kwargs):
     """Convenience function for H.264 compression"""
     return ffmpeg(codec="libx264", preset=preset, crf=crf, tune=tune, **kwargs)
+
 
 def x265(preset="medium", crf=28, tune=None, **kwargs):
     """Convenience function for H.265/HEVC compression"""
     return ffmpeg(codec="libx265", preset=preset, crf=crf, tune=tune, **kwargs)
 
+
 def rav1e(preset="6", crf=30, tune=None, **kwargs):
     """Convenience function for AV1 compression"""
     return ffmpeg(codec="librav1e", preset=preset, crf=crf, tune=tune, **kwargs)
 
+
 def svtav1(preset="6", crf=30, tune="fastdecode", **kwargs):
     """Convenience function for AV1 compression"""
     return ffmpeg(codec="libsvtav1", preset=preset, crf=crf, tune=tune, **kwargs)
+
 
 def h264_nvenc(preset="p4", crf=23, **kwargs):
     """Convenience function for NVIDIA H.264 hardware compression"""
     gpu_id = kwargs.pop("gpu_id", 0)  # Default to first GPU
     return ffmpeg(codec="h264_nvenc", preset=preset, crf=crf, gpu_id=gpu_id, **kwargs)
 
+
 def hevc_nvenc(preset="p4", crf=23, **kwargs):
     """Convenience function for NVIDIA H.265/HEVC hardware compression"""
     gpu_id = kwargs.pop("gpu_id", 0)  # Default to first GPU
     return ffmpeg(codec="hevc_nvenc", preset=preset, crf=crf, gpu_id=gpu_id, **kwargs)
+
 
 def av1_nvenc(preset="p4", crf=23, **kwargs):
     """Convenience function for NVIDIA H.265/HEVC hardware compression"""
     gpu_id = kwargs.pop("gpu_id", 0)  # Default to first GPU
     return ffmpeg(codec="av1_nvenc", preset=preset, crf=crf, gpu_id=gpu_id, **kwargs)
 
+
 def av1_qsv(preset="medium", crf=30, tune=None, **kwargs):
     """Convenience function for Intel AV1 QSV hardware compression"""
     return ffmpeg(codec="av1_qsv", preset=preset, crf=crf, tune=tune, **kwargs)
 
+
 # native functions
 try:
     from ._ffmpeg_filter import ffmpeg_native_c
-    
+
     def read_metadata_from_compressed(compressed_data):
         """Extract metadata from compressed data header"""
         import struct
-        
+
         if len(compressed_data) < 8:
             raise ValueError("Invalid compressed data: too short")
-        
+
         offset = 0
-        
+
         # Read header: metadata size + version
-        metadata_size, version = struct.unpack('II', compressed_data[offset:offset+8])
+        metadata_size, version = struct.unpack(
+            "II", compressed_data[offset : offset + 8]
+        )
         offset += 8
-        
+
         if len(compressed_data) < 8 + metadata_size:
             raise ValueError("Invalid compressed data: metadata size mismatch")
-        
+
         if version == 1:
             # Read metadata fields (11 unsigned ints + 1 size_t)
-            metadata_values = struct.unpack('I' * 11, compressed_data[offset:offset+44])
+            metadata_values = struct.unpack(
+                "I" * 11, compressed_data[offset : offset + 44]
+            )
             offset += 44
-            
+
             # Read compressed_size as size_t
             import sys
+
             if sys.maxsize > 2**32:  # 64-bit system
-                compressed_size = struct.unpack('Q', compressed_data[offset:offset+8])[0]
+                compressed_size = struct.unpack(
+                    "Q", compressed_data[offset : offset + 8]
+                )[0]
                 offset += 8
             else:  # 32-bit system
-                compressed_size = struct.unpack('I', compressed_data[offset:offset+4])[0]
+                compressed_size = struct.unpack(
+                    "I", compressed_data[offset : offset + 4]
+                )[0]
                 offset += 4
-                
+
         elif version == 0:
             # Version 0 (legacy): all fields as unsigned int
-            metadata_values = struct.unpack('I' * 12, compressed_data[offset:offset+48])
+            metadata_values = struct.unpack(
+                "I" * 12, compressed_data[offset : offset + 48]
+            )
             compressed_size = metadata_values[11]
             metadata_values = metadata_values[:11]
             offset += 48
         else:
             raise ValueError(f"Unsupported metadata version: {version}")
-        
-        enc_id, dec_id, width, height, depth, bit_mode, preset_id, tune_id, crf, film_grain, gpu_id = metadata_values
-        
+
+        (
+            enc_id,
+            dec_id,
+            width,
+            height,
+            depth,
+            bit_mode,
+            preset_id,
+            tune_id,
+            crf,
+            film_grain,
+            gpu_id,
+        ) = metadata_values
+
         return {
-            'enc_id': enc_id,
-            'dec_id': dec_id,
-            'preset_id': preset_id,
-            'tune_id': tune_id,
-            'width': width,
-            'height': height,
-            'depth': depth,
-            'bit_mode': bit_mode,
-            'crf': crf,
-            'film_grain': film_grain,
-            'gpu_id': gpu_id,
-            'compressed_size': compressed_size,
-            'data_offset': offset,
-            'version': version
+            "enc_id": enc_id,
+            "dec_id": dec_id,
+            "preset_id": preset_id,
+            "tune_id": tune_id,
+            "width": width,
+            "height": height,
+            "depth": depth,
+            "bit_mode": bit_mode,
+            "crf": crf,
+            "film_grain": film_grain,
+            "gpu_id": gpu_id,
+            "compressed_size": compressed_size,
+            "data_offset": offset,
+            "version": version,
         }
-    
-    def ffmpeg_native(flags, data, codec="libx264", preset=None, tune=None, crf=23, 
-                     bit_mode=BitMode.BIT_8, film_grain=0, gpu_id=0):
+
+    def ffmpeg_native(
+        flags,
+        data,
+        codec="libx264",
+        preset=None,
+        tune=None,
+        crf=23,
+        bit_mode=BitMode.BIT_8,
+        film_grain=0,
+        gpu_id=0,
+    ):
         """Single native function for compress (flags=0) and decompress (flags=1)"""
-        
+
         if flags == 0:  # Compress
             enc_id = CODEC_TO_ENCODER[codec]
             dec_id = DEFAULT_DECODER[enc_id]
-            
-            preset_id = PRESET_MAPPING.get(codec, {}).get(preset, Preset.NONE) if preset else Preset.NONE
-            tune_id = TUNE_MAPPING.get(codec, {}).get(tune, Tune.NONE) if tune else Tune.NONE
 
-            data = np.ascontiguousarray(data, dtype=(np.uint8 if bit_mode == BitMode.BIT_8 else np.uint16))
-            
+            preset_id = (
+                PRESET_MAPPING.get(codec, {}).get(preset, Preset.NONE)
+                if preset
+                else Preset.NONE
+            )
+            tune_id = (
+                TUNE_MAPPING.get(codec, {}).get(tune, Tune.NONE) if tune else Tune.NONE
+            )
+
+            data = np.ascontiguousarray(
+                data, dtype=(np.uint8 if bit_mode == BitMode.BIT_8 else np.uint16)
+            )
+
             if data.ndim != 3:
                 raise ValueError("Data must be a 3D array (depth, height, width)")
 
             depth, height, width = data.shape
 
             buf_size = data.nbytes
-                
+
         else:  # Decompress (flags=1)
             # Read metadata from the compressed bytes
             metadata = read_metadata_from_compressed(data)
-            
+
             # Extract values from metadata
-            width = metadata['width']
-            height = metadata['height'] 
-            depth = metadata['depth']
-            bit_mode = metadata['bit_mode']
-            enc_id = metadata['enc_id']
-            dec_id = metadata['dec_id']
-            preset_id = metadata['preset_id']
-            tune_id = metadata['tune_id']
-            crf = metadata['crf']
-            film_grain = metadata['film_grain']
-            gpu_id = metadata['gpu_id']
-            
+            width = metadata["width"]
+            height = metadata["height"]
+            depth = metadata["depth"]
+            bit_mode = metadata["bit_mode"]
+            enc_id = metadata["enc_id"]
+            dec_id = metadata["dec_id"]
+            preset_id = metadata["preset_id"]
+            tune_id = metadata["tune_id"]
+            crf = metadata["crf"]
+            film_grain = metadata["film_grain"]
+            gpu_id = metadata["gpu_id"]
+
             # Extract only the compressed data (skip metadata)
-            data_offset = metadata['data_offset']
+            data_offset = metadata["data_offset"]
             data = data[data_offset:]
             buf_size = len(data)
-        
+
         # Build cd_values tuple (exactly 11 elements as expected by C function)
-        cd_values = (enc_id, dec_id, width, height, depth, bit_mode, 
-                    preset_id, tune_id, crf, film_grain, gpu_id)
-        
+        cd_values = (
+            enc_id,
+            dec_id,
+            width,
+            height,
+            depth,
+            bit_mode,
+            preset_id,
+            tune_id,
+            crf,
+            film_grain,
+            gpu_id,
+        )
+
         # Call C function
         return ffmpeg_native_c(flags, cd_values, buf_size, data)
-    
+
     # Convenience functions
     def compress_native(data, **kwargs):
         """Compress data using native FFMPEG"""
         return ffmpeg_native(0, data, **kwargs)
-    
+
     def decompress_native(compressed_data, **kwargs):
         """Decompress data using native FFMPEG"""
         return ffmpeg_native(1, compressed_data, **kwargs)
-        
+
     NATIVE_AVAILABLE = True
-        
+
 except ImportError:
+
     def ffmpeg_native(*args, **kwargs):
-        raise RuntimeError("Native functions not available - C extension not compiled with native support")
+        raise RuntimeError(
+            "Native functions not available - C extension not compiled with native support"
+        )
+
     def compress_native(*args, **kwargs):
-        raise RuntimeError("Native functions not available - C extension not compiled with native support")
+        raise RuntimeError(
+            "Native functions not available - C extension not compiled with native support"
+        )
+
     def decompress_native(*args, **kwargs):
-        raise RuntimeError("Native functions not available - C extension not compiled with native support")
-    
+        raise RuntimeError(
+            "Native functions not available - C extension not compiled with native support"
+        )
+
     NATIVE_AVAILABLE = False
