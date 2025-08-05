@@ -433,7 +433,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
          * cd_values[2] = width
          * cd_values[3] = height
          * cd_values[4] = depth
-         * cd_values[5] = 0=Mono, 1=RGB
+         * cd_values[5] = bit_mode
          */
         const AVCodec *codec;
         AVCodecParserContext *parser;

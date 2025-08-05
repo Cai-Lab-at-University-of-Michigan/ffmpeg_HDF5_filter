@@ -2,11 +2,11 @@ import os
 import sys
 import platform
 import glob
-import sysconfig
 import subprocess
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
+__VERSION__ = "2.2.6"
 
 def is_building_sdist():
     return "sdist" in sys.argv or "egg_info" in sys.argv
@@ -51,7 +51,7 @@ def get_hdf5_root():
         possible_paths = [
             "/usr/include/hdf5",
             "/usr/local/include/hdf5",
-            "/opt/conda/include",
+            "/opt/conda/include"
         ]
         for path in possible_paths:
             if os.path.exists(os.path.join(path, "hdf5.h")):
@@ -445,7 +445,19 @@ else:
                     print(f"Set executable permission on {lib_file}")
 
 
+def write_version_py(version, filename="h5ffmpeg/_version.py"):
+    """Write version info to a file."""
+    try:
+        os.makedirs(os.path.dirname(filename), exist_ok=True)
+        with open(filename, "w") as f:
+            f.write(f"__version__ = '{version}'\n")
+        print(f"Version file written: {filename}")
+    except Exception as e:
+        print(f"WARNING: Could not write version file {filename}: {e}")
+
+
 try:
+    write_version_py(__VERSION__)
     with open("README.md", "r", encoding="utf-8") as f:
         long_description = f.read()
 except FileNotFoundError:
@@ -454,7 +466,7 @@ except FileNotFoundError:
 
 setup(
     name="h5ffmpeg",
-    version="2.2.4",
+    version=__VERSION__,
     description="HDF5 filter plugin for FFMPEG video codec compression",
     long_description=long_description,
     long_description_content_type="text/markdown",

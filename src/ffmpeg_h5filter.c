@@ -467,7 +467,7 @@ size_t ffmpeg_h5_filter(unsigned flags, size_t cd_nelmts, const unsigned int cd_
          * cd_values[2] = width
          * cd_values[3] = height
          * cd_values[4] = depth
-         * cd_values[5] = 0=Mono, 1=RGB
+         * cd_values[5] = bit_mode
          */
         const AVCodec *codec;
         AVCodecParserContext *parser;
