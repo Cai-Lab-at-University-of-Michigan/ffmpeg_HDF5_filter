@@ -744,8 +744,6 @@ try:
             offset += 44
 
             # Read compressed_size as size_t
-            import sys
-
             if sys.maxsize > 2**32:  # 64-bit system
                 compressed_size = struct.unpack(
                     "Q", compressed_data[offset : offset + 8]
