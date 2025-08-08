@@ -156,7 +156,6 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         Py_XDECREF(version_obj);
         Py_XDECREF(module);
 
-        Py_BEGIN_ALLOW_THREADS
         size_t metadata_size = 11 * sizeof(unsigned int) + sizeof(uint64_t); // 11 uint32 + 1 size_t
         size_t header_size = 8; // metadata_size(4) + version(4)
         size_t total_size = header_size + metadata_size + result_size;
@@ -164,7 +163,6 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         char *output_buf = malloc(total_size);
         if (!output_buf) {
             free(buf);
-            Py_END_ALLOW_THREADS
             PyErr_SetString(PyExc_MemoryError, "Failed to allocate output buffer");
             return NULL;
         }
@@ -202,8 +200,6 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         // Write compressed data
         memcpy(output_buf + offset, buf, result_size);
         
-        Py_END_ALLOW_THREADS
-
         result = PyBytes_FromStringAndSize(output_buf, total_size);
         free(output_buf);
     }
