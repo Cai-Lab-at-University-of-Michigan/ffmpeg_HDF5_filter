@@ -6,7 +6,7 @@ import subprocess
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-__VERSION__ = "2.2.6"
+__VERSION__ = "2.2.8"
 
 def is_building_sdist():
     return "sdist" in sys.argv or "egg_info" in sys.argv
