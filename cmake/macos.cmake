@@ -153,21 +153,39 @@ install(CODE "
     if(APPLE)
         find_program(DYLIBBUNDLER dylibbundler)
         if(DYLIBBUNDLER)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Using dylibbundler ===\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Using dylibbundler (OOM optimized) ===\")
+            
+            execute_process(COMMAND vm_stat OUTPUT_VARIABLE vm_before ERROR_QUIET)
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Memory before dylibbundler:\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${vm_before}\")
+            
             execute_process(
                 COMMAND \${DYLIBBUNDLER} 
                     -b
                     -x \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
                     -d \"\${CMAKE_INSTALL_PREFIX}/lib/\"
+                    --exclude /usr/lib/
+                    --exclude /System/
+                    --exclude /Library/Frameworks/
+                    --overwrite-files
                 RESULT_VARIABLE result
                 OUTPUT_VARIABLE output
                 ERROR_VARIABLE error
             )
+            
             if(result EQUAL 0)
                 execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✅ dylibbundler completed successfully\")
                 execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${output}\")
             else()
-                message(FATAL_ERROR \"❌ dylibbundler failed: \${error}\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"❌ dylibbundler failed with exit code: \${result}\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Error output: \${error}\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Standard output: \${output}\")
+                
+                execute_process(COMMAND vm_stat OUTPUT_VARIABLE vm_after ERROR_QUIET)
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Memory after failure:\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${vm_after}\")
+                
+                message(FATAL_ERROR \"dylibbundler failed - likely OOM or dependency issue\")
             endif()
         else()
             message(FATAL_ERROR \"dylibbundler not found. Make sure it's installed: brew install dylibbundler\")
