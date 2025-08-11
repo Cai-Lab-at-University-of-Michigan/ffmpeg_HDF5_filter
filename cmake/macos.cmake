@@ -166,11 +166,6 @@ install(FILES src/ffmpeg_utils.h
     DESTINATION include
 )
 
-add_custom_target(bundle_all ALL
-    DEPENDS h5ffmpeg_shared
-    COMMENT "Bundling all dependencies for standalone distribution"
-)
-
 install(CODE "
     set(MAIN_LIB \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\")
     
