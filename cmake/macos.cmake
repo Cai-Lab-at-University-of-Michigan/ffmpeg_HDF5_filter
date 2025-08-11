@@ -122,11 +122,11 @@ target_compile_definitions(h5ffmpeg_shared PRIVATE
 target_link_libraries(h5ffmpeg_shared PRIVATE
     ${FFMPEG_LIBRARIES}
     ${HDF5_C_LIBRARY}
-    -framework CoreFoundation
-    -framework CoreMedia
-    -framework CoreVideo
-    -framework VideoToolbox
-    -framework AudioToolbox
+    "-framework CoreFoundation"
+    "-framework CoreMedia"
+    "-framework CoreVideo"
+    "-framework VideoToolbox"
+    "-framework AudioToolbox"
 )
 
 set_target_properties(h5ffmpeg_shared PROPERTIES
