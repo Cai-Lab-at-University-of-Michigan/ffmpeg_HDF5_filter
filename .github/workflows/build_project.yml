@@ -139,8 +139,9 @@ jobs:
         shell: bash
         run: |
           brew install dylibbundler
-          dylibbundler --version
-              
+          echo "dylibbundler installed successfully"
+          which dylibbundler
+
       - name: Build shared library
         shell: bash
         run: |
