@@ -117,8 +117,6 @@ target_include_directories(h5ffmpeg_shared
 
 target_compile_definitions(h5ffmpeg_shared PRIVATE
     FFMPEG_H5_FILTER_EXPORTS
-    _POSIX_C_SOURCE=200809L
-    -fPIC
 )
 
 target_link_libraries(h5ffmpeg_shared PRIVATE
