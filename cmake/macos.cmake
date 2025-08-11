@@ -173,16 +173,22 @@ install(CODE "
         set(FFMPEG_ROOT \"${FFMPEG_ROOT}\")
         set(HDF5_ROOT \"${HDF5_ROOT}\")
         
-        # Extended list of libraries to bundle - including the missing ones from your otool output
         set(target_libs
             \"libavcodec\" \"libavformat\" \"libavutil\" \"libswscale\" \"libswresample\" \"libavfilter\"
             \"libhdf5\"
             \"libx264\" \"libx265\" \"libvpx\" \"libdav1d\" \"libaom\" \"librav1e\" \"libSvtAv1Enc\"
-            \"libiconv\"
-            \"liblzma\" \"libc++\" \"libxvidcore\" \"libz\" \"libssl\" \"libcrypto\"
+            \"libxvidcore\"
         )
         
-        # Search in multiple locations
+        set(system_lib_mappings
+            \"libiconv;/usr/lib/libiconv.2.dylib\"
+            \"liblzma;/usr/lib/liblzma.5.dylib\"
+            \"libc++;/usr/lib/libc++.1.dylib\"
+            \"libz;/usr/lib/libz.1.dylib\"
+            \"libssl;/usr/lib/libssl.dylib\"
+            \"libcrypto;/usr/lib/libcrypto.dylib\"
+        )
+        
         file(GLOB_RECURSE candidate_files 
             \"\${FFMPEG_ROOT}/lib/*.dylib*\"
             \"\${HDF5_ROOT}/lib/*.dylib*\"
@@ -195,7 +201,6 @@ install(CODE "
         foreach(candidate_file \${candidate_files})
             get_filename_component(candidate_name \"\${candidate_file}\" NAME)
             
-            # Check if this library should be bundled
             set(should_bundle FALSE)
             foreach(target_lib \${target_libs})
                 if(\"\${candidate_name}\" MATCHES \"^\${target_lib}[.].*[.]dylib$\" OR 
@@ -261,12 +266,10 @@ install(CODE "
             endif()
         endforeach()
         
-        # Now fix all the install names and dependencies
         find_program(INSTALL_NAME_TOOL install_name_tool)
         if(INSTALL_NAME_TOOL)
             file(GLOB all_bundle_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
             
-            # First pass: fix install names (IDs)
             foreach(lib \${all_bundle_libs})
                 if(NOT IS_SYMLINK \"\${lib}\")
                     get_filename_component(lib_name \"\${lib}\" NAME)
@@ -278,36 +281,46 @@ install(CODE "
                 endif()
             endforeach()
             
-            # Second pass: fix dependencies
             foreach(lib \${all_bundle_libs})
                 if(NOT IS_SYMLINK \"\${lib}\")
                     get_filename_component(lib_name \"\${lib}\" NAME)
                     
-                    # Get current dependencies
                     execute_process(
                         COMMAND otool -L \"\${lib}\"
                         OUTPUT_VARIABLE deps
                         ERROR_QUIET
                     )
-                    
-                    # Process each dependency line
                     string(REPLACE \"\\n\" \";\" deps_list \"\${deps}\")
                     foreach(dep_line \${deps_list})
-                        # Extract the path from the dependency line (before the first parenthesis)
                         string(REGEX MATCH \"^[ \\t]*([^ \\t]+)\" dep_match \"\${dep_line}\")
                         if(dep_match)
                             set(dep_path \"\${CMAKE_MATCH_1}\")
                             get_filename_component(dep_name \"\${dep_path}\" NAME)
                             
-                            # Check if we have this dependency bundled
                             if(EXISTS \"\${CMAKE_INSTALL_PREFIX}/lib/\${dep_name}\")
-                                # Only change if it's not already using @loader_path
                                 if(NOT \"\${dep_path}\" MATCHES \"^@loader_path\")
                                     execute_process(
                                         COMMAND \"\${INSTALL_NAME_TOOL}\" -change \"\${dep_path}\" \"@loader_path/\${dep_name}\" \"\${lib}\"
                                         ERROR_QUIET
                                     )
                                 endif()
+                            else()
+                                foreach(mapping \${system_lib_mappings})
+                                    string(REPLACE \";\" \":\" mapping_parts \"\${mapping}\")
+                                    list(GET mapping_parts 0 sys_lib_name)
+                                    list(GET mapping_parts 1 sys_lib_path)
+                                    
+                                    if(\"\${dep_name}\" MATCHES \"^\${sys_lib_name}[.].*\")
+                                        if(NOT \"\${dep_path}\" MATCHES \"^/usr/lib/\" AND NOT \"\${dep_path}\" MATCHES \"^/System/\")
+                                            execute_process(
+                                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change \"\${dep_path}\" \"\${sys_lib_path}\" \"\${lib}\"
+                                                ERROR_QUIET
+                                            )
+                                            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixed system lib: \${dep_name} -> \${sys_lib_path}\")
+                                        endif()
+                                        break()
+                                    endif()
+                                endforeach()
                             endif()
                         endif()
                     endforeach()
