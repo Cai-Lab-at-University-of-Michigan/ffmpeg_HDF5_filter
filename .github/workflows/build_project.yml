@@ -134,7 +134,13 @@ jobs:
               echo "Restored dependencies to $HOME/ffmpeg_build"
             fi
           fi
-
+      - name: Install dylibbundler (macOS only)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          brew install dylibbundler
+          dylibbundler --version
+              
       - name: Build shared library
         shell: bash
         run: |
