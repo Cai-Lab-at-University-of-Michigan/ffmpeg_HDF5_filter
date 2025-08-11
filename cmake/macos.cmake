@@ -265,7 +265,6 @@ install(CODE "
                 endif()
             endif()
         endforeach()
-        
         find_program(INSTALL_NAME_TOOL install_name_tool)
         if(INSTALL_NAME_TOOL)
             file(GLOB all_bundle_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
@@ -306,19 +305,23 @@ install(CODE "
                                 endif()
                             else()
                                 foreach(mapping \${system_lib_mappings})
-                                    string(REPLACE \";\" \":\" mapping_parts \"\${mapping}\")
-                                    list(GET mapping_parts 0 sys_lib_name)
-                                    list(GET mapping_parts 1 sys_lib_path)
-                                    
-                                    if(\"\${dep_name}\" MATCHES \"^\${sys_lib_name}[.].*\")
-                                        if(NOT \"\${dep_path}\" MATCHES \"^/usr/lib/\" AND NOT \"\${dep_path}\" MATCHES \"^/System/\")
-                                            execute_process(
-                                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change \"\${dep_path}\" \"\${sys_lib_path}\" \"\${lib}\"
-                                                ERROR_QUIET
-                                            )
-                                            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixed system lib: \${dep_name} -> \${sys_lib_path}\")
+                                    string(REPLACE \";\" \"|\" mapping_parts \"\${mapping}\")
+                                    string(REPLACE \"|\" \";\" mapping_list \"\${mapping_parts}\")
+                                    list(LENGTH mapping_list mapping_length)
+                                    if(mapping_length EQUAL 2)
+                                        list(GET mapping_list 0 sys_lib_name)
+                                        list(GET mapping_list 1 sys_lib_path)
+                                        
+                                        if(\"\${dep_name}\" MATCHES \"^\${sys_lib_name}[.].*\")
+                                            if(NOT \"\${dep_path}\" MATCHES \"^/usr/lib/\" AND NOT \"\${dep_path}\" MATCHES \"^/System/\")
+                                                execute_process(
+                                                    COMMAND \"\${INSTALL_NAME_TOOL}\" -change \"\${dep_path}\" \"\${sys_lib_path}\" \"\${lib}\"
+                                                    ERROR_QUIET
+                                                )
+                                                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Fixed system lib: \${dep_name} -> \${sys_lib_path}\")
+                                            endif()
+                                            break()
                                         endif()
-                                        break()
                                     endif()
                                 endforeach()
                             endif()
