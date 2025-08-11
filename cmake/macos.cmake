@@ -173,62 +173,101 @@ install(CODE "
         set(FFMPEG_ROOT \"${FFMPEG_ROOT}\")
         set(HDF5_ROOT \"${HDF5_ROOT}\")
         
+        # Extended list of libraries to bundle - including the missing ones from your otool output
         set(target_libs
             \"libavcodec\" \"libavformat\" \"libavutil\" \"libswscale\" \"libswresample\" \"libavfilter\"
             \"libhdf5\"
             \"libx264\" \"libx265\" \"libvpx\" \"libdav1d\" \"libaom\" \"librav1e\" \"libSvtAv1Enc\"
             \"libiconv\"
+            \"liblzma\" \"libc++\" \"libxvidcore\" \"libz\" \"libssl\" \"libcrypto\"
         )
         
+        # Search in multiple locations
         file(GLOB_RECURSE candidate_files 
-            \"\${FFMPEG_ROOT}/lib/*.dylib\"
-            \"\${HDF5_ROOT}/lib/*.dylib\"
+            \"\${FFMPEG_ROOT}/lib/*.dylib*\"
+            \"\${HDF5_ROOT}/lib/*.dylib*\"
+            \"/usr/local/lib/*.dylib*\"
+            \"/opt/homebrew/lib/*.dylib*\"
         )
+        
+        set(bundled_libs_list \"\")
         
         foreach(candidate_file \${candidate_files})
             get_filename_component(candidate_name \"\${candidate_file}\" NAME)
             
+            # Check if this library should be bundled
             set(should_bundle FALSE)
             foreach(target_lib \${target_libs})
                 if(\"\${candidate_name}\" MATCHES \"^\${target_lib}[.].*[.]dylib$\" OR 
-                   \"\${candidate_name}\" MATCHES \"^\${target_lib}[.]dylib$\")
+                   \"\${candidate_name}\" MATCHES \"^\${target_lib}[.]dylib$\" OR
+                   \"\${candidate_name}\" MATCHES \"^\${target_lib}[.].*$\")
                     set(should_bundle TRUE)
                     break()
                 endif()
             endforeach()
             
             if(should_bundle)
-                if(EXISTS \"\${candidate_file}\" AND NOT IS_SYMLINK \"\${candidate_file}\")
-                    set(dest_file \"\${CMAKE_INSTALL_PREFIX}/lib/\${candidate_name}\")
-                    if(NOT EXISTS \"\${dest_file}\")
-                        file(COPY \"\${candidate_file}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
-                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled: \${candidate_name}\")
+                set(dest_file \"\${CMAKE_INSTALL_PREFIX}/lib/\${candidate_name}\")
+                
+                if(IS_SYMLINK \"\${candidate_file}\")
+                    execute_process(
+                        COMMAND readlink \"\${candidate_file}\" 
+                        OUTPUT_VARIABLE link_target 
+                        OUTPUT_STRIP_TRAILING_WHITESPACE 
+                        ERROR_QUIET
+                    )
+                    
+                    if(link_target)
+                        if(NOT IS_ABSOLUTE \"\${link_target}\")
+                            get_filename_component(candidate_dir \"\${candidate_file}\" DIRECTORY)
+                            set(absolute_target \"\${candidate_dir}/\${link_target}\")
+                        else()
+                            set(absolute_target \"\${link_target}\")
+                        endif()
+                        
+                        if(EXISTS \"\${absolute_target}\" AND NOT IS_SYMLINK \"\${absolute_target}\")
+                            get_filename_component(real_name \"\${absolute_target}\" NAME)
+                            set(dest_real_file \"\${CMAKE_INSTALL_PREFIX}/lib/\${real_name}\")
+                            
+                            if(NOT EXISTS \"\${dest_real_file}\")
+                                execute_process(
+                                    COMMAND cp \"\${absolute_target}\" \"\${dest_real_file}\"
+                                    ERROR_QUIET
+                                )
+                                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled target file: \${real_name}\")
+                                list(APPEND bundled_libs_list \"\${dest_real_file}\")
+                            endif()
+                        endif()
+                        
+                        if(NOT EXISTS \"\${dest_file}\" AND NOT IS_SYMLINK \"\${dest_file}\")
+                            execute_process(
+                                COMMAND ln -s \"\${link_target}\" \"\${dest_file}\"
+                                ERROR_QUIET
+                            )
+                            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Created symlink: \${candidate_name} -> \${link_target}\")
+                        endif()
                     endif()
-                elseif(IS_SYMLINK \"\${candidate_file}\")
-                    execute_process(COMMAND readlink -f \"\${candidate_file}\" OUTPUT_VARIABLE real_file OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
-                    if(EXISTS \"\${real_file}\")
-                        get_filename_component(real_name \"\${real_file}\" NAME)
-                        set(dest_real_file \"\${CMAKE_INSTALL_PREFIX}/lib/\${real_name}\")
-                        
-                        if(NOT EXISTS \"\${dest_real_file}\")
-                            file(COPY \"\${real_file}\" DESTINATION \"\${CMAKE_INSTALL_PREFIX}/lib\")
-                        endif()
-                        
-                        set(dest_symlink \"\${CMAKE_INSTALL_PREFIX}/lib/\${candidate_name}\")
-                        if(NOT EXISTS \"\${dest_symlink}\")
-                            execute_process(COMMAND ln -sf \"\${real_name}\" \"\${dest_symlink}\" ERROR_QUIET)
-                        endif()
-                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled symlink: \${candidate_name} -> \${real_name}\")
+                    
+                elseif(EXISTS \"\${candidate_file}\" AND NOT IS_SYMLINK \"\${candidate_file}\")
+                    if(NOT EXISTS \"\${dest_file}\")
+                        execute_process(
+                            COMMAND cp \"\${candidate_file}\" \"\${dest_file}\"
+                            ERROR_QUIET
+                        )
+                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Bundled: \${candidate_name}\")
+                        list(APPEND bundled_libs_list \"\${dest_file}\")
                     endif()
                 endif()
             endif()
         endforeach()
         
+        # Now fix all the install names and dependencies
         find_program(INSTALL_NAME_TOOL install_name_tool)
         if(INSTALL_NAME_TOOL)
-            file(GLOB bundle_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
+            file(GLOB all_bundle_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
             
-            foreach(lib \${bundle_libs})
+            # First pass: fix install names (IDs)
+            foreach(lib \${all_bundle_libs})
                 if(NOT IS_SYMLINK \"\${lib}\")
                     get_filename_component(lib_name \"\${lib}\" NAME)
                     
@@ -236,53 +275,40 @@ install(CODE "
                         COMMAND \"\${INSTALL_NAME_TOOL}\" -id \"@loader_path/\${lib_name}\" \"\${lib}\"
                         ERROR_QUIET
                     )
+                endif()
+            endforeach()
+            
+            # Second pass: fix dependencies
+            foreach(lib \${all_bundle_libs})
+                if(NOT IS_SYMLINK \"\${lib}\")
+                    get_filename_component(lib_name \"\${lib}\" NAME)
                     
+                    # Get current dependencies
                     execute_process(
                         COMMAND otool -L \"\${lib}\"
                         OUTPUT_VARIABLE deps
                         ERROR_QUIET
                     )
                     
-                    foreach(other_lib \${bundle_libs})
-                        get_filename_component(other_name \"\${other_lib}\" NAME)
-                        
-                        string(FIND \"\${deps}\" \"\${other_name}\" found_dep)
-                        if(NOT found_dep EQUAL -1)
-                            execute_process(
-                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change 
-                                    \"\${FFMPEG_ROOT}/lib/\${other_name}\"
-                                    \"@loader_path/\${other_name}\"
-                                    \"\${lib}\"
-                                ERROR_QUIET
-                            )
-                            execute_process(
-                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change 
-                                    \"\${HDF5_ROOT}/lib/\${other_name}\"
-                                    \"@loader_path/\${other_name}\"
-                                    \"\${lib}\"
-                                ERROR_QUIET
-                            )
-                            execute_process(
-                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change 
-                                    \"@rpath/\${other_name}\"
-                                    \"@loader_path/\${other_name}\"
-                                    \"\${lib}\"
-                                ERROR_QUIET
-                            )
-                            execute_process(
-                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change 
-                                    \"/usr/local/lib/\${other_name}\"
-                                    \"@loader_path/\${other_name}\"
-                                    \"\${lib}\"
-                                ERROR_QUIET
-                            )
-                            execute_process(
-                                COMMAND \"\${INSTALL_NAME_TOOL}\" -change 
-                                    \"/opt/homebrew/lib/\${other_name}\"
-                                    \"@loader_path/\${other_name}\"
-                                    \"\${lib}\"
-                                ERROR_QUIET
-                            )
+                    # Process each dependency line
+                    string(REPLACE \"\\n\" \";\" deps_list \"\${deps}\")
+                    foreach(dep_line \${deps_list})
+                        # Extract the path from the dependency line (before the first parenthesis)
+                        string(REGEX MATCH \"^[ \\t]*([^ \\t]+)\" dep_match \"\${dep_line}\")
+                        if(dep_match)
+                            set(dep_path \"\${CMAKE_MATCH_1}\")
+                            get_filename_component(dep_name \"\${dep_path}\" NAME)
+                            
+                            # Check if we have this dependency bundled
+                            if(EXISTS \"\${CMAKE_INSTALL_PREFIX}/lib/\${dep_name}\")
+                                # Only change if it's not already using @loader_path
+                                if(NOT \"\${dep_path}\" MATCHES \"^@loader_path\")
+                                    execute_process(
+                                        COMMAND \"\${INSTALL_NAME_TOOL}\" -change \"\${dep_path}\" \"@loader_path/\${dep_name}\" \"\${lib}\"
+                                        ERROR_QUIET
+                                    )
+                                endif()
+                            endif()
                         endif()
                     endforeach()
                 endif()
@@ -292,30 +318,54 @@ install(CODE "
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Main library dependencies after bundling ===\")
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${DEPS_AFTER}\")
             
-            string(REGEX MATCH \"/Users/[^/]*/[^\\n]*\" found_absolute \"\${DEPS_AFTER}\")
-            string(REGEX MATCH \"/usr/local/[^\\n]*\" found_usr_local \"\${DEPS_AFTER}\")
-            string(REGEX MATCH \"/opt/homebrew/[^\\n]*\" found_homebrew \"\${DEPS_AFTER}\")
+            string(REGEX MATCHALL \"/Users/[^\\n)]*\" found_user_paths \"\${DEPS_AFTER}\")
+            string(REGEX MATCHALL \"/usr/local/[^\\n)]*\" found_usr_local \"\${DEPS_AFTER}\")
+            string(REGEX MATCHALL \"/opt/homebrew/[^\\n)]*\" found_homebrew \"\${DEPS_AFTER}\")
             
-            if(found_absolute OR found_usr_local OR found_homebrew)
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"WARNING: Some absolute paths still found in dependencies\")
-                if(found_absolute)
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  User paths: \${found_absolute}\")
-                endif()
-                if(found_usr_local)
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  /usr/local paths: \${found_usr_local}\")
-                endif()
-                if(found_homebrew)
-                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Homebrew paths: \${found_homebrew}\")
-                endif()
-            else()
+            set(has_issues FALSE)
+            if(found_user_paths)
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"WARNING: User-specific paths still found:\")
+                foreach(path \${found_user_paths})
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${path}\")
+                endforeach()
+                set(has_issues TRUE)
+            endif()
+            
+            if(found_usr_local)
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"WARNING: /usr/local paths still found:\")
+                foreach(path \${found_usr_local})
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${path}\")
+                endforeach()
+                set(has_issues TRUE)
+            endif()
+            
+            if(found_homebrew)
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"WARNING: Homebrew paths still found:\")
+                foreach(path \${found_homebrew})
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${path}\")
+                endforeach()
+                set(has_issues TRUE)
+            endif()
+            
+            if(NOT has_issues)
                 execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"SUCCESS: All non-system dependencies use @loader_path\")
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"System frameworks (CoreFoundation, etc.) will be dynamically resolved at runtime\")
             endif()
 
             execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Bundled libraries ===\")
-            foreach(bundled_lib \${bundle_libs})
+            file(GLOB final_bundled_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
+            foreach(bundled_lib \${final_bundled_libs})
                 get_filename_component(bundled_name \"\${bundled_lib}\" NAME)
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${bundled_name}\")
+                if(IS_SYMLINK \"\${bundled_lib}\")
+                    execute_process(
+                        COMMAND readlink \"\${bundled_lib}\"
+                        OUTPUT_VARIABLE link_target
+                        OUTPUT_STRIP_TRAILING_WHITESPACE
+                        ERROR_QUIET
+                    )
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${bundled_name} -> \${link_target}\")
+                else()
+                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${bundled_name}\")
+                endif()
             endforeach()
         endif()
     endif()
