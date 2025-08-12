@@ -164,10 +164,10 @@ install(CODE "
                     -b
                     -x \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
                     -d \"\${CMAKE_INSTALL_PREFIX}/lib/\"
-                    --exclude /usr/lib/
-                    --exclude /System/
-                    --exclude /Library/Frameworks/
-                    --overwrite-files
+                    -i /usr/lib/
+                    -i /System/
+                    -i /Library/Frameworks/
+                    -of
                 RESULT_VARIABLE result
                 OUTPUT_VARIABLE output
                 ERROR_VARIABLE error
