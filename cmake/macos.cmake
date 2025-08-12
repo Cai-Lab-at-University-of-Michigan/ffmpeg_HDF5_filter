@@ -191,7 +191,8 @@ install(CODE "
                         
                         if(\"\${dep_path}\" MATCHES \"^/usr/lib/\" OR 
                            \"\${dep_path}\" MATCHES \"^/System/Library/\" OR
-                           \"\${dep_path}\" MATCHES \"^@\")
+                           \"\${dep_path}\" MATCHES \"^@loader_path\" OR
+                           \"\${dep_path}\" MATCHES \"^@executable_path\")
                             continue()
                         endif()
 
