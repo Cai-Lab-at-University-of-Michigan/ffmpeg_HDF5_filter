@@ -153,11 +153,7 @@ install(CODE "
     if(APPLE)
         execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Automated recursive bundling ===\")
         
-        set(linked_libs
-            \${FFMPEG_LIBRARIES}
-            \${HDF5_C_LIBRARY}
-        )
-        
+        set(linked_libs \${FFMPEG_LIBRARIES} \${HDF5_C_LIBRARY})
         list(APPEND linked_libs \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\")
         
         set(processed_libs \"\")
@@ -247,6 +243,13 @@ install(CODE "
                            NOT \"\${lib_dep_path}\" MATCHES \"^@loader_path\" AND
                            NOT \"\${lib_dep_path}\" MATCHES \"^/usr/lib/\" AND
                            NOT \"\${lib_dep_path}\" MATCHES \"^/System/Library/\")
+                            execute_process(
+                                COMMAND install_name_tool -change \"\${lib_dep_path}\" \"@loader_path/\${lib_dep_name}\" \"\${lib}\"
+                                ERROR_QUIET
+                            )
+                        endif()
+                        
+                        if(\"\${lib_dep_path}\" MATCHES \"^@rpath/\" AND EXISTS \"\${CMAKE_INSTALL_PREFIX}/lib/\${lib_dep_name}\")
                             execute_process(
                                 COMMAND install_name_tool -change \"\${lib_dep_path}\" \"@loader_path/\${lib_dep_name}\" \"\${lib}\"
                                 ERROR_QUIET
