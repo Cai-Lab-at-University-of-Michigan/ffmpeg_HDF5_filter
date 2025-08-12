@@ -192,6 +192,34 @@ install(CODE "
                             continue()
                         endif()
 
+                        if(\"\${dep_path}\" MATCHES \"^@rpath/\")
+                            string(REGEX REPLACE \"^@rpath/\" \"\" dep_name \"\${dep_path}\")
+                            set(found_lib \"\")
+                            
+                            foreach(search_dir \"${HDF5_ROOT}/lib\" \"${FFMPEG_ROOT}/lib\" \"/usr/local/lib\" \"/opt/homebrew/lib\")
+                                if(EXISTS \"\${search_dir}/\${dep_name}\")
+                                    set(found_lib \"\${search_dir}/\${dep_name}\")
+                                    break()
+                                endif()
+                            endforeach()
+                            
+                            if(found_lib)
+                                set(dest_path \"\${CMAKE_INSTALL_PREFIX}/lib/\${dep_name}\")
+                                if(NOT EXISTS \"\${dest_path}\")
+                                    execute_process(
+                                        COMMAND cp -R \"\${found_lib}\" \"\${dest_path}\"
+                                        RESULT_VARIABLE cp_result
+                                        ERROR_QUIET
+                                    )
+                                    if(cp_result EQUAL 0)
+                                        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Bundled (from @rpath): \${dep_name}\")
+                                        list(APPEND libs_to_process \"\${found_lib}\")
+                                    endif()
+                                endif()
+                            endif()
+                            continue()
+                        endif()
+
                         if(EXISTS \"\${dep_path}\")
                             get_filename_component(dep_name \"\${dep_path}\" NAME)
                             set(dest_path \"\${CMAKE_INSTALL_PREFIX}/lib/\${dep_name}\")
