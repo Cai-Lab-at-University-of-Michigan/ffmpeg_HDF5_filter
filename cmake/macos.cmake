@@ -151,44 +151,39 @@ install(FILES src/ffmpeg_utils.h
 
 install(CODE "
     if(APPLE)
-        find_program(DYLIBBUNDLER dylibbundler)
-        if(DYLIBBUNDLER)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Using dylibbundler (OOM optimized) ===\")
-            
-            execute_process(COMMAND vm_stat OUTPUT_VARIABLE vm_before ERROR_QUIET)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Memory before dylibbundler:\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${vm_before}\")
-            
-            execute_process(
-                COMMAND \${DYLIBBUNDLER} 
-                    -b
-                    -x \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
-                    -d \"\${CMAKE_INSTALL_PREFIX}/lib/\"
-                    -i /usr/lib/
-                    -i /System/
-                    -i /Library/Frameworks/
-                    -of
-                RESULT_VARIABLE result
-                OUTPUT_VARIABLE output
-                ERROR_VARIABLE error
-            )
-            
-            if(result EQUAL 0)
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✅ dylibbundler completed successfully\")
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${output}\")
-            else()
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"❌ dylibbundler failed with exit code: \${result}\")
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Error output: \${error}\")
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Standard output: \${output}\")
-                
-                execute_process(COMMAND vm_stat OUTPUT_VARIABLE vm_after ERROR_QUIET)
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Memory after failure:\")
-                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${vm_after}\")
-                
-                message(FATAL_ERROR \"dylibbundler failed - likely OOM or dependency issue\")
-            endif()
+        find_program(DELOCATE_PATH delocate-path)
+        find_program(DELOCATE_LISTDEPS delocate-listdeps)
+        if(NOT DELOCATE_PATH OR NOT DELOCATE_LISTDEPS)
+            message(FATAL_ERROR \"delocate CLI tools not found — please pip install delocate before build\")
+        endif()
+
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Using delocate ===\")
+
+        execute_process(
+            COMMAND \${DELOCATE_LISTDEPS} --all \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
+            OUTPUT_VARIABLE deps_output
+            ERROR_VARIABLE deps_error
+        )
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${deps_output}\")
+        if(NOT \"\${deps_error}\" STREQUAL \"\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"[delocate warnings] \${deps_error}\")
+        endif()
+
+        execute_process(COMMAND \${CMAKE_COMMAND} -E make_directory \"\${CMAKE_INSTALL_PREFIX}/lib\")
+
+        execute_process(
+            COMMAND \${DELOCATE_PATH}
+                \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
+                --lib-dir \"\${CMAKE_INSTALL_PREFIX}/lib\"
+            RESULT_VARIABLE result
+            OUTPUT_VARIABLE output
+            ERROR_VARIABLE error
+        )
+        if(result EQUAL 0)
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✅ delocate bundling completed successfully\")
+            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${output}\")
         else()
-            message(FATAL_ERROR \"dylibbundler not found. Make sure it's installed: brew install dylibbundler\")
+            message(FATAL_ERROR \"❌ delocate bundling failed: \${error}\")
         endif()
     endif()
 ")
