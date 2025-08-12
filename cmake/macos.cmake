@@ -151,42 +151,129 @@ install(FILES src/ffmpeg_utils.h
 
 install(CODE "
     if(APPLE)
-        find_program(DELOCATE_PATH delocate-path)
-        find_program(DELOCATE_LISTDEPS delocate-listdeps)
-        if(NOT DELOCATE_PATH OR NOT DELOCATE_LISTDEPS)
-            message(FATAL_ERROR \"delocate CLI tools not found — please pip install delocate before build\")
-        endif()
-
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Using delocate ===\")
-
-        execute_process(
-            COMMAND \${DELOCATE_LISTDEPS} --all \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
-            OUTPUT_VARIABLE deps_output
-            ERROR_VARIABLE deps_error
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Automated recursive bundling ===\")
+        
+        set(linked_libs
+            \${FFMPEG_LIBRARIES}
+            \${HDF5_C_LIBRARY}
         )
-        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${deps_output}\")
-        if(NOT \"\${deps_error}\" STREQUAL \"\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"[delocate warnings] \${deps_error}\")
-        endif()
+        
+        list(APPEND linked_libs \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\")
+        
+        set(processed_libs \"\")
+        set(libs_to_process \${linked_libs})
+        
+        while(libs_to_process)
+            list(GET libs_to_process 0 current_lib)
+            list(REMOVE_AT libs_to_process 0)
+            
+            list(FIND processed_libs \"\${current_lib}\" found_idx)
+            if(NOT found_idx EQUAL -1)
+                continue()
+            endif()
+            
+            list(APPEND processed_libs \"\${current_lib}\")
+            
+            if(EXISTS \"\${current_lib}\")
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"Processing: \${current_lib}\")
+                
+                execute_process(
+                    COMMAND otool -L \"\${current_lib}\"
+                    OUTPUT_VARIABLE deps_output
+                    ERROR_QUIET
+                )
+                
+                string(REPLACE \"\\n\" \";\" deps_list \"\${deps_output}\")
+                foreach(dep_line \${deps_list})
+                    string(REGEX MATCH \"^[ \\t]*([^ \\t]+)\" dep_match \"\${dep_line}\")
+                    if(dep_match)
+                        set(dep_path \"\${CMAKE_MATCH_1}\")
+                        
+                        if(\"\${dep_path}\" MATCHES \"^/usr/lib/\" OR 
+                           \"\${dep_path}\" MATCHES \"^/System/Library/\" OR
+                           \"\${dep_path}\" MATCHES \"^@\")
+                            continue()
+                        endif()
 
-        execute_process(COMMAND \${CMAKE_COMMAND} -E make_directory \"\${CMAKE_INSTALL_PREFIX}/lib\")
-
-        execute_process(
-            COMMAND \${DELOCATE_PATH}
-                \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
-                -L \"\${CMAKE_INSTALL_PREFIX}/lib\"
-                -e \"/usr/lib/\"
-                -e \"/System/\"
-            RESULT_VARIABLE result
-            OUTPUT_VARIABLE output
-            ERROR_VARIABLE error
-        )
-        if(result EQUAL 0)
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✅ delocate bundling completed successfully\")
-            execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"\${output}\")
-        else()
-            message(FATAL_ERROR \"❌ delocate bundling failed: \${error}\")
-        endif()
+                        if(EXISTS \"\${dep_path}\")
+                            get_filename_component(dep_name \"\${dep_path}\" NAME)
+                            set(dest_path \"\${CMAKE_INSTALL_PREFIX}/lib/\${dep_name}\")
+                            
+                            if(NOT EXISTS \"\${dest_path}\")
+                                execute_process(
+                                    COMMAND cp -R \"\${dep_path}\" \"\${dest_path}\"
+                                    RESULT_VARIABLE cp_result
+                                    ERROR_QUIET
+                                )
+                                
+                                if(cp_result EQUAL 0)
+                                    execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  Bundled: \${dep_name}\")
+                                    list(APPEND libs_to_process \"\${dep_path}\")
+                                endif()
+                            endif()
+                        endif()
+                    endif()
+                endforeach()
+            endif()
+        endwhile()
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Fixing install names ===\")
+        
+        file(GLOB all_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib\")
+        foreach(lib \${all_libs})
+            if(NOT IS_SYMLINK \"\${lib}\")
+                get_filename_component(lib_name \"\${lib}\" NAME)
+                
+                execute_process(
+                    COMMAND install_name_tool -id \"@loader_path/\${lib_name}\" \"\${lib}\"
+                    ERROR_QUIET
+                )
+                
+                execute_process(
+                    COMMAND otool -L \"\${lib}\"
+                    OUTPUT_VARIABLE lib_deps
+                    ERROR_QUIET
+                )
+                
+                string(REPLACE \"\\n\" \";\" lib_deps_list \"\${lib_deps}\")
+                foreach(lib_dep_line \${lib_deps_list})
+                    string(REGEX MATCH \"^[ \\t]*([^ \\t]+)\" lib_dep_match \"\${lib_dep_line}\")
+                    if(lib_dep_match)
+                        set(lib_dep_path \"\${CMAKE_MATCH_1}\")
+                        get_filename_component(lib_dep_name \"\${lib_dep_path}\" NAME)
+                        
+                        if(EXISTS \"\${CMAKE_INSTALL_PREFIX}/lib/\${lib_dep_name}\" AND 
+                           NOT \"\${lib_dep_path}\" MATCHES \"^@loader_path\" AND
+                           NOT \"\${lib_dep_path}\" MATCHES \"^/usr/lib/\" AND
+                           NOT \"\${lib_dep_path}\" MATCHES \"^/System/Library/\")
+                            execute_process(
+                                COMMAND install_name_tool -change \"\${lib_dep_path}\" \"@loader_path/\${lib_dep_name}\" \"\${lib}\"
+                                ERROR_QUIET
+                            )
+                        endif()
+                    endif()
+                endforeach()
+            endif()
+        endforeach()
+        
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"✅ Automated bundling completed\")
+        
+        file(GLOB final_libs \"\${CMAKE_INSTALL_PREFIX}/lib/*.dylib*\")
+        execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"=== Bundled libraries ===\")
+        foreach(final_lib \${final_libs})
+            get_filename_component(lib_name \"\${final_lib}\" NAME)
+            if(IS_SYMLINK \"\${final_lib}\")
+                execute_process(
+                    COMMAND readlink \"\${final_lib}\"
+                    OUTPUT_VARIABLE link_target
+                    OUTPUT_STRIP_TRAILING_WHITESPACE
+                    ERROR_QUIET
+                )
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${lib_name} -> \${link_target}\")
+            else()
+                execute_process(COMMAND \${CMAKE_COMMAND} -E echo \"  \${lib_name}\")
+            endif()
+        endforeach()
     endif()
 ")
 

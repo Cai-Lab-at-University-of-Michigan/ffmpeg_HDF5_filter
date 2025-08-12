@@ -134,13 +134,6 @@ jobs:
               echo "Restored dependencies to $HOME/ffmpeg_build"
             fi
           fi
-      - name: Install delocate (macOS only)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          pip install delocate
-          echo "delocate installed successfully"
-          which delocate-listdeps
 
       - name: Build shared library
         shell: bash
@@ -157,16 +150,6 @@ jobs:
             cmake --build . --target bundle_all
             cmake --install . --prefix ../install
           fi
-
-      - name: Verify bundling (macOS only)
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          echo "=== Verifying bundled libraries ==="
-          ls -la install/lib/
-          echo ""
-          echo "=== Main library dependencies ==="
-          otool -L install/lib/libh5ffmpeg_shared.dylib
 
       - name: Package shared library bundle
         shell: bash
