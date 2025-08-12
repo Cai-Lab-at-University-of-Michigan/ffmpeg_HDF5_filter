@@ -174,7 +174,9 @@ install(CODE "
         execute_process(
             COMMAND \${DELOCATE_PATH}
                 \"\${CMAKE_INSTALL_PREFIX}/lib/libh5ffmpeg_shared.dylib\"
-                --lib-dir \"\${CMAKE_INSTALL_PREFIX}/lib\"
+                -L \"\${CMAKE_INSTALL_PREFIX}/lib\"
+                -e \"/usr/lib/\"
+                -e \"/System/\"
             RESULT_VARIABLE result
             OUTPUT_VARIABLE output
             ERROR_VARIABLE error
