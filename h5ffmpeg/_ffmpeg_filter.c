@@ -78,8 +78,10 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
     }
 
     void *buf = NULL;
+    void *data_source = NULL;
+    size_t copy_size = 0;
 
-    // Get data and copy it
+    // Get data and prepare for copying
     if (flags == 0)
     { 
         // Compress
@@ -100,15 +102,24 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         if (buf_size == 0)
             buf_size = actual_buf_size;
 
+        data_source = PyArray_DATA(array);
+        copy_size = actual_buf_size;
+
+        // Release GIL for memory allocation and data copying
+        Py_BEGIN_ALLOW_THREADS
         buf = malloc(buf_size);
+        if (buf) {
+            memcpy(buf, data_source, copy_size);
+        }
+        Py_END_ALLOW_THREADS
+
+        Py_DECREF(array);
+
         if (!buf)
         {
-            Py_DECREF(array);
             PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory");
             return NULL;
         }
-        memcpy(buf, PyArray_DATA(array), actual_buf_size);
-        Py_DECREF(array);
     }
     else
     { // Decompress
@@ -122,13 +133,22 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         // The Python code has already parsed the metadata and stripped it
         // So data_ptr now points directly to the compressed data
         buf_size = size;
+        data_source = data_ptr;
+        copy_size = size;
+
+        // Release GIL for memory allocation and data copying
+        Py_BEGIN_ALLOW_THREADS
         buf = malloc(buf_size);
+        if (buf) {
+            memcpy(buf, data_source, copy_size);
+        }
+        Py_END_ALLOW_THREADS
+
         if (!buf)
         {
             PyErr_SetString(PyExc_MemoryError, "Failed to allocate memory");
             return NULL;
         }
-        memcpy(buf, data_ptr, size);
     }
 
     // Release GIL during CPU-intensive ffmpeg operation
@@ -160,22 +180,7 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
         size_t header_size = 8; // metadata_size(4) + version(4)
         size_t total_size = header_size + metadata_size + result_size;
         
-        char *output_buf = malloc(total_size);
-        if (!output_buf) {
-            free(buf);
-            PyErr_SetString(PyExc_MemoryError, "Failed to allocate output buffer");
-            return NULL;
-        }
-        
-        size_t offset = 0;
-        
-        // Write header: metadata size + version
-        *(unsigned int*)(output_buf + offset) = (unsigned int)metadata_size;
-        offset += sizeof(unsigned int);
-        *(unsigned int*)(output_buf + offset) = header_version;
-        offset += sizeof(unsigned int);
-        
-        // Write metadata fields (11 unsigned ints)
+        // Prepare metadata structure
         unsigned int metadata[11] = {
             cd_values[0],  // enc_id
             cd_values[1],  // dec_id
@@ -189,16 +194,38 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
             cd_values[9],  // film_grain
             cd_values[10], // gpu_id
         };
-        
-        memcpy(output_buf + offset, metadata, 11 * sizeof(unsigned int));
-        offset += 11 * sizeof(unsigned int);
-        
-        // Write compressed_size as uint64_t
-        *(uint64_t*)(output_buf + offset) = (uint64_t)result_size;
-        offset += sizeof(uint64_t);
-        
-        // Write compressed data
-        memcpy(output_buf + offset, buf, result_size);
+
+        // Release GIL for memory allocation and data construction
+        char *output_buf;
+        Py_BEGIN_ALLOW_THREADS
+        output_buf = malloc(total_size);
+        if (output_buf) {
+            size_t offset = 0;
+            
+            // Write header: metadata size + version
+            *(unsigned int*)(output_buf + offset) = (unsigned int)metadata_size;
+            offset += sizeof(unsigned int);
+            *(unsigned int*)(output_buf + offset) = header_version;
+            offset += sizeof(unsigned int);
+            
+            // Write metadata fields (11 unsigned ints)
+            memcpy(output_buf + offset, metadata, 11 * sizeof(unsigned int));
+            offset += 11 * sizeof(unsigned int);
+            
+            // Write compressed_size as uint64_t
+            *(uint64_t*)(output_buf + offset) = (uint64_t)result_size;
+            offset += sizeof(uint64_t);
+            
+            // Write compressed data
+            memcpy(output_buf + offset, buf, result_size);
+        }
+        Py_END_ALLOW_THREADS
+
+        if (!output_buf) {
+            free(buf);
+            PyErr_SetString(PyExc_MemoryError, "Failed to allocate output buffer");
+            return NULL;
+        }
         
         result = PyBytes_FromStringAndSize(output_buf, total_size);
         free(output_buf);
@@ -220,7 +247,13 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
             free(buf);
             return NULL;
         }
-        memcpy(PyArray_DATA(array), buf, result_size);
+
+        // Release GIL for data copying
+        void *array_data = PyArray_DATA(array);
+        Py_BEGIN_ALLOW_THREADS
+        memcpy(array_data, buf, result_size);
+        Py_END_ALLOW_THREADS
+
         result = (PyObject *)array;
     }
 
