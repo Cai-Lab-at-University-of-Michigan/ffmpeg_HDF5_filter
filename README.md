@@ -22,9 +22,13 @@ pip install h5ffmpeg
 
 ### Using pre-built binaries for ImageJ/Fiji
 
-We recommend using our imageJ update sites. 
+We recommend using our imageJ update sites. We support Windows, Ubuntu, MacOS (ARM64). 
 
-**Note:** Due to the limitation of static built ffmpeg to comply with Java, some codecs are not supported. We **strongly recommend** using our python package. If working with large-scale dataset, [SISF_CDN](https://github.com/Cai-Lab-at-University-of-Michigan/SISF_CDN) with [neuroglancer](https://github.com/google/neuroglancer) is recommended.
+**MacOS users**: Run **setup_macos_fiji.sh** to prevent crashes during compression/decompression. 
+
+**SetUpH5FFMPEG.ijm**: This macro runs automatically. After system restarts, open Fiji twice to configure HDF5_PLUGIN_PATH properly.
+
+**Note:** Due to the limitation of built ffmpeg to comply with Java, some codecs are not supported. We **strongly recommend** using our python package. If working with large-scale dataset, [SISF_CDN](https://github.com/Cai-Lab-at-University-of-Michigan/SISF_CDN) with [neuroglancer](https://github.com/google/neuroglancer) is recommended.
 
 ### From source (not recommended)
 
