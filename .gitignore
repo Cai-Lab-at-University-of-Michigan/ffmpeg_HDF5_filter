@@ -1,6 +1,5 @@
 /build/
 *.xml
-*.h5
 /cmake-build-debug/
 .idea/*
 tmp_video*
