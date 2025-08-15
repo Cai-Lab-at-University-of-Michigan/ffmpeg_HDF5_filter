@@ -4,11 +4,11 @@ macro "AutoRun" {
     os_lower = toLowerCase(os);
 
     if (indexOf(os_lower, "mac") >= 0) {
-        lib_path = imagej_dir + "lib/macosx/";
+        lib_path = imagej_dir + "lib/macosx";
     } else if (indexOf(os_lower, "win") >= 0) {
-        lib_path = imagej_dir + "lib/win64/";
+        lib_path = imagej_dir + "lib\\win64";
     } else {
-        lib_path = imagej_dir + "lib/linux64/";
+        lib_path = imagej_dir + "lib/linux64";
     }
 
     print("Operating System: " + os);
