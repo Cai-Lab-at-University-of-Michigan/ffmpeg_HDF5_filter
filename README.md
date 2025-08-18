@@ -28,6 +28,8 @@ We recommend using our imageJ update sites. We support Windows, Ubuntu, MacOS (A
 
 **SetUpH5FFMPEG.ijm**: This macro runs automatically. After system restarts, open Fiji twice to configure HDF5_PLUGIN_PATH properly.
 
+**Ubuntu users**: After the first time opening Fiji, You may need to Logout and LogIn for Fiji picking up the HDF5_PLUGIN_PATH enviroment variable.
+
 **Note:** Due to the limitation of built ffmpeg to comply with Java, some codecs are not supported. We **strongly recommend** using our python package. If working with large-scale dataset, [SISF_CDN](https://github.com/Cai-Lab-at-University-of-Michigan/SISF_CDN) with [neuroglancer](https://github.com/google/neuroglancer) is recommended.
 
 ### From source (not recommended)

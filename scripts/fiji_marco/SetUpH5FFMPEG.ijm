@@ -23,7 +23,10 @@ macro "AutoRun" {
         cmd = "setx HDF5_PLUGIN_PATH \"" + lib_path + "\"";
         exec("cmd", "/c", cmd);
     } else {
-        cmd = "export HDF5_PLUGIN_PATH=" + lib_path;
+        cmd = "mkdir -p ~/.config/environment.d && "
+        + "if ! grep -q 'HDF5_PLUGIN_PATH=' ~/.config/environment.d/hdf5.conf 2>/dev/null; then "
+        + "echo 'HDF5_PLUGIN_PATH=" + lib_path + "' >> ~/.config/environment.d/hdf5.conf; fi && "
+        + "systemctl --user import-environment HDF5_PLUGIN_PATH";
         exec("sh", "-c", cmd);
     }
 
