@@ -50,6 +50,8 @@ find_library(HDF5_C_LIBRARY
         /usr/local/lib
         /usr/lib/x86_64-linux-gnu
         /usr/lib/x86_64-linux-gnu/hdf5/serial
+        /usr/lib/aarch64-linux-gnu
+        /usr/lib/aarch64-linux-gnu/hdf5/serial
 )
 
 if(HDF5_C_LIBRARY)
@@ -66,12 +68,26 @@ find_library(ICONV_LIBRARY
         /usr/lib
         /usr/local/lib
         /usr/lib/x86_64-linux-gnu
+        /usr/lib/aarch64-linux-gnu
 )
 
 if(ICONV_LIBRARY)
     message(STATUS "Found libiconv: ${ICONV_LIBRARY}")
 else()
-    message(WARNING "libiconv not found - may cause runtime issues")
+    find_library(ICONV_LIBRARY
+    NAMES c
+    PATHS 
+        /usr/lib
+        /usr/local/lib
+        /usr/lib/x86_64-linux-gnu
+        /usr/lib/aarch64-linux-gnu
+    )
+
+    if(ICONV_LIBRARY)
+        message(STATUS "Found libiconv as libc: ${ICONV_LIBRARY}")
+    else()
+        message(WARNING "libiconv not found - may cause runtime issues")
+    endif()    
 endif()
 
 add_library(h5ffmpeg_shared SHARED
