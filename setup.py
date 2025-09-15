@@ -6,7 +6,7 @@ import subprocess
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-__VERSION__ = "2.3.0"
+__VERSION__ = "2.3.2"
 
 def is_building_sdist():
     return "sdist" in sys.argv or "egg_info" in sys.argv
@@ -487,13 +487,14 @@ setup(
         "nvidia": ["cupy-cuda11x"],
         "intel": ["intel-openmp"],
     },
-    python_requires=">=3.11",
+    python_requires=">=3.10,<4.0",
     cmdclass={"build_ext": CustomBuildExt},
     license="MIT",
     classifiers=[
         "Development Status :: 4 - Beta",
         "Intended Audience :: Science/Research",
         "Programming Language :: Python :: 3",
+        "Programming Language :: Python :: 3.10",
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
