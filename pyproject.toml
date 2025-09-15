@@ -309,10 +309,10 @@ before-all = [
 repair-wheel-command = "delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.macos.environment]
-FFMPEG_ROOT = "$HOME/ffmpeg"
-HDF5_ROOT = "$HOME/miniconda"
+FFMPEG_ROOT = "/Users/runner/ffmpeg"
+HDF5_ROOT = "/Users/runner/miniconda"
 MACOSX_DEPLOYMENT_TARGET = "12.0"
-DELOCATE_LIBRARY_PATH = "$HOME/ffmpeg/lib:$HOME/miniconda/lib"
+DELOCATE_LIBRARY_PATH = "/Users/runner/ffmpeg/lib:/Users/runner/miniconda/lib"
 
 [tool.cibuildwheel.windows]
 before-all = '''
