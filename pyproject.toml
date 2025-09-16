@@ -63,7 +63,7 @@ before-all = [
     make install PREFIX="/opt/ffmpeg"
     cd /tmp/hwaccel_src
     
-    export PKG_CONFIG_PATH="/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
+    export PKG_CONFIG_PATH="/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
     
     if [ ! -f "/opt/miniconda/lib/pkgconfig/dav1d.pc" ]; then
         echo "Building dav1d from source..."
@@ -127,7 +127,7 @@ repair-wheel-command = [
 [tool.cibuildwheel.linux.environment]
 FFMPEG_ROOT = "/opt/ffmpeg"
 HDF5_ROOT = "/opt/miniconda"
-PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
+PKG_CONFIG_PATH = "/opt/ffmpeg/lib/pkgconfig:/opt/miniconda/share/pkgconfig"
 LD_LIBRARY_PATH = "/opt/ffmpeg/lib:/opt/miniconda/lib"
 CPPFLAGS = "-I/opt/miniconda/include -I/opt/ffmpeg/include"
 LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
@@ -179,20 +179,14 @@ before-all = [
         openssl \
         -c conda-forge
     
-    echo "=== DEBUGGING: Conda lib directory ==="
-    ls -la $HOME/miniconda/lib/ | grep libvpx
-    
     export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
     export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
-    export CFLAGS="-I$HOME/miniconda/include"
     export ARCHFLAGS="-arch arm64"
     
     export MACOSX_DEPLOYMENT_TARGET=12.0
     export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
     export CC=/usr/bin/clang
     export CXX=/usr/bin/clang++
-    export CFLAGS="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
-    export LDFLAGS="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
@@ -220,15 +214,14 @@ before-all = [
     /usr/bin/git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
-    which pkg-config
     export PATH="$HOME/miniconda/bin:$PATH"
     which pkg-config
-
     export PKG_CONFIG_PATH="$HOME/ffmpeg/lib/pkgconfig:$PKG_CONFIG_PATH"
+    
     ./configure \
         --prefix="$HOME/ffmpeg" \
-        --extra-cflags="-I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
-        --extra-ldflags="-L$HOME/miniconda/lib -L$HOME/ffmpeg/lib" \
+        --extra-cflags="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
+        --extra-ldflags="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-rpath,$HOME/miniconda/lib -Wl,-rpath,$HOME/ffmpeg/lib" \
         --extra-libs="-lm -lstdc++" \
         --pkg-config-flags="--static" \
         --enable-shared \
@@ -262,30 +255,18 @@ before-all = [
     make -j$(sysctl -n hw.ncpu)
     make install
     
-    echo "=== DEBUGGING: FFmpeg lib directory ==="
-    ls -la $HOME/ffmpeg/lib/
-    
-    echo "=== DEBUGGING: libavcodec dependencies ==="
-    otool -L $HOME/ffmpeg/lib/libavcodec.*.dylib
+    for lib in "$HOME/ffmpeg/lib"/*.dylib; do
+        if [ -f "$lib" ]; then
+            install_name_tool -add_rpath "$HOME/ffmpeg/lib" "$lib" 2>/dev/null || true
+            install_name_tool -add_rpath "$HOME/miniconda/lib" "$lib" 2>/dev/null || true
+        fi
+    done
     
     $HOME/ffmpeg/bin/ffmpeg -version
-    
-    $HOME/ffmpeg/bin/ffmpeg -encoders | grep -E "(libx264|libx265|libaom|librav1e|libsvtav1|libvpx)" || echo "Some video encoders missing"
-    $HOME/ffmpeg/bin/ffmpeg -decoders | grep -E "(h264|hevc|av1|vp9)" || echo "Some video decoders missing"
     """
 ]
 
-repair-wheel-command = [
-    """
-    echo "=== DEBUGGING: Available libraries ==="
-    echo "FFmpeg lib:"
-    ls -la /Users/runner/ffmpeg/lib/
-    echo "Conda lib (libvpx):"
-    ls -la /Users/runner/miniconda/lib/
-    
-    DELOCATE_LIBRARY_PATH=/Users/runner/ffmpeg/lib:/Users/runner/miniconda/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}
-    """
-]
+repair-wheel-command = "DELOCATE_LIBRARY_PATH=/Users/runner/ffmpeg/lib:/Users/runner/miniconda/lib:/usr/lib delocate-wheel --require-archs {delocate_archs} -w {dest_dir} -v {wheel}"
 
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "/Users/runner/ffmpeg"
