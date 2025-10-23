@@ -453,7 +453,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
         uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
 
-        int ret, eof;
+        int ret, eof = 0;  // Initialize eof to prevent undefined behavior
 
         c_id = cd_values[1];
         width = cd_values[2];
@@ -601,6 +601,10 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             if (pkt->size)
                 decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
             else if (eof)
+                break;
+            
+            // Prevent infinite loop: if parser made no progress and no packet was generated
+            if (ret == 0 && pkt->size == 0 && eof)
                 break;
         }
 
