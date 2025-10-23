@@ -7,9 +7,6 @@
  */
 
 #include "ffmpeg_utils.h"
-#include <pthread.h>
-
-pthread_mutex_t ffmpeg_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void raise_ffmpeg_error(const char *msg)
 {
@@ -401,7 +398,6 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(tune);
         if (out_data)
             free(out_data);
-        pthread_mutex_unlock(&ffmpeg_mutex);
         return out_size;
 
     CompressFailure:
@@ -426,7 +422,6 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(out_data);
         if (out_buf)
             free(out_buf);
-        pthread_mutex_unlock(&ffmpeg_mutex);
         return 0;
     }
     else
@@ -673,7 +668,6 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(out_data);
         if (out_buf)
             free(out_buf);
-        pthread_mutex_unlock(&ffmpeg_mutex);
         return 0;
     }
 }
