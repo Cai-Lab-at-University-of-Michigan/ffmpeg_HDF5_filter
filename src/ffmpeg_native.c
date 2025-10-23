@@ -582,6 +582,8 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
                                      NULL);
 
         /* real code for decoding buffer data */
+        size_t last_p_data_size = p_data_size;
+        int no_progress_iters = 0;
         while (p_data_size > 0)
         {
             ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
@@ -598,12 +600,26 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
 
             if (pkt->size)
                 decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
-            
-            if (ret == 0 && pkt->size == 0)
+
+            /*
+             * Safety: If the parser neither consumes input nor produces a packet,
+             * we could spin forever. Break out to flush the decoder in that case.
+             * Also add a small iteration guard for repeated no-progress states.
+             */
+            if ((ret == 0 && pkt->size == 0) || p_data_size == last_p_data_size)
             {
-                // Parser didn't consume data and didn't produce a packet, avoid infinite loop
-                break;
+                no_progress_iters++;
+                if (no_progress_iters > 3)
+                {
+                    raise_ffmpeg_error("Parser made no progress, breaking to flush decoder\n");
+                    break;
+                }
             }
+            else
+            {
+                no_progress_iters = 0;
+            }
+            last_p_data_size = p_data_size;
         }
 
         /* flush the decoder */
