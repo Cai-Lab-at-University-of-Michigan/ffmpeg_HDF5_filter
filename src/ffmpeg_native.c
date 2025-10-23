@@ -645,7 +645,6 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(codec_name);
         if (out_data)
             free(out_data);
-        pthread_mutex_unlock(&ffmpeg_mutex);
         return out_size;
 
     DecompressFailure:
