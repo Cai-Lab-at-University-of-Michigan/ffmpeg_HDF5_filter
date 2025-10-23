@@ -454,7 +454,6 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
         size_t out_size = 0;
 
         int ret = 0;
-        int eof = 0;  // Initialize eof to prevent undefined behavior
 
         c_id = cd_values[1];
         width = cd_values[2];
@@ -583,10 +582,8 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
                                      NULL);
 
         /* real code for decoding buffer data */
-        while (p_data_size > 0 || eof)
+        while (p_data_size > 0)
         {
-            eof = !p_data_size;
-
             ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
                                    p_data, p_data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 
@@ -601,12 +598,12 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
 
             if (pkt->size)
                 decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
-            else if (eof)
-                break;
             
-            // Prevent infinite loop: if parser made no progress and no packet was generated
-            if (ret == 0 && pkt->size == 0 && eof)
+            if (ret == 0 && pkt->size == 0)
+            {
+                // Parser didn't consume data and didn't produce a packet, avoid infinite loop
                 break;
+            }
         }
 
         /* flush the decoder */
