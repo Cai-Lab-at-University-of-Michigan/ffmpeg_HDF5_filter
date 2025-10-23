@@ -435,7 +435,10 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
 
     ret = avcodec_send_frame(enc_ctx, frame);
     if (ret < 0)
+    {
         raise_ffmpeg_error("Error sending a frame for encoding\n");
+        return;  // Early return on error
+    }
 
     while (ret >= 0)
     {
@@ -443,7 +446,10 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         if (ret < 0)
+        {
             raise_ffmpeg_error("Error during encoding\n");
+            return;  // Early return on error
+        }
 
         // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
 
@@ -453,12 +459,15 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
         // each time exceeds memory block then realloc two times bigger block
         if (updated_size > *expected_size)
         {
-            *out_data = realloc(*out_data, updated_size * 2);
+            uint8_t *new_data = realloc(*out_data, updated_size * 2);
+            if (new_data == NULL)
+            {
+                raise_ffmpeg_error("Out of memory occurred during encoding\n");
+                return;  // Return without updating out_data, preserving original pointer
+            }
+            *out_data = new_data;
             *expected_size = updated_size * 2;
         }
-
-        if (*out_data == NULL)
-            raise_ffmpeg_error("Out of memory occurred during encoding\n");
 
         memcpy(*out_data + offset, pkt->data, pkt->size);
         *out_size = updated_size;
@@ -491,7 +500,10 @@ void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
     ret = avcodec_send_packet(dec_ctx, pkt);
 
     if (ret < 0)
+    {
         raise_ffmpeg_error("Error sending a pkt for decoding\n");
+        return;  // Early return on error
+    }
 
     // printf("receiving packets %d\n", pkt->size);
 
@@ -501,7 +513,10 @@ void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         else if (ret < 0)
+        {
             raise_ffmpeg_error("Error receiving a frame for decoding\n");
+            return;  // Early return on error
+        }
 
         // printf("Decode frame %3d\n", dec_ctx->frame_number);
 
