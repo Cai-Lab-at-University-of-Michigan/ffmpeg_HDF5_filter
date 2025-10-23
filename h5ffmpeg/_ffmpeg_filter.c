@@ -133,9 +133,9 @@ static PyObject *ffmpeg_native_c(PyObject *self, PyObject *args, PyObject *kwarg
 
     // Release GIL during CPU-intensive ffmpeg operation
     size_t result_size;
-    Py_BEGIN_ALLOW_THREADS
+    //Py_BEGIN_ALLOW_THREADS
     result_size = ffmpeg_native(flags, cd_values, buf_size, &buf);
-    Py_END_ALLOW_THREADS
+    //Py_END_ALLOW_THREADS
 
     if (result_size == 0)
     {
