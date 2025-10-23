@@ -7,6 +7,9 @@
  */
 
 #include "ffmpeg_utils.h"
+#include <pthread.h>
+
+pthread_mutex_t ffmpeg_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 void raise_ffmpeg_error(const char *msg)
 {
@@ -398,6 +401,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(tune);
         if (out_data)
             free(out_data);
+        pthread_mutex_unlock(&ffmpeg_mutex);
         return out_size;
 
     CompressFailure:
@@ -422,6 +426,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(out_data);
         if (out_buf)
             free(out_buf);
+        pthread_mutex_unlock(&ffmpeg_mutex);
         return 0;
     }
     else
@@ -453,7 +458,8 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
         uint8_t *out_data = NULL, *p_data = NULL;
         size_t out_size = 0;
 
-        int ret, eof = 0;  // Initialize eof to prevent undefined behavior
+        int ret = 0;
+        int eof = 0;  // Initialize eof to prevent undefined behavior
 
         c_id = cd_values[1];
         width = cd_values[2];
@@ -582,7 +588,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
                                      NULL);
 
         /* real code for decoding buffer data */
-        while (p_data_size >= 0 || eof)
+        while (p_data_size > 0 || eof)
         {
             eof = !p_data_size;
 
@@ -644,6 +650,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(codec_name);
         if (out_data)
             free(out_data);
+        pthread_mutex_unlock(&ffmpeg_mutex);
         return out_size;
 
     DecompressFailure:
@@ -666,6 +673,7 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             free(out_data);
         if (out_buf)
             free(out_buf);
+        pthread_mutex_unlock(&ffmpeg_mutex);
         return 0;
     }
 }
