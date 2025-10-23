@@ -428,6 +428,8 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
     int ret;
     size_t offset = 0;
     size_t updated_size = 0;
+    int packet_count = 0;
+    const int MAX_PACKETS_PER_FRAME = 10; // Normally should be 1, allow some margin
 
     /* send the frame to the encoder */
     // if (frame)
@@ -442,6 +444,14 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
 
     while (ret >= 0)
     {
+        // Deadlock mitigation: Limit packets per frame to prevent infinite loop
+        packet_count++;
+        if (packet_count > MAX_PACKETS_PER_FRAME)
+        {
+            raise_ffmpeg_error("Too many packets from single frame, possible encoder issue\n");
+            return;
+        }
+
         ret = avcodec_receive_packet(enc_ctx, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
@@ -496,6 +506,8 @@ void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 {
     int ret;
     size_t offset = 0;
+    int frame_count = 0;
+    const int MAX_FRAMES_PER_PACKET = 10; // Normally should be 1, allow some margin
 
     ret = avcodec_send_packet(dec_ctx, pkt);
 
@@ -509,6 +521,14 @@ void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 
     while (ret >= 0)
     {
+        // Deadlock mitigation: Limit frames per packet to prevent infinite loop
+        frame_count++;
+        if (frame_count > MAX_FRAMES_PER_PACKET)
+        {
+            raise_ffmpeg_error("Too many frames from single packet, possible decoder issue\n");
+            return;
+        }
+
         ret = avcodec_receive_frame(dec_ctx, src_frame);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;

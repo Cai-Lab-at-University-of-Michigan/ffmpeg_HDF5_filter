@@ -584,8 +584,19 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
         /* real code for decoding buffer data */
         size_t last_p_data_size = p_data_size;
         int no_progress_iters = 0;
+        int total_iterations = 0;
+        const int MAX_ITERATIONS = depth * 10; // Allow more iterations than expected frames
+        
         while (p_data_size > 0)
         {
+            // Deadlock mitigation 1: Limit total iterations
+            total_iterations++;
+            if (total_iterations > MAX_ITERATIONS)
+            {
+                raise_ffmpeg_error("Maximum decode iterations exceeded, breaking to flush decoder\n");
+                break;
+            }
+
             ret = av_parser_parse2(parser, c, &pkt->data, &pkt->size,
                                    p_data, p_data_size, AV_NOPTS_VALUE, AV_NOPTS_VALUE, 0);
 
@@ -599,26 +610,39 @@ size_t ffmpeg_native(unsigned flags, const unsigned int cd_values[], size_t buf_
             p_data_size -= ret;
 
             if (pkt->size)
+            {
                 decode(c, src_frame, pkt, sws_context, dst_frame, &out_size, out_data, frame_size);
+                no_progress_iters = 0; // Reset on successful packet decode
+            }
 
             /*
-             * Safety: If the parser neither consumes input nor produces a packet,
-             * we could spin forever. Break out to flush the decoder in that case.
-             * Also add a small iteration guard for repeated no-progress states.
+             * Deadlock mitigation 2: Detect when parser makes no progress
+             * If parser returns 0 bytes consumed AND produces no packet, we're stuck
              */
-            if ((ret == 0 && pkt->size == 0) || p_data_size == last_p_data_size)
+            if (ret == 0 && pkt->size == 0)
             {
                 no_progress_iters++;
-                if (no_progress_iters > 3)
+                if (no_progress_iters > 2)
                 {
-                    raise_ffmpeg_error("Parser made no progress, breaking to flush decoder\n");
+                    raise_ffmpeg_error("Parser stalled (no progress), breaking to flush decoder\n");
                     break;
                 }
             }
-            else
+            
+            /*
+             * Deadlock mitigation 3: Detect when data size doesn't change
+             * This catches cases where ret > 0 but nothing is actually consumed
+             */
+            if (p_data_size > 0 && p_data_size == last_p_data_size)
             {
-                no_progress_iters = 0;
+                no_progress_iters++;
+                if (no_progress_iters > 2)
+                {
+                    raise_ffmpeg_error("Data size unchanged, breaking to flush decoder\n");
+                    break;
+                }
             }
+            
             last_p_data_size = p_data_size;
         }
 
