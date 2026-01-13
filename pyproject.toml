@@ -271,7 +271,7 @@ repair-wheel-command = "DELOCATE_LIBRARY_PATH=/Users/runner/ffmpeg/lib:/Users/ru
 [tool.cibuildwheel.macos.environment]
 FFMPEG_ROOT = "/Users/runner/ffmpeg"
 HDF5_ROOT = "/Users/runner/miniconda"
-MACOSX_DEPLOYMENT_TARGET = "12.0"
+MACOSX_DEPLOYMENT_TARGET = "12.1"
 
 [tool.cibuildwheel.windows]
 before-all = '''
