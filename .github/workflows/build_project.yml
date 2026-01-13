@@ -18,6 +18,8 @@ jobs:
   build_wheels:
     name: Build wheels on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "12.1"
     timeout-minutes: 120
     strategy:
       fail-fast: false
