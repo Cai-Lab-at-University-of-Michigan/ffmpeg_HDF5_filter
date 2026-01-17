@@ -50,7 +50,7 @@ import numpy as np
 import h5ffmpeg as hf
 
 # Create sample data
-data = np.random.rand(100, 512, 512).astype(np.uint8)
+data = np.random.randint(0, 256, size=(100, 512, 512), dtype=np.uint8)
 
 # Save with default settings (H.264)
 with h5py.File("compressed.h5", "w") as f:
@@ -153,4 +153,5 @@ Feel free to check out other tools from the Cai Lab:)
 - [nGauge](https://github.com/Cai-Lab-at-University-of-Michigan/nGauge): Python library for neuron morphology analysis
 - [nTracer2](https://github.com/Cai-Lab-at-University-of-Michigan/nTracer2): Browser-based tool for neuron tracing
 - [pySISF](https://github.com/Cai-Lab-at-University-of-Michigan/pySISF): Python wrapper for SISF format
+
 - [SISF_CDN](https://github.com/Cai-Lab-at-University-of-Michigan/SISF_CDN):Scalable Image Storage Format CDN
