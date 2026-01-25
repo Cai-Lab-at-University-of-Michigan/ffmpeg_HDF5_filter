@@ -428,6 +428,8 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
     int ret;
     size_t offset = 0;
     size_t updated_size = 0;
+    int packet_count = 0;
+    const int MAX_PACKETS_PER_FRAME = 10; // Normally should be 1, allow some margin
 
     /* send the frame to the encoder */
     // if (frame)
@@ -435,15 +437,29 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
 
     ret = avcodec_send_frame(enc_ctx, frame);
     if (ret < 0)
+    {
         raise_ffmpeg_error("Error sending a frame for encoding\n");
+        return;  // Early return on error
+    }
 
     while (ret >= 0)
     {
+        // Deadlock mitigation: Limit packets per frame to prevent infinite loop
+        packet_count++;
+        if (packet_count > MAX_PACKETS_PER_FRAME)
+        {
+            raise_ffmpeg_error("Too many packets from single frame, possible encoder issue\n");
+            return;
+        }
+
         ret = avcodec_receive_packet(enc_ctx, pkt);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         if (ret < 0)
+        {
             raise_ffmpeg_error("Error during encoding\n");
+            return;  // Early return on error
+        }
 
         // printf("Encode/Write packet %3" PRId64 " (size=%9d)\n", pkt->pts, pkt->size);
 
@@ -453,12 +469,15 @@ void encode(AVCodecContext *enc_ctx, AVFrame *frame, AVPacket *pkt,
         // each time exceeds memory block then realloc two times bigger block
         if (updated_size > *expected_size)
         {
-            *out_data = realloc(*out_data, updated_size * 2);
+            uint8_t *new_data = realloc(*out_data, updated_size * 2);
+            if (new_data == NULL)
+            {
+                raise_ffmpeg_error("Out of memory occurred during encoding\n");
+                return;  // Return without updating out_data, preserving original pointer
+            }
+            *out_data = new_data;
             *expected_size = updated_size * 2;
         }
-
-        if (*out_data == NULL)
-            raise_ffmpeg_error("Out of memory occurred during encoding\n");
 
         memcpy(*out_data + offset, pkt->data, pkt->size);
         *out_size = updated_size;
@@ -487,21 +506,37 @@ void decode(AVCodecContext *dec_ctx, AVFrame *src_frame, AVPacket *pkt,
 {
     int ret;
     size_t offset = 0;
+    int frame_count = 0;
+    const int MAX_FRAMES_PER_PACKET = 10; // Normally should be 1, allow some margin
 
     ret = avcodec_send_packet(dec_ctx, pkt);
 
     if (ret < 0)
+    {
         raise_ffmpeg_error("Error sending a pkt for decoding\n");
+        return;  // Early return on error
+    }
 
     // printf("receiving packets %d\n", pkt->size);
 
     while (ret >= 0)
     {
+        // Deadlock mitigation: Limit frames per packet to prevent infinite loop
+        frame_count++;
+        if (frame_count > MAX_FRAMES_PER_PACKET)
+        {
+            raise_ffmpeg_error("Too many frames from single packet, possible decoder issue\n");
+            return;
+        }
+
         ret = avcodec_receive_frame(dec_ctx, src_frame);
         if (ret == AVERROR(EAGAIN) || ret == AVERROR_EOF)
             return;
         else if (ret < 0)
+        {
             raise_ffmpeg_error("Error receiving a frame for decoding\n");
+            return;  // Early return on error
+        }
 
         // printf("Decode frame %3d\n", dec_ctx->frame_number);
 
