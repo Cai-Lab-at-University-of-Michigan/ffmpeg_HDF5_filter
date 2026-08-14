@@ -149,12 +149,15 @@ before-all = [
     bash miniconda.sh -b -p $HOME/miniconda
     
     $HOME/miniconda/bin/conda config --add channels conda-forge
+    $HOME/miniconda/bin/conda config --remove channels defaults || true
     $HOME/miniconda/bin/conda config --set channel_priority strict
     $HOME/miniconda/bin/conda update -y conda
-    
+
     $HOME/miniconda/bin/conda install -y \
         hdf5 \
         hdf5-external-filter-plugins \
+        libiconv \
+        libunistring \
         pkg-config \
         cmake \
         ninja \
@@ -189,14 +192,14 @@ before-all = [
         openssl \
         -c conda-forge
     
-    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
-    export DYLD_LIBRARY_PATH="$HOME/miniconda/lib"
-    export ARCHFLAGS="-arch arm64"
-    
     export MACOSX_DEPLOYMENT_TARGET=12.0
     export SDKROOT=$(xcrun --sdk macosx --show-sdk-path)
     export CC=/usr/bin/clang
     export CXX=/usr/bin/clang++
+
+    export PKG_CONFIG_PATH="$HOME/miniconda/lib/pkgconfig"
+    export DYLD_FALLBACK_LIBRARY_PATH="$HOME/miniconda/lib"
+    export ARCHFLAGS="-arch arm64"
     
     mkdir -p /tmp/hwaccel_src $HOME/ffmpeg/include $HOME/ffmpeg/lib $HOME/ffmpeg/lib/pkgconfig
     cd /tmp/hwaccel_src
