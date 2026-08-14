@@ -27,8 +27,19 @@ test-skip = ["cp315-*"]
 # predates CPython 3.14 and has no interpreter for it.
 manylinux-x86_64-image = "manylinux_2_34"
 
+container-engine = { name = "docker", create-args = ["--volume=/tmp/cibw-cache/ffmpeg:/opt/ffmpeg", "--volume=/tmp/cibw-cache/miniconda:/opt/miniconda"] }
+
 before-all = [
     """
+    if [ -x /opt/ffmpeg/bin/ffmpeg ] && /opt/ffmpeg/bin/ffmpeg -version >/dev/null 2>&1; then
+        echo "Reusing cached FFmpeg build"
+        /opt/ffmpeg/bin/ffmpeg -version
+        echo "/opt/ffmpeg/lib" > /etc/ld.so.conf.d/ffmpeg.conf
+        echo "/opt/miniconda/lib" >> /etc/ld.so.conf.d/ffmpeg.conf
+        ldconfig
+        exit 0
+    fi
+
     yum update -y || (apt-get update && apt-get upgrade -y)
     yum groupinstall -y "Development Tools" || apt-get install -y build-essential
     # epel-release must land in its own transaction, otherwise EPEL-only packages
@@ -37,7 +48,7 @@ before-all = [
     yum install -y cmake nasm yasm pkg-config zlib-devel bzip2-devel xz-devel openssl-devel git wget which || apt-get install -y cmake nasm yasm pkg-config libz-dev libbz2-dev liblzma-dev libssl-dev git wget || true
 
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
-    bash miniconda.sh -b -p /opt/miniconda
+    bash miniconda.sh -b -u -p /opt/miniconda
     
     /opt/miniconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/main
     /opt/miniconda/bin/conda tos accept --override-channels --channel https://repo.anaconda.com/pkgs/r
@@ -145,8 +156,14 @@ LDFLAGS = "-L/opt/miniconda/lib -L/opt/ffmpeg/lib"
 [tool.cibuildwheel.macos]
 before-all = [
     """
+    if [ -x "$HOME/ffmpeg/bin/ffmpeg" ] && "$HOME/ffmpeg/bin/ffmpeg" -version >/dev/null 2>&1; then
+        echo "Reusing cached FFmpeg build"
+        "$HOME/ffmpeg/bin/ffmpeg" -version
+        exit 0
+    fi
+
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-MacOSX-arm64.sh -o miniconda.sh
-    bash miniconda.sh -b -p $HOME/miniconda
+    bash miniconda.sh -b -u -p $HOME/miniconda
     
     $HOME/miniconda/bin/conda config --add channels conda-forge
     $HOME/miniconda/bin/conda config --remove channels defaults || true

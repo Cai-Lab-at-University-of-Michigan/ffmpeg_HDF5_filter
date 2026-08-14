@@ -11,6 +11,12 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# Supersede older runs of the same ref, but never cancel a tag build: that one
+# publishes.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
 env:
   PYTHON_VERSION: '3.10'
 
@@ -34,6 +40,31 @@ jobs:
         uses: docker/setup-qemu-action@v3
         with:
           platforms: all
+
+      # FFmpeg and dav1d are compiled from source in cibuildwheel's before-all,
+      # which dominates the job. Cache the install prefixes, keyed on the file
+      # holding the build script so any edit to it forces a rebuild.
+      - name: Cache FFmpeg build (Linux)
+        if: runner.os == 'Linux'
+        uses: actions/cache@v4
+        with:
+          path: /tmp/cibw-cache
+          key: ffmpeg-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pyproject.toml') }}
+
+      - name: Cache FFmpeg build (macOS)
+        if: runner.os == 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/ffmpeg
+            ~/miniconda
+          key: ffmpeg-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pyproject.toml') }}
+
+      # Docker creates missing bind-mount sources as root, which the cache step
+      # then cannot read. Create them as the runner user first.
+      - name: Prepare cache mount points (Linux)
+        if: runner.os == 'Linux'
+        run: mkdir -p /tmp/cibw-cache/ffmpeg /tmp/cibw-cache/miniconda
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v4.2.0
