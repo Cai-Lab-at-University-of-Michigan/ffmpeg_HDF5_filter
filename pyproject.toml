@@ -7,25 +7,35 @@ requires = [
 build-backend = "setuptools.build_meta"
 
 [tool.cibuildwheel]
-build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*"]
+build = ["cp310-*", "cp311-*", "cp312-*", "cp313-*", "cp314-*", "cp315-*"]
 skip = [
-    "*-musllinux*", 
-    "*-win32", 
+    "*-musllinux*",
+    "*-win32",
     "*-manylinux_i686",
     "*-macosx_x86_64"
 ]
 test-requires = "pytest numpy h5py"
 test-command = "python -c \"import h5ffmpeg; print('Import successful')\""
+# h5py/matplotlib/scikit-image have no cp315 wheels yet, so test-requires cannot
+# be satisfied on 3.15. The wheel itself still builds and is published; drop this
+# line once those projects ship cp315 wheels (expected after 3.15.0 final).
+test-skip = ["cp315-*"]
 
 [tool.cibuildwheel.linux]
-manylinux-x86_64-image = "dockcross/manylinux_2_34-x64"
+# Shorthand for cibuildwheel's pinned quay.io/pypa/manylinux_2_34_x86_64 image.
+# The previous dockcross/manylinux_2_34-x64 image was last rebuilt 2025-02, so it
+# predates CPython 3.14 and has no interpreter for it.
+manylinux-x86_64-image = "manylinux_2_34"
 
 before-all = [
     """
     yum update -y || (apt-get update && apt-get upgrade -y)
     yum groupinstall -y "Development Tools" || apt-get install -y build-essential
-    yum install -y epel-release cmake nasm yasm pkg-config zlib-devel bzip2-devel xz-devel openssl-devel git wget which || apt-get install -y cmake nasm yasm pkg-config libz-dev libbz2-dev liblzma-dev libssl-dev git wget
-    
+    # epel-release must land in its own transaction, otherwise EPEL-only packages
+    # (nasm, yasm) are unresolvable and abort the whole install.
+    yum install -y epel-release || true
+    yum install -y cmake nasm yasm pkg-config zlib-devel bzip2-devel xz-devel openssl-devel git wget which || apt-get install -y cmake nasm yasm pkg-config libz-dev libbz2-dev liblzma-dev libssl-dev git wget || true
+
     curl -L https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -o miniconda.sh
     bash miniconda.sh -b -p /opt/miniconda
     

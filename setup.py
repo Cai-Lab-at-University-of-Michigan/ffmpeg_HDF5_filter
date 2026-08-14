@@ -6,7 +6,7 @@ import subprocess
 from setuptools import setup, Extension, find_packages
 from setuptools.command.build_ext import build_ext
 
-__VERSION__ = "2.4.0"
+__VERSION__ = "2.5.0"
 
 def is_building_sdist():
     return "sdist" in sys.argv or "egg_info" in sys.argv
@@ -498,6 +498,8 @@ setup(
         "Programming Language :: Python :: 3.11",
         "Programming Language :: Python :: 3.12",
         "Programming Language :: Python :: 3.13",
+        "Programming Language :: Python :: 3.14",
+        "Programming Language :: Python :: 3.15",
         "Topic :: Scientific/Engineering",
         "Topic :: Scientific/Engineering :: Bio-Informatics",
         "Topic :: Scientific/Engineering :: Image Processing",
