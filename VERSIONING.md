@@ -4,7 +4,7 @@ This document tracks the versions of FFmpeg and codec libraries used in the h5ff
 
 ## Project Version
 
-**h5ffmpeg**: 2.4.0
+**h5ffmpeg**: 2.5.0
 
 ## Core Dependencies
 
@@ -197,7 +197,7 @@ intel-openmp
 
 ### Linux (manylinux_2_34_x86_64)
 
-**Container Image**: dockcross/manylinux_2_34-x64
+**Container Image**: quay.io/pypa/manylinux_2_34_x86_64 (via cibuildwheel's `manylinux_2_34` pin)
 
 **FFmpeg Configure Flags**:
 ```bash
@@ -249,7 +249,11 @@ intel-openmp
 
 **Wheel Building**: cibuildwheel
 
-**Supported Python Versions**: 3.10, 3.11, 3.12, 3.13
+**Supported Python Versions**: 3.10, 3.11, 3.12, 3.13, 3.14, 3.15
+
+> 3.15 wheels are built but not import-tested in CI, because `h5py`, `matplotlib`
+> and `scikit-image` do not publish cp315 wheels yet. Remove the `test-skip`
+> entry in `pyproject.toml` once they do.
 
 **Platforms**:
 - Linux: manylinux_2_34_x86_64
@@ -263,7 +267,11 @@ intel-openmp
 
 ## Version History
 
-### 2.4.0 (Current)
+### 2.5.0 (Current)
+- Adds CPython 3.14 and 3.15 wheels for Linux, macOS (arm64) and Windows
+- Builds on cibuildwheel 4.2.0 and the pypa manylinux_2_34 image
+
+### 2.4.0
 - Latest stable release
 - Full multi-codec support
 - Hardware acceleration for NVIDIA and Intel
