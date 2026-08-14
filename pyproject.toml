@@ -217,6 +217,8 @@ before-all = [
         "-Db_pgo=generate"
         "-Dc_args=-march=native"
         "-Dcpp_args=-march=native"
+        "-Dc_link_args=-Wl,-headerpad_max_install_names"
+        "-Dcpp_link_args=-Wl,-headerpad_max_install_names"
     )
     
     $HOME/miniconda/bin/meson setup "${MESON_ARGS[@]}" ..
@@ -234,7 +236,7 @@ before-all = [
     ./configure \
         --prefix="$HOME/ffmpeg" \
         --extra-cflags="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -I$HOME/miniconda/include -I$HOME/ffmpeg/include" \
-        --extra-ldflags="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-rpath,$HOME/miniconda/lib -Wl,-rpath,$HOME/ffmpeg/lib" \
+        --extra-ldflags="-isysroot $SDKROOT -arch arm64 -mmacosx-version-min=$MACOSX_DEPLOYMENT_TARGET -L$HOME/miniconda/lib -L$HOME/ffmpeg/lib -Wl,-headerpad_max_install_names -Wl,-rpath,$HOME/miniconda/lib -Wl,-rpath,$HOME/ffmpeg/lib" \
         --extra-libs="-lm -lstdc++" \
         --pkg-config-flags="--static" \
         --enable-shared \

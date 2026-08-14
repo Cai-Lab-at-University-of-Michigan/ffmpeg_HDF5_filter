@@ -375,6 +375,7 @@ else:
         extra_compile_args.extend(["-std=c99", "-fPIC"])
         extra_link_args.extend(
             [
+                "-Wl,-headerpad_max_install_names",
                 "-Wl,-rpath,@loader_path",
                 "-Wl,-rpath,@loader_path/../../",
             ]
