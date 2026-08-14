@@ -90,9 +90,9 @@ before-all = [
     git config --global http.maxRequestBuffer 100M
     git config --global core.compression 0
     
-    if ! git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg; then
+    if ! git clone --depth 1 --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg; then
         echo "Shallow clone failed, trying full clone..."
-        git clone https://github.com/FFmpeg/FFmpeg.git ffmpeg
+        git clone --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     fi
     
     cd ffmpeg
@@ -226,7 +226,7 @@ before-all = [
     $HOME/miniconda/bin/ninja install
     cd /tmp/hwaccel_src
     
-    /usr/bin/git clone --depth 1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
+    /usr/bin/git clone --depth 1 --branch n9.0.1 https://github.com/FFmpeg/FFmpeg.git ffmpeg
     cd ffmpeg
     
     export PATH="$HOME/miniconda/bin:$PATH"
