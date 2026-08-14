@@ -69,7 +69,7 @@ popd
 :: Download and extract FFmpeg (MSVC-compatible)
 echo 📥 Downloading FFmpeg for MSVC...
 curl -L --retry 3 --retry-delay 5 ^
-  https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-full_build-shared.zip ^
+  https://github.com/GyanD/codexffmpeg/releases/download/9.0.1/ffmpeg-9.0.1-full_build-shared.zip ^
   -o ffmpeg-msvc.zip
 
 echo 📦 Extracting FFmpeg...

@@ -9,8 +9,9 @@ This document tracks the versions of FFmpeg and codec libraries used in the h5ff
 ## Core Dependencies
 
 ### FFmpeg
-- **Version**: 8.0
+- **Version**: 9.0.1 (tag `n9.0.1`, libavcodec 63)
 - **Repository**: https://github.com/FFmpeg/FFmpeg.git
+- **Windows**: prebuilt `ffmpeg-9.0.1-full_build-shared.zip` from GyanD/codexffmpeg
 - **Build Configuration**: See platform-specific sections below
 - **License**: GPL v3+ (due to enabled GPL components)
 
